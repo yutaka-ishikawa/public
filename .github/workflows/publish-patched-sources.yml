@@ -1,0 +1,110 @@
+name: Publish patched K3 source branches
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-patched-sources.yml'
+permissions:
+  contents: write
+jobs:
+  publish:
+    name: Publish ${{ matrix.project }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: qemu
+            upstream: https://github.com/qemu/qemu.git
+            ref: v11.1.3
+            patch: qemu-11.1.3-jupiter2-k3-boot.patch
+            branch: sources/qemu-k3
+          - project: opensbi
+            upstream: https://github.com/spacemit-com/opensbi.git
+            ref: ad6091fd16c4d4a445168f6a479e1b8aadb4931c
+            patch: opensbi-k3-keystone-cumulative.patch
+            branch: sources/opensbi-k3
+          - project: keystone
+            upstream: https://github.com/keystone-enclave/keystone.git
+            ref: b8c2385355b2afb5b94a4e5dc503936f1502b972
+            patch: keystone-k3-cumulative.patch
+            branch: sources/keystone-k3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify patch exists in integration repository
+        env:
+          PATCH: ${{ matrix.patch }}
+        run: |
+          set -Eeuo pipefail
+          test -s "patches/$PATCH"
+          sha256sum "patches/$PATCH" | tee patch-sha256.txt
+      - name: Clone full upstream commit history and select pinned version
+        env:
+          UPSTREAM: ${{ matrix.upstream }}
+          PIN: ${{ matrix.ref }}
+          PROJECT: ${{ matrix.project }}
+        run: |
+          set -Eeuo pipefail
+          git clone --filter=blob:none "$UPSTREAM" source
+          cd source
+          if [ "$PROJECT" = qemu ]; then
+            BASE=$(git rev-parse "refs/tags/$PIN^{commit}")
+          else
+            BASE="$PIN"
+          fi
+          git cat-file -e "$BASE^{commit}"
+          git checkout --detach "$BASE"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "$BASE^{commit}")"
+          git status --short
+          printf '%s\n' "upstream=$UPSTREAM" "ref=$PIN" "base_commit=$(git rev-parse HEAD)" > "$GITHUB_WORKSPACE/source-provenance.txt"
+      - name: Apply and independently verify patch
+        env:
+          PATCH: ${{ matrix.patch }}
+        run: |
+          set -Eeuo pipefail
+          cd source
+          git apply --check "$GITHUB_WORKSPACE/patches/$PATCH"
+          git apply "$GITHUB_WORKSPACE/patches/$PATCH"
+          git apply --reverse --check "$GITHUB_WORKSPACE/patches/$PATCH"
+          git diff --check
+          git diff --stat | tee "$GITHUB_WORKSPACE/patched-diff-stat.txt"
+          test -n "$(git status --porcelain)"
+      - name: Commit patched source
+        env:
+          PROJECT: ${{ matrix.project }}
+          PIN: ${{ matrix.ref }}
+        run: |
+          set -Eeuo pipefail
+          cd source
+          git switch -c "k3-patched-20261107"
+          git add -A
+          git -c user.name="K3 GitHub Actions" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Apply Jupiter2 K3 patch to $PROJECT ($PIN)"
+          printf '%s\n' "patched_commit=$(git rev-parse HEAD)" >> "$GITHUB_WORKSPACE/source-provenance.txt"
+      - name: Push patched full-history source branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ matrix.branch }}
+        run: |
+          set -Eeuo pipefail
+          cd source
+          # Refuse to overwrite an existing branch: no forced updates.
+          REMOTE="https://github.com/$GITHUB_REPOSITORY.git"
+          if git ls-remote --exit-code "$REMOTE" "refs/heads/$TARGET_BRANCH" >/dev/null; then
+            echo "::error::Branch $TARGET_BRANCH already exists. Inspect it before changing source history."
+            exit 1
+          fi
+          git push "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "Published https://github.com/$GITHUB_REPOSITORY/tree/$TARGET_BRANCH" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-publish-${{ matrix.project }}
+          path: |
+            source-provenance.txt
+            patched-diff-stat.txt
+            patch-sha256.txt
+          if-no-files-found: warn
