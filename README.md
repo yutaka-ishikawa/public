@@ -120,6 +120,20 @@ For another installation (for example `install/keystone-v2`), use that same dire
 
 With `CONFIG_K3_KEYSTONE_SM`, firmware deliberately uses the machine-timer path required by the current SM. It clears Sstc access and removes `sstc` from both device-tree ISA encodings, so Linux and SBI SET_TIMER agree on that policy. This is a compatibility policy, not full Sstc context virtualization. Firmware builds without Keystone enabled keep their existing timer behavior.
 
+### Locate a CREATE/RUN hang before changing SM behavior
+
+An RCU stall is Linux's later report that a CPU stopped making progress; it does not identify the timer as the cause of a stuck `run-keystone-hello`. Enable opt-in firmware progress markers to locate the last completed stage:
+
+```bash
+KEYSTONE_SM_TRACE=1 bash scripts/build-install-k3.sh --only firmware \
+  --prefix "$PWD/install/keystone"
+bash run-k3.sh
+```
+
+Stop the old guest before rebuilding and use the actual installation path for both commands if it differs. At boot, confirm the `[SM-TRACE] ... boot trace enabled; built ...` marker, then run `run-keystone-hello` in the guest. Capture the boot marker and all `[SM-TRACE]` lines through the stall. They distinguish SBI entry, CREATE argument copying, PMP broadcast/ACK, shared-memory cleanup, hashing, and RUN context switching. An entry with `a=2001` is CREATE and `a=2003` is RUN; `sbi.return` records status and `sbi.switch-return` records the selected return PC. These markers contain no memory contents or key material.
+
+No SBI entry after a confirmed trace-enabled boot points to an earlier user/kernel path; a final `CREATE args-copy begin` narrows the issue to the copy/trap path; `CREATE pmp-global begin` narrows it to PMP/IPI handling. A hash-start marker without completion also permits slow M-mode hashing as an explanation, rather than assuming an infinite loop. The trace is disabled unless `KEYSTONE_SM_TRACE=1`; rebuild with `KEYSTONE_SM_TRACE=0` to remove it. It is diagnostic logging, not a timeout increase or a bypass of PMP checks.
+
 ## QEMU startup: Keystone is the default
 
 ```bash

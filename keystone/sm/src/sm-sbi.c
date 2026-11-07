@@ -1,3 +1,4 @@
+#include "sm_trace.h"
 //******************************************************************************
 // Copyright (c) 2018, The Regents of the University of California (Regents).
 // All Rights Reserved. See LICENSE for license details.
@@ -23,7 +24,9 @@ unsigned long sbi_sm_create_enclave(unsigned long* eid, uintptr_t create_args)
     return SBI_ERR_SM_ENCLAVE_NOT_INITIALIZED;
   }
 #endif
+  SM_TRACE_STAGE("CREATE args-copy begin");
   ret = copy_enclave_create_args(create_args, &create_args_local);
+  SM_TRACE_RESULT("CREATE args-copy end", ret);
 
   if (ret)
     return ret;

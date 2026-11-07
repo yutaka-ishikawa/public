@@ -1,3 +1,4 @@
+#include "sm_trace.h"
 #include <sbi/sbi_trap.h>
 #include <sbi/sbi_error.h>
 #include <sbi/sbi_tlb.h>
@@ -21,6 +22,7 @@ static int keystone_ecall_return(struct sbi_trap_regs *regs,
                                 struct sbi_ecall_return *out,
                                 uintptr_t status)
 {
+  SM_TRACE_VALUES("sbi.return", regs->a6, status);
   regs->a0 = status;
   regs->a1 = out->value;
   regs->mepc += 4;
@@ -33,6 +35,7 @@ static int sbi_ecall_keystone_enclave_handler(unsigned long extid, unsigned long
                      struct sbi_ecall_return *out)
 {
   uintptr_t retval;
+  SM_TRACE_VALUES("sbi.enter", funcid, regs->mepc);
 
 #ifdef KEYSTONE_K3_PMP_N_REG
   if (!sm_is_ready()) {
@@ -109,8 +112,11 @@ static int sbi_ecall_keystone_enclave_handler(unsigned long extid, unsigned long
       break;
   }
 
-  if (out->skip_regs_update)
-    return 0; /* RUN/RESUME/STOP/EXIT already selected a different frame. */
+  /* RUN/RESUME/STOP/EXIT already selected a different frame. */
+  if (out->skip_regs_update) {
+    SM_TRACE_VALUES("sbi.switch-return", funcid, regs->mepc);
+    return 0;
+  }
   return keystone_ecall_return(regs, out, retval);
 
 }

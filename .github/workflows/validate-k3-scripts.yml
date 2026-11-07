@@ -14,6 +14,8 @@ on:
       - 'scripts/tests/test-keystone-sm-port.py'
       - 'scripts/tests/test-keystone-timer-policy.py'
       - 'keystone/sm/src/**'
+      - 'keystone/sm/tools/**'
+      - 'scripts/build_keystone_sm.sh'
       - 'opensbi/Makefile'
       - 'opensbi/platform/generic/spacemit/**'
       - 'opensbi/platform/generic/include/spacemit/k3_keystone_timer.h'
@@ -89,6 +91,11 @@ jobs:
           if qemu-riscv64 .build-keystone/guest-tools/busybox insmod /nonexistent-keystone-test.ko; then
             exit 1
           fi
+      - name: Build trace-enabled SM and OpenSBI firmware
+        run: |
+          sudo apt-get install -y clang lld llvm
+          KEYSTONE_SM_TRACE=1 bash scripts/build-install-k3.sh --only firmware --prefix /tmp/keystone-firmware-test --jobs 2
+          strings /tmp/keystone-firmware-test/firmware/k3/fw_dynamic.bin | grep -F '[SM-TRACE]'
       - name: Verify usage and source layout
         shell: bash
         run: |

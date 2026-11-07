@@ -1,3 +1,4 @@
+#include "sm_trace.h"
 //******************************************************************************
 // Copyright (c) 2018, The Regents of the University of California (Regents).
 // All Rights Reserved. See LICENSE for license details.
@@ -47,6 +48,7 @@ extern byte dev_public_key[PUBLIC_KEY_SIZE];
 static inline void context_switch_to_enclave(struct sbi_trap_regs* regs,
                                                 enclave_id eid,
                                                 int load_parameters){
+  SM_TRACE_STAGE("RUN switch begin");
   /* save host context */
   swap_prev_state(&enclaves[eid].threads[0], regs, 1);
   swap_prev_mepc(&enclaves[eid].threads[0], regs, regs->mepc);
@@ -96,6 +98,7 @@ static inline void context_switch_to_enclave(struct sbi_trap_regs* regs,
   // Setup any platform specific defenses
   platform_switch_to_enclave(&(enclaves[eid]));
   cpu_enter_enclave_context(eid);
+  SM_TRACE_STAGE("RUN switch end");
 }
 
 static inline void context_switch_to_host(struct sbi_trap_regs *regs,
@@ -394,6 +397,7 @@ unsigned long create_enclave(unsigned long *eidptr, struct keystone_sbi_create_t
   if(!is_create_args_valid(&create_args))
     return SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT;
 
+  SM_TRACE_STAGE("CREATE layout valid");
   /* set params */
   struct runtime_params_t params;
   params.dram_base = base;
@@ -421,11 +425,16 @@ unsigned long create_enclave(unsigned long *eidptr, struct keystone_sbi_create_t
     goto free_region;
 
   // set pmp registers for private region (not shared)
-  if(pmp_set_global(region, PMP_NO_PERM))
+  SM_TRACE_STAGE("CREATE pmp-global begin");
+  int pmp_rc = pmp_set_global(region, PMP_NO_PERM);
+  SM_TRACE_RESULT("CREATE pmp-global end", pmp_rc);
+  if(pmp_rc)
     goto free_shared_region;
 
   // cleanup some memory regions for sanity See issue #38
+  SM_TRACE_STAGE("CREATE utm-clean begin");
   clean_enclave_memory(utbase, utsize);
+  SM_TRACE_STAGE("CREATE utm-clean end");
 
 
   // initialize enclave metadata
@@ -455,7 +464,9 @@ unsigned long create_enclave(unsigned long *eidptr, struct keystone_sbi_create_t
   /* Validate memory, prepare hash and signature for attestation */
   spin_lock(&encl_lock); // FIXME This should error for second enter.
  
+  SM_TRACE_STAGE("CREATE hash begin");
   ret = validate_and_hash_enclave(&enclaves[eid]);
+  SM_TRACE_RESULT("CREATE hash end", ret);
   /* The enclave is fresh if it has been validated and hashed but not run yet. */
   if (ret)
     goto unlock;

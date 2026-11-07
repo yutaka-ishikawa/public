@@ -1,3 +1,4 @@
+#include "sm_trace.h"
 /* SPDX-License-Identifier: BSD-2-Clause */
 /* K3 IPI transport. This adapter is not part of the production SM build until
  * all-hart enumeration, HSM replay, and PMP ownership have been integrated. */
@@ -41,8 +42,10 @@ static void k3_pmp_ipi_event_process(struct sbi_scratch *scratch)
    * sufficient: this hart must not resume its interrupted S/U context with
    * an unverified protection configuration. This is the existing IPI
    * handler's failure path, not an additional all-hart hold protocol. */
-  if (__atomic_load_n(&box->state, __ATOMIC_ACQUIRE) == K3_PMP_MB_FAILED)
+  if (__atomic_load_n(&box->state, __ATOMIC_ACQUIRE) == K3_PMP_MB_FAILED) {
+    SM_TRACE_RESULT("PMP receiver failed", box->result);
     sbi_hart_hang();
+  }
 }
 
 static const struct sbi_ipi_event_ops k3_pmp_ipi_ops = {
@@ -128,7 +131,9 @@ int k3_pmp_ipi_transport_send(ulong mask, ulong base,
     n++;
   }
   if (!n || unmatched) return SBI_ENOTSUPP;
+  SM_TRACE_VALUES("PMP send", mask, request->generation);
   rc = sbi_ipi_send_many(mask, base, (u32)k3_pmp_ipi_event, (void *)request);
+  SM_TRACE_RESULT("PMP send result", rc);
   if (rc) return rc;
   /* A send is never an ACK. Observe every target's exact generation. */
   for (i = 0; i <= sbi_scratch_last_hartindex(); i++) {
@@ -141,10 +146,16 @@ int k3_pmp_ipi_transport_send(ulong mask, ulong base,
     int state;
     do {
       state = k3_pmp_mailbox_check(mb, request->generation);
-      if (state < 0) return SBI_EFAIL;
+      if (state < 0) {
+        SM_TRACE_VALUES("PMP ACK failed", hartid, request->generation);
+        return SBI_EFAIL;
+      }
       if (state == 1) break;
     } while (--spins);
-    if (!spins) return SBI_EFAIL;
+    if (!spins) {
+      SM_TRACE_VALUES("PMP ACK timeout", hartid, request->generation);
+      return SBI_EFAIL;
+    }
   }
   for (i = 0; i <= sbi_scratch_last_hartindex(); i++) {
     struct sbi_scratch *remote = sbi_hartindex_to_scratch(i);

@@ -30,6 +30,7 @@ def main():
     p.add_argument('--compiler', default='clang')
     p.add_argument('--dev-embedded-key', action='store_true',
                    help='Diagnostic only: compile with build-time-generated dev key. Never production.')
+    p.add_argument("--trace", action="store_true", help="Enable SM progress markers for hang diagnosis")
     a=p.parse_args()
     sm=pathlib.Path(__file__).resolve().parents[1]/'src'
     a.output.mkdir(parents=True,exist_ok=True)
@@ -43,6 +44,8 @@ def main():
            '-I'+str(sm),'-I'+str(a.opensbi/'include'),
            '-I'+str(a.opensbi/'platform/generic/include'),
            '-I'+str(sm.parent/'../sdk/include'),'-I'+str(sm.parent.parent/'sdk/include/shared'),'-Wno-unused-function']
+    if a.trace:
+        flags.append("-DKEYSTONE_SM_TRACE=1")
     if a.dev_embedded_key:
         flags.append('-DKEYSTONE_K3_DEV_EMBED_KEY=1')
     failed=[]

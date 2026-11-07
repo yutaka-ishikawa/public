@@ -1,3 +1,4 @@
+#include "sm_trace.h"
 //******************************************************************************
 // Copyright (c) 2018, The Regents of the University of California (Regents).
 // All Rights Reserved. See LICENSE for license details.
@@ -159,6 +160,7 @@ void sm_print_cert()
 
 int sm_init(bool cold_boot)
 {
+  if (cold_boot) SM_TRACE_STAGE("boot trace enabled; built " __DATE__ " " __TIME__);
 #if defined(KEYSTONE_K3_PMP_N_REG)
   /* K3 PMP-only SM bootstrap. Keys, entropy and DMA are deliberately not
    * prerequisites, but no enclave is admitted until PMP ownership and the
