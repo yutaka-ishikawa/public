@@ -1,0 +1,35 @@
+name: K3 integration script validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-install-k3.sh'
+      - 'scripts/run-k3.sh'
+      - '.github/workflows/validate-k3-scripts.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n scripts/build-install-k3.sh
+          bash -n scripts/run-k3.sh
+          bash -n scripts/build-linux-k3.sh
+          bash -n scripts/build_keystone_sm.sh
+          bash -n scripts/build_opensbi_link.sh
+      - name: Verify usage and source layout
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash scripts/build-install-k3.sh --help
+          bash scripts/run-k3.sh --help
+          for path in qemu/configure opensbi/Makefile keystone/sm/tools/k3_rv64_compile_audit.py linux-k3/Makefile patches/linux-k3-config.patch; do
+            test -s "$path" || { echo "Missing $path"; exit 1; }
+          done
+          test ! -e linux-k3-config.patch
