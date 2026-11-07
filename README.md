@@ -6,6 +6,8 @@ The `main` branch contains `qemu/`, `opensbi/`, `keystone/`, and `linux-k3/`. Or
 
 実機情報と現在のファームウェアの適合性は、[Milk-V Jupiter 2実機調査](doc/jupiter2-hardware-compatibility.md)にまとめています。
 
+未移植機能の一覧と実装順序は、[K3 Keystone移植計画](doc/keystone-porting-plan.md)を参照してください。
+
 ## Host dependencies
 
 On Ubuntu 24.04 or an equivalent APT-based distribution:
