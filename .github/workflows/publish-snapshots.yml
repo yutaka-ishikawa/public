@@ -1,0 +1,95 @@
+name: Publish OpenSBI and Keystone patched snapshots
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-snapshots.yml'
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: opensbi
+            upstream: https://github.com/spacemit-com/opensbi.git
+            ref: ad6091fd16c4d4a445168f6a479e1b8aadb4931c
+            patch: opensbi-k3-keystone-cumulative.patch
+            branch: sources/opensbi-k3
+          - project: keystone
+            upstream: https://github.com/keystone-enclave/keystone.git
+            ref: b8c2385355b2afb5b94a4e5dc503936f1502b972
+            patch: keystone-k3-cumulative.patch
+            branch: sources/keystone-k3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Clone pinned upstream sources
+        env:
+          UPSTREAM: ${{ matrix.upstream }}
+          SHA: ${{ matrix.ref }}
+          PATCH: ${{ matrix.patch }}
+        run: |
+          set -Eeuo pipefail
+          test -s "patches/$PATCH"
+          git clone --filter=blob:none "$UPSTREAM" source
+          git -C source checkout --detach "$SHA"
+          test "$(git -C source rev-parse HEAD)" = "$SHA"
+          printf 'upstream=%s\nbase=%s\n' "$UPSTREAM" "$SHA" > source-provenance.txt
+          sha256sum "patches/$PATCH" | tee patch-sha256.txt
+      - name: Apply patch and normalize only whitespace errors
+        env:
+          PATCH: ${{ matrix.patch }}
+        run: |
+          set -Eeuo pipefail
+          git -C source apply --check "$GITHUB_WORKSPACE/patches/$PATCH"
+          git -C source apply --whitespace=fix "$GITHUB_WORKSPACE/patches/$PATCH"
+          git -C source diff --check
+          git -C source diff --stat | tee patched-diff-stat.txt
+          test -n "$(git -C source status --porcelain)"
+      - name: Prepare source snapshot without active GitHub workflow paths
+        run: |
+          set -Eeuo pipefail
+          cd source
+          # GITHUB_TOKEN cannot push .github/workflows from third party source.
+          # Preserve content at a neutral path; do not drop source files.
+          if [ -d .github/workflows ]; then
+            test ! -e upstream-github-workflows
+            mv .github/workflows upstream-github-workflows
+            echo 'Relocated upstream .github/workflows to upstream-github-workflows (content preserved).' >> "$GITHUB_WORKSPACE/source-provenance.txt"
+          fi
+          # A source snapshot has its full tree, with the pinned upstream SHA
+          # recorded. It does not claim to include all original Git history.
+          rm -rf .git
+          git init -b source-snapshot
+          git add -A
+          git -c user.name='K3 GitHub Actions' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Save patched K3 source snapshot'
+          git rev-parse HEAD >> "$GITHUB_WORKSPACE/source-provenance.txt"
+      - name: Push new snapshot branch without rewriting existing refs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ matrix.branch }}
+        run: |
+          set -Eeuo pipefail
+          cd source
+          REMOTE="https://github.com/$GITHUB_REPOSITORY.git"
+          if git ls-remote --exit-code "$REMOTE" "refs/heads/$BRANCH" >/dev/null; then
+            echo "::error::Branch $BRANCH already exists: refusing to overwrite"
+            exit 1
+          fi
+          git push "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$BRANCH"
+          echo "Published [$BRANCH](https://github.com/$GITHUB_REPOSITORY/tree/$BRANCH)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: patched-snapshot-${{ matrix.project }}
+          path: |
+            source-provenance.txt
+            patch-sha256.txt
+            patched-diff-stat.txt
+          if-no-files-found: warn
