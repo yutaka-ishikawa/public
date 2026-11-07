@@ -148,6 +148,8 @@ For a custom `--build-dir` or `--hostfs`, adjust the shared package paths. A fre
 
 ### Illegal instruction at the Eyrie virtual entry
 
+原因・GDBの証拠・修正内容・更新手順の詳細は、[Keystone Eyrieの入口でGNU build-idを実行して停止した問題](doc/keystone-eyrie-entry-build-id.md)を参照してください。
+
 An observed `mepc=0xffffffffc0000000`, `mcause=2`, `mtval=4` was accompanied by the words `00000004 00000014 00000003 00554e47` at the entry. These are a GNU build-id note header, not runtime instructions. The loader enters a fixed virtual address; an orphan `.note.gnu.build-id` placed there by the linker made it execute metadata instead of `_start`.
 
 The runtime now explicitly places its dedicated `_start` section first, discards the build-id note, declares the ELF entry, and asserts that `_start` equals the fixed runtime base. Update the SDK and copy both rebuilt example packages into the guest using the commands above. This change does not require rebuilding OpenSBI or replacing the rootfs. The runtime entry tests link with build-id generation enabled and inspect the executable PT_LOAD bytes of both example ELFs; complete enclave execution still requires a guest test.
