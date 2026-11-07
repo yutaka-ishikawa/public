@@ -43,7 +43,7 @@ jobs:
           TMP=$(mktemp -d)
           trap 'rm -rf "$TMP"' EXIT
           mkdir -p "$TMP/k3-build/qemu" "$TMP/k3-build/firmware" "$TMP/k3-build/linux"
-          printf 'k3-build-dir-v1\\n' > "$TMP/k3-build/.k3-build-root"
+          printf 'k3-build-dir-v1\n' > "$TMP/k3-build/.k3-build-root"
           touch "$TMP/k3-build/qemu/file" "$TMP/k3-build/firmware/file" "$TMP/k3-build/linux/file"
           bash scripts/clean-k3.sh --build-dir "$TMP/k3-build" --only qemu --dry-run
           test -e "$TMP/k3-build/qemu/file"
