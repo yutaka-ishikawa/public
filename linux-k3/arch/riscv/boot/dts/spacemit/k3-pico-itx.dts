@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/* Copyright (c) 2025 Spacemit, Inc */
+
+#include "k3-pico.dtsi"
+
+/ {
+	model = "SpacemiT K3 Pico-ITX";
+	compatible = "spacemit,k3-pico-itx", "spacemit,k3";
+
+	hub_vbus: hub-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "hub-vbus";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		regulator-boot-on;
+		gpio = <&ec 8 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&pinctrl {
+	gmac0-cfg {
+		gmac0-6-pins {
+			drive-strength = <25>;
+		};
+	};
+};
+
+&rpmi_regulator {
+	adcdc2: adcdc2 {
+		regulator-min-microvolt = <540000>;
+		regulator-max-microvolt = <1100000>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+
+	adcdc1: adcdc1 {
+		regulator-min-microvolt = <540000>;
+		regulator-max-microvolt = <1100000>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+};
+
+&usb2_host {
+	/* Ensure no defered probe cause USB disconnect */
+	function-supply = <&hub_vbus>;
+
+	hub@1 {
+		vdd-supply = <&hub_vbus>;
+		always-powered-in-suspend;
+	};
+};
+
+&i2c8 {
+	status = "okay";
+	spacemit,sda-glitch-nofix;
+};
+
+&cpu_0 {
+	clst-supply = <&adcdc1>;
+};
+
+&cpu_1 {
+	clst-supply = <&adcdc1>;
+};
+
+&cpu_2 {
+	clst-supply = <&adcdc1>;
+};
+
+&cpu_3 {
+	clst-supply = <&adcdc1>;
+};
+
+&cpu_4 {
+	clst-supply = <&adcdc1>;
+};
+
+&cpu_5 {
+	clst-supply = <&adcdc1>;
+};
+
+&cpu_6 {
+	clst-supply = <&adcdc1>;
+};
+
+&cpu_7 {
+	clst-supply = <&adcdc1>;
+};

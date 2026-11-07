@@ -1,0 +1,196 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/* Copyright (c) 2025 Spacemit, Inc */
+
+#include "k3_com260.dtsi"
+
+/ {
+	model = "SpacemiT K3 CoM260 Kit V02";
+	compatible = "spacemit,k3-com260-kit-v02", "spacemit,k3-com260", "spacemit,k3";
+
+	rfkill-pcie-wlan {
+		compatible = "rfkill-gpio";
+		label = "rfkill-pcie-wlan";
+		pinctrl-names = "default";
+		pinctrl-0 = <&m2_wdis1_cfg>;
+		radio-type = "wlan";
+		shutdown-gpios = <&gpio 2 9 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&pinctrl {
+	uart4-0-cfg {
+		uart4-0-pins {
+			power-source = <3300>;
+		};
+	};
+
+	uart5-2-cfg {
+		uart5-0-pins {
+			power-source = <3300>;
+		};
+	};
+
+	can3-1-cfg {
+		can3-0-pins {
+			power-source = <1800>;
+		};
+	};
+
+	can4-1-cfg {
+		can4-0-pins {
+			power-source = <1800>;
+		};
+	};
+
+	rcan2-0-cfg {
+		rcan2-0-pins {
+			power-source = <1800>;
+		};
+	};
+};
+
+/* Override dtsi default voltages */
+&rpmi_regulator {
+	edcdc2: edcdc2 {
+		regulator-min-microvolt = <800000>;
+		regulator-max-microvolt = <800000>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+
+	edcdc1: edcdc1 {
+		regulator-min-microvolt = <534000>;
+		regulator-max-microvolt = <1000000>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+};
+
+&uart4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart4_0_cfg>;
+	status = "okay";
+};
+
+&uart5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart5_2_cfg>;
+	status = "okay";
+};
+
+&qspi {
+	spacemit,qspi-tx-dma = <0>;
+	spacemit,qspi-rx-dma = <0>;
+};
+
+&usb3_porta {
+	/delete-property/ monitor-vbus;
+};
+
+&eth1 {
+	tx-fifo-depth = <8192>;
+	rx-fifo-depth = <8192>;
+	snps,tso;
+	snps,force_sf_dma_mode;
+	phy-handle = <&rgmii1>;
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "snps,dwmac-mdio";
+
+		rgmii1: phy@1 {
+			compatible = "ethernet-phy-id001c.c916";
+			reg = <0x1>;
+			device_type = "ethernet-phy";
+		};
+	};
+};
+
+&usb3_portb {
+	/* VL817 USB2.0 hub (4 ports) */
+	hub_2_0: hub@1 {
+		compatible = "usb2109,2817";
+		reg = <1>;
+		peer-hub = <&hub_3_0>;
+		/* GPIO53(MIPI_CSI3_PWDN) reserved for HUB 3V3 RST,
+		 * now reset will be done by HW */
+	};
+
+	/* VL817 USB3.0 hub (4 ports) */
+	hub_3_0: hub@2 {
+		compatible = "usb2109,817";
+		reg = <2>;
+		peer-hub = <&hub_2_0>;
+		/* GPIO53(MIPI_CSI3_PWDN) reserved for HUB 3V3 RST,
+		 * now reset will be done by HW */
+	};
+};
+
+&i2c0 {
+	tcpc@25 {
+		wakeup-source;
+	};
+};
+
+/* kit_v02: no camera */
+&i2c5 {
+	status = "disabled";
+};
+
+/* kit_v02: gpu cooling levels differ */
+&thermal_zones {
+	thermal_gpu {
+		cooling-maps {
+			map1 {
+				cooling-device = <&imggpu 1 2>;
+			};
+
+			map2 {
+				cooling-device = <&imggpu 2 3>;
+			};
+		};
+	};
+};
+
+&flexcan0 {
+	clock-frequency = <80000000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&can0_1_cfg>;
+	status = "okay";
+};
+
+&flexcan1 {
+	clock-frequency = <80000000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&can1_0_cfg>;
+	status = "okay";
+};
+
+&flexcan2 {
+	clock-frequency = <80000000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&can2_0_cfg>;
+	status = "okay";
+};
+
+&flexcan3 {
+	clock-frequency = <80000000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&can3_1_cfg>;
+	status = "okay";
+};
+
+&flexcan4 {
+	clock-frequency = <80000000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&can4_1_cfg>;
+	status = "okay";
+};
+
+&r_flexcan2 {
+	clock-frequency = <80000000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&rcan2_0_cfg>;
+	status = "okay";
+};

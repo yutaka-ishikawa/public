@@ -1,0 +1,553 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/* Copyright (c) 2025 Spacemit, Inc */
+
+&soc {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	r_uart0: serial@c0881000 {
+		compatible = "spacemit,k1-uart",
+			     "intel,xscale-uart";
+		reg = <0x0 0xc0881000 0x0 0x100>;
+		clocks = <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART0>,
+			 <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART0_BUS>,
+			 <&syscon_mpmu CLK_MPMU_SLOW_UART>;
+		clock-names = "core", "bus", "gate";
+		spacemit,rcpu-uart;
+		resets = <&syscon_rcpu_uartctrl RESET_RCPU_UARTCTRL_RUART0>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		fifo-size = <256>;
+		tx-threshold = <32>;
+		interrupt-parent = <&saplic>;
+		interrupts = <251 IRQ_TYPE_LEVEL_HIGH>;
+		status = "disabled";
+	};
+
+	r_uart1: serial@c0881100 {
+		compatible = "spacemit,k1-uart",
+			     "intel,xscale-uart";
+		reg = <0x0 0xc0881100 0x0 0x100>;
+		clocks = <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART1>,
+			 <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART1_BUS>,
+			 <&syscon_mpmu CLK_MPMU_SLOW_UART>;
+		clock-names = "core", "bus", "gate";
+		spacemit,rcpu-uart;
+		resets = <&syscon_rcpu_uartctrl RESET_RCPU_UARTCTRL_RUART1>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		fifo-size = <256>;
+		tx-threshold = <32>;
+		interrupt-parent = <&saplic>;
+		interrupts = <252 IRQ_TYPE_LEVEL_HIGH>;
+		status = "disabled";
+	};
+
+	r_uart2: serial@c0881200 {
+		compatible = "spacemit,k1-uart",
+			     "intel,xscale-uart";
+		reg = <0x0 0xc0881200 0x0 0x100>;
+		clocks = <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART2>,
+			 <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART2_BUS>,
+			 <&syscon_mpmu CLK_MPMU_SLOW_UART>;
+		clock-names = "core", "bus", "gate";
+		spacemit,rcpu-uart;
+		resets = <&syscon_rcpu_uartctrl RESET_RCPU_UARTCTRL_RUART2>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		fifo-size = <256>;
+		tx-threshold = <32>;
+		interrupt-parent = <&saplic>;
+		interrupts = <253 IRQ_TYPE_LEVEL_HIGH>;
+		status = "disabled";
+	};
+
+	r_uart3: serial@c0881300 {
+		compatible = "spacemit,k1-uart",
+			     "intel,xscale-uart";
+		reg = <0x0 0xc0881300 0x0 0x100>;
+		clocks = <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART3>,
+			 <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART3_BUS>,
+			 <&syscon_mpmu CLK_MPMU_SLOW_UART>;
+		clock-names = "core", "bus", "gate";
+		spacemit,rcpu-uart;
+		resets = <&syscon_rcpu_uartctrl RESET_RCPU_UARTCTRL_RUART3>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		fifo-size = <256>;
+		tx-threshold = <32>;
+		interrupt-parent = <&saplic>;
+		interrupts = <254 IRQ_TYPE_LEVEL_HIGH>;
+		status = "disabled";
+	};
+
+	r_uart4: serial@c0881400 {
+		compatible = "spacemit,k1-uart",
+			     "intel,xscale-uart";
+		reg = <0x0 0xc0881400 0x0 0x100>;
+		clocks = <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART4>,
+			 <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART4_BUS>,
+			 <&syscon_mpmu CLK_MPMU_SLOW_UART>;
+		clock-names = "core", "bus", "gate";
+		spacemit,rcpu-uart;
+		resets = <&syscon_rcpu_uartctrl RESET_RCPU_UARTCTRL_RUART4>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		fifo-size = <256>;
+		tx-threshold = <32>;
+		interrupt-parent = <&saplic>;
+		interrupts = <255 IRQ_TYPE_LEVEL_HIGH>;
+		status = "disabled";
+	};
+
+	r_uart5: serial@c0881500 {
+		compatible = "spacemit,k1-uart",
+			     "intel,xscale-uart";
+		reg = <0x0 0xc0881500 0x0 0x100>;
+		clocks = <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART5>,
+			 <&syscon_rcpu_uartctrl CLK_RCPU_UARTCTRL_RUART5_BUS>,
+			 <&syscon_mpmu CLK_MPMU_SLOW_UART>;
+		clock-names = "core", "bus", "gate";
+		spacemit,rcpu-uart;
+		resets = <&syscon_rcpu_uartctrl RESET_RCPU_UARTCTRL_RUART5>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		fifo-size = <256>;
+		tx-threshold = <32>;
+		interrupt-parent = <&saplic>;
+		interrupts = <256 IRQ_TYPE_LEVEL_HIGH>;
+		status = "disabled";
+	};
+
+	r_flexcan0: fdcan@c0710000 {
+		compatible = "spacemit,k1-flexcan";
+		reg = <0x0 0xc0710000 0x0 0x4000>;
+		clocks = <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RCAN0>,
+			 <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RCAN0_BUS>;
+		clock-names = "per","ipg";
+		interrupts = <241 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-parent = <&saplic>;
+		fsl,clk-source = <0>;
+		resets = <&syscon_rcpu_sysctrl RESET_RCPU_SYSCTRL_RCAN0>;
+		status = "disabled";
+	};
+
+	r_flexcan1: fdcan@c0720000 {
+		compatible = "spacemit,k1-flexcan";
+		reg = <0x0 0xc0720000 0x0 0x4000>;
+		clocks = <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RCAN1>,
+			 <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RCAN1_BUS>;
+		clock-names = "per","ipg";
+		interrupts = <243 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-parent = <&saplic>;
+		fsl,clk-source = <0>;
+		resets = <&syscon_rcpu_sysctrl RESET_RCPU_SYSCTRL_RCAN1>;
+		status = "disabled";
+	};
+
+	r_flexcan2: fdcan@c0730000 {
+		compatible = "spacemit,k1-flexcan";
+		reg = <0x0 0xc0730000 0x0 0x4000>;
+		clocks = <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RCAN2>,
+			 <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RCAN2_BUS>;
+		clock-names = "per","ipg";
+		interrupts = <245 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-parent = <&saplic>;
+		fsl,clk-source = <0>;
+		resets = <&syscon_rcpu_sysctrl RESET_RCPU_SYSCTRL_RCAN2>;
+		status = "disabled";
+	};
+
+	r_flexcan3: fdcan@c0740000 {
+		compatible = "spacemit,k1-flexcan";
+		reg = <0x0 0xc0740000 0x0 0x4000>;
+		clocks = <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RCAN3>,
+			 <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RCAN3_BUS>;
+		clock-names = "per","ipg";
+		interrupts = <247 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-parent = <&saplic>;
+		fsl,clk-source = <0>;
+		resets = <&syscon_rcpu_sysctrl RESET_RCPU_SYSCTRL_RCAN3>;
+		status = "disabled";
+	};
+
+	r_flexcan4: fdcan@c0750000 {
+		compatible = "spacemit,k1-flexcan";
+		reg = <0x0 0xc0750000 0x0 0x4000>;
+		clocks = <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RCAN4>,
+			 <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RCAN4_BUS>;
+		clock-names = "per","ipg";
+		interrupts = <249 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-parent = <&saplic>;
+		fsl,clk-source = <0>;
+		resets = <&syscon_rcpu_sysctrl RESET_RCPU_SYSCTRL_RCAN4>;
+		status = "disabled";
+	};
+
+	rpwm0: pwm@c088d100 {
+		compatible = "spacemit,k1-pwm", "marvell,pxa910-pwm";
+		reg = <0x0 0xc088d100 0x0 0x10>;
+		clocks = <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM0>,
+			 <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM0_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_pwmctrl RESET_RCPU_PWMCTRL_PWM0>;
+		#pwm-cells = <3>;
+		k1,pwm-disable-fd;
+		status = "disabled";
+	};
+
+	rpwm1: pwm@c088d200 {
+		compatible = "spacemit,k1-pwm", "marvell,pxa910-pwm";
+		reg = <0x0 0xc088d200 0x0 0x10>;
+		clocks = <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM1>,
+			 <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM1_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_pwmctrl RESET_RCPU_PWMCTRL_PWM1>;
+		#pwm-cells = <3>;
+		k1,pwm-disable-fd;
+		status = "disabled";
+	};
+
+	rpwm2: pwm@c088d300 {
+		compatible = "spacemit,k1-pwm", "marvell,pxa910-pwm";
+		reg = <0x0 0xc088d300 0x0 0x10>;
+		clocks = <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM2>,
+			 <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM2_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_pwmctrl RESET_RCPU_PWMCTRL_PWM2>;
+		#pwm-cells = <3>;
+		k1,pwm-disable-fd;
+		status = "disabled";
+	};
+
+	rpwm3: pwm@c088d400 {
+		compatible = "spacemit,k1-pwm", "marvell,pxa910-pwm";
+		reg = <0x0 0xc088d400 0x0 0x10>;
+		clocks = <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM3>,
+			 <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM3_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_pwmctrl RESET_RCPU_PWMCTRL_PWM3>;
+		#pwm-cells = <3>;
+		k1,pwm-disable-fd;
+		status = "disabled";
+	};
+
+	rpwm4: pwm@c088d500 {
+		compatible = "spacemit,k1-pwm", "marvell,pxa910-pwm";
+		reg = <0x0 0xc088d500 0x0 0x10>;
+		clocks = <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM4>,
+			 <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM4_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_pwmctrl RESET_RCPU_PWMCTRL_PWM4>;
+		#pwm-cells = <3>;
+		k1,pwm-disable-fd;
+		status = "disabled";
+	};
+
+	rpwm5: pwm@c088d600 {
+		compatible = "spacemit,k1-pwm", "marvell,pxa910-pwm";
+		reg = <0x0 0xc088d600 0x0 0x10>;
+		clocks = <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM5>,
+			 <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM5_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_pwmctrl RESET_RCPU_PWMCTRL_PWM5>;
+		#pwm-cells = <3>;
+		k1,pwm-disable-fd;
+		status = "disabled";
+	};
+
+	rpwm6: pwm@c088d700 {
+		compatible = "spacemit,k1-pwm", "marvell,pxa910-pwm";
+		reg = <0x0 0xc088d700 0x0 0x10>;
+		clocks = <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM6>,
+			 <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM6_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_pwmctrl RESET_RCPU_PWMCTRL_PWM6>;
+		#pwm-cells = <3>;
+		k1,pwm-disable-fd;
+		status = "disabled";
+	};
+
+	rpwm7: pwm@c088d800 {
+		compatible = "spacemit,k1-pwm", "marvell,pxa910-pwm";
+		reg = <0x0 0xc088d800 0x0 0x10>;
+		clocks = <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM7>,
+			 <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM7_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_pwmctrl RESET_RCPU_PWMCTRL_PWM7>;
+		#pwm-cells = <3>;
+		k1,pwm-disable-fd;
+		status = "disabled";
+	};
+
+	rpwm8: pwm@c088d900 {
+		compatible = "spacemit,k1-pwm", "marvell,pxa910-pwm";
+		reg = <0x0 0xc088d900 0x0 0x10>;
+		clocks = <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM8>,
+			 <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM8_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_pwmctrl RESET_RCPU_PWMCTRL_PWM8>;
+		#pwm-cells = <3>;
+		k1,pwm-disable-fd;
+		status = "disabled";
+	};
+
+	rpwm9: pwm@c088da00 {
+		compatible = "spacemit,k1-pwm", "marvell,pxa910-pwm";
+		reg = <0x0 0xc088da00 0x0 0x10>;
+		clocks = <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM9>,
+			 <&syscon_rcpu_pwmctrl CLK_RCPU_PWMCTRL_RPWM9_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_pwmctrl RESET_RCPU_PWMCTRL_PWM9>;
+		#pwm-cells = <3>;
+		k1,pwm-disable-fd;
+		status = "disabled";
+	};
+
+	r_i2c0: ri2c@c0886000 {
+		compatible = "spacemit,k1-i2c";
+		reg = <0x0 0xc0886000 0x0 0x38>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		interrupt-parent = <&saplic>;
+		interrupts = <272 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&syscon_rcpu_i2cctrl CLK_RCPU_I2CCTRL_RI2C0>,
+			 <&syscon_rcpu_i2cctrl CLK_RCPU_I2CCTRL_RI2C0_BUS>;
+		clock-names = "func", "bus";
+		clock-frequency = <400000>;
+		resets = <&syscon_rcpu_i2cctrl RESET_RCPU_I2CCTRL_RI2C0>;
+		power-domains = <&power K3_PMU_DUMMY_PWR_DOMAIN>;
+		status = "disabled";
+	};
+
+	r_i2c1: ri2c@c0886100 {
+		compatible = "spacemit,k1-i2c";
+		reg = <0x0 0xc0886100 0x0 0x38>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		interrupt-parent = <&saplic>;
+		interrupts = <273 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&syscon_rcpu_i2cctrl CLK_RCPU_I2CCTRL_RI2C1>,
+			 <&syscon_rcpu_i2cctrl CLK_RCPU_I2CCTRL_RI2C1_BUS>;
+		clock-names = "func", "bus";
+		clock-frequency = <400000>;
+		resets = <&syscon_rcpu_i2cctrl RESET_RCPU_I2CCTRL_RI2C1>;
+		power-domains = <&power K3_PMU_DUMMY_PWR_DOMAIN>;
+		status = "disabled";
+	};
+
+	adma0: adma0@C0883000 {
+		compatible = "spacemit,k3-adma";
+		reg = <0x0 0xc0883000 0x0 0x100>,
+		      <0x0 0xc08d0000 0x0 0x100>;
+		reg-names = "adma_reg", "buf_addr";
+		interrupt-parent = <&saplic>;
+		interrupts = <257 IRQ_TYPE_LEVEL_HIGH>,
+			     <258 IRQ_TYPE_LEVEL_HIGH>;
+		#dma-cells= <1>;
+		#dma-channels = <2>;
+		status = "disabled";
+	};
+
+	adma1: adma1@C0883400 {
+		compatible = "spacemit,k3-adma";
+		reg = <0x0 0xc0883400 0x0 0x100>,
+		      <0x0 0xc08d0100 0x0 0x100>;
+		reg-names = "adma_reg", "buf_addr";
+		interrupt-parent = <&saplic>;
+		interrupts = <260 IRQ_TYPE_LEVEL_HIGH>,
+			     <261 IRQ_TYPE_LEVEL_HIGH>;
+		#dma-cells= <1>;
+		#dma-channels = <2>;
+		rpmsg-services = "adma-service";
+		rpmsg-channels = <1>;
+		status = "disabled";
+	};
+
+	adma2: adma2@C0883800 {
+		compatible = "spacemit,k3-adma";
+		reg = <0x0 0xc0883800 0x0 0x100>,
+		      <0x0 0xc08d0200 0x0 0x100>;
+		reg-names = "adma_reg", "buf_addr";
+		interrupt-parent = <&saplic>;
+		interrupts = <263 IRQ_TYPE_LEVEL_HIGH>,
+			     <264 IRQ_TYPE_LEVEL_HIGH>;
+		#dma-cells= <1>;
+		#dma-channels = <2>;
+		status = "disabled";
+	};
+
+	adma3: adma3@C0883C00 {
+		compatible = "spacemit,k3-adma";
+		reg = <0x0 0xc0883C00 0x0 0x100>,
+		      <0x0 0xc08d0300 0x0 0x100>;
+		reg-names = "adma_reg", "buf_addr";
+		interrupt-parent = <&saplic>;
+		interrupts = <266 IRQ_TYPE_LEVEL_HIGH>,
+			     <267 IRQ_TYPE_LEVEL_HIGH>;
+		#dma-cells= <1>;
+		#dma-channels = <2>;
+		status = "disabled";
+	};
+
+	ri2s0: ri2s0@c0883100 {
+		compatible = "spacemit,k3-ri2s";
+		#sound-dai-cells = <0>;
+		reg = <0x0 0xc0883100 0x0 0x300>,
+		      <0x0 0xc08d0400 0x0 0x4000>;
+		clocks = <&syscon_rcpu_i2sctrl CLK_RCPU_I2SCTRL_RI2S0>,
+			 <&syscon_rcpu_i2sctrl CLK_RCPU_I2SCTRL_RI2S0_BUS>,
+			 <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RI2S0_SYSCLK>;
+		clock-names = "func", "bus", "sysclk";
+		resets = <&syscon_rcpu_i2sctrl RESET_RCPU_I2SCTRL_RI2S0>,
+			 <&syscon_rcpu_sysctrl RESET_RCPU_SYSCTRL_RI2S0_SYSCLK>;
+		reset-names = "reset", "reset-sys";
+		dmas = <&adma0 1>, <&adma0 0>;
+		dma-names = "rx", "tx";
+		status = "disabled";
+	};
+
+	ri2s1: ri2s1@c0883500 {
+		compatible = "spacemit,k3-ri2s";
+		#sound-dai-cells = <0>;
+		reg = <0x0 0xc0883500 0x0 0x300>,
+		      <0x0 0xc08d4400 0x0 0x4000>;
+		clocks = <&syscon_rcpu_i2sctrl CLK_RCPU_I2SCTRL_RI2S1>,
+			 <&syscon_rcpu_i2sctrl CLK_RCPU_I2SCTRL_RI2S1_BUS>,
+			 <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RI2S1_SYSCLK>;
+		clock-names = "func", "bus", "sysclk";
+		resets = <&syscon_rcpu_i2sctrl RESET_RCPU_I2SCTRL_RI2S1>,
+			 <&syscon_rcpu_sysctrl RESET_RCPU_SYSCTRL_RI2S1_SYSCLK>;
+		reset-names = "reset", "reset-sys";
+		dmas = <&adma1 1>, <&adma1 0>;
+		dma-names = "rx", "tx";
+		status = "disabled";
+	};
+
+	ri2s2: ri2s2@c0883900 {
+		compatible = "spacemit,k3-ri2s";
+		#sound-dai-cells = <0>;
+		reg = <0x0 0xc0883900 0x0 0x300>,
+		      <0x0 0xc08d8400 0x0 0x4000>;
+		clocks = <&syscon_rcpu_i2sctrl CLK_RCPU_I2SCTRL_RI2S2>,
+			 <&syscon_rcpu_i2sctrl CLK_RCPU_I2SCTRL_RI2S2_BUS>,
+			 <&syscon_rcpu_i2sctrl CLK_RCPU_I2SCTRL_RI2S2_SYSCLK>;
+		clock-names = "func", "bus", "sysclk";
+		resets = <&syscon_rcpu_i2sctrl RESET_RCPU_I2SCTRL_RI2S2>,
+			 <&syscon_rcpu_i2sctrl RESET_RCPU_I2SCTRL_RI2S2_SYSCLK>;
+		reset-names = "reset", "reset-sys";
+		dmas = <&adma2 1>, <&adma2 0>;
+		dma-names = "rx", "tx";
+		status = "disabled";
+	};
+
+	ri2s3: ri2s3@c0883D00 {
+		compatible = "spacemit,k3-ri2s";
+		#sound-dai-cells = <0>;
+		reg = <0x0 0xc0883d00 0x0 0x300>,
+		      <0x0 0xc08dc400 0x0 0x4000>;
+		clocks = <&syscon_rcpu_i2sctrl CLK_RCPU_I2SCTRL_RI2S3>,
+			 <&syscon_rcpu_i2sctrl CLK_RCPU_I2SCTRL_RI2S3_BUS>,
+			 <&syscon_rcpu_i2sctrl CLK_RCPU_I2SCTRL_RI2S3_SYSCLK>;
+		clock-names = "func", "bus", "sysclk";
+		resets = <&syscon_rcpu_i2sctrl RESET_RCPU_I2SCTRL_RI2S3>,
+			 <&syscon_rcpu_i2sctrl RESET_RCPU_I2SCTRL_RI2S3_SYSCLK>;
+		reset-names = "reset", "reset-sys";
+		dmas = <&adma3 1>, <&adma3 0>;
+		dma-names = "rx", "tx";
+		status = "disabled";
+	};
+
+	sound_card_dp0: sound-card-dp0@0 {
+		compatible = "simple-audio-card";
+		simple-audio-card,mclk-fs = <512>;
+		status = "disabled";
+		simple-audio-card,dai-link@0 {
+			format = "left_j";
+			frame-master = <&dp0_link_cpu>;
+			bitclock-master = <&dp0_link_cpu>;
+			dp0_link_cpu: cpu {
+				sound-dai = <&ri2s2>;
+			};
+		};
+	};
+
+	sound_card_dp1: sound-card-dp1@1 {
+		compatible = "simple-audio-card";
+		simple-audio-card,mclk-fs = <512>;
+		status = "disabled";
+		simple-audio-card,dai-link@0 {
+			format = "left_j";
+			frame-master = <&dp1_link_cpu>;
+			bitclock-master = <&dp1_link_cpu>;
+			dp1_link_cpu: cpu {
+				sound-dai = <&ri2s3>;
+			};
+		};
+	};
+
+	r_ircrx0: r-irc-rx0@c0887000 {
+		compatible = "spacemit-k1,irc";
+		reg = <0x0 0xc0887000 0x0 0x100>;
+		interrupts = <274 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-parent = <&saplic>;
+		clocks = <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RIRC0>;
+		resets = <&syscon_rcpu_sysctrl RESET_RCPU_SYSCTRL_RIRC0>;
+		status = "disabled";
+	};
+
+	r_ircrx1: r-irc-rx1@c088e000 {
+		compatible = "spacemit-k1,irc";
+		reg = <0x0 0xc088e000 0x0 0x100>;
+		interrupts = <275 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-parent = <&saplic>;
+		clocks = <&syscon_rcpu_sysctrl CLK_RCPU_SYSCTRL_RIRC1>;
+		resets = <&syscon_rcpu_sysctrl RESET_RCPU_SYSCTRL_RIRC1>;
+		status = "disabled";
+	};
+
+	rspi0: rspi0@c0885000 {
+		compatible = "spacemit,k3-spi";
+		reg = <0x0 0xc0885000 0x0 0x30>;
+		interrupt-parent = <&saplic>;
+		interrupts = <269 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&syscon_rcpu_spictrl  CLK_RCPU_SPICTRL_RSPI0>,
+			 <&syscon_rcpu_spictrl CLK_RCPU_SPICTRL_RSPI0_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_spictrl RESET_RCPU_SPICTRL_RSPI0>;
+		spi-max-frequency = <51200000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
+	rspi1: rspi1@c0885100 {
+		compatible = "spacemit,k3-spi";
+		reg = <0x0 0xc0885100 0x0 0x30>;
+		interrupt-parent = <&saplic>;
+		interrupts = <270 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&syscon_rcpu_spictrl  CLK_RCPU_SPICTRL_RSPI1>,
+			 <&syscon_rcpu_spictrl CLK_RCPU_SPICTRL_RSPI1_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_spictrl RESET_RCPU_SPICTRL_RSPI1>;
+		spi-max-frequency = <51200000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
+	rspi2: rspi2@c0885200 {
+		compatible = "spacemit,k3-spi";
+		reg = <0x0 0xc0885200 0x0 0x30>;
+		interrupt-parent = <&saplic>;
+		interrupts = <271 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&syscon_rcpu_spictrl  CLK_RCPU_SPICTRL_RSPI2>,
+			 <&syscon_rcpu_spictrl CLK_RCPU_SPICTRL_RSPI2_BUS>;
+		clock-names = "func", "bus";
+		resets = <&syscon_rcpu_spictrl RESET_RCPU_SPICTRL_RSPI2>;
+		spi-max-frequency = <51200000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+};

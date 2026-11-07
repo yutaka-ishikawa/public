@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/* Copyright (c) 2025 Spacemit, Inc */
+
+#include "k3-pico.dtsi"
+
+/ {
+	model = "SpacemiT K3 Deb1";
+	compatible = "spacemit,k3-deb1";
+};
+
+&pinctrl {
+	gmac0-cfg {
+		gmac0-0-pins {
+			drive-strength = <11>;
+		};
+
+		gmac0-1-pins {
+			drive-strength = <11>;
+		};
+
+		gmac0-3-pins {
+			drive-strength = <11>;
+		};
+
+		gmac0-6-pins {
+			drive-strength = <11>;
+		};
+	};
+
+	i2c2-1-cfg {
+		i2c2-0-pins {
+			drive-strength = <9>;		/* DS4 */
+		};
+	};
+
+	qspi-cs0-cfg {
+		qspi-cs0-pins {
+			drive-strength = <11>;
+		};
+	};
+
+	espi0-2-cfg {
+		espi0-0-pins {
+			drive-strength = <9>;		/* DS4 */
+		};
+
+		espi0-1-pins {
+			drive-strength = <9>;		/* DS4 */
+		};
+	};
+};
+
+&rpmi_regulator {
+	edcdc2: edcdc2 {
+		regulator-min-microvolt = <800000>;
+		regulator-max-microvolt = <800000>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+
+	edcdc1: edcdc1 {
+		regulator-min-microvolt = <534000>;
+		regulator-max-microvolt = <1000000>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+};
+
+&espi0 {
+	ec@0 {
+		i2c-tunnel@1 {
+			rt7451: retimer@13 {
+				compatible = "retimer,rt7451";
+				reg = <0x13>;
+				primary-addr = <0x13>;
+				secondary-addr = <0x29>;
+				status = "okay";
+			};
+		};
+	};
+};
+
+&dp1 {
+	retimer-supply = <&rt7451>;
+};
