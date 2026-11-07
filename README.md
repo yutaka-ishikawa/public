@@ -19,3 +19,19 @@ The patches themselves are retained on `main` under `patches/` along with GitHub
 - [Build workflow](https://github.com/yutaka-ishikawa/public/blob/main/.github/workflows/k3-build.yml) — separate diagnostic build, **not yet verified successful**.
 
 **Do not flash firmware from this experimental port until hardware PMP/IOPMP and firmware safety tests are completed.**
+
+## K3 Linux 6.18 source and kernel build
+
+- [Patched K3 Linux source](linux-k3/) — vendor `spacemit-com/linux-6.18`, branch `k3-br-v1.0.y`, SHA `7d17e358c660f1046eb1f27f26eea33955813afd`.
+- [Linux build script](scripts/build-linux-k3.sh) — builds `Image dtbs modules` with the requested VirtIO, generic PCI host, networking, and 9P options.
+- [Linux kernel build workflow](.github/workflows/build-linux-k3.yml) — Ubuntu 24.04 RISC-V cross-build with artifacts for kernel Image, DTBs, modules, and effective Kconfig.
+
+Run locally at repository root (after installing `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves`):
+
+```bash
+JOBS=15 bash scripts/build-linux-k3.sh
+```
+
+Outputs are under `linux-k3/build-k3/`. This generates a kernel `Image`, not a bootable disk/rootfs image. On GitHub Actions, built artifacts are downloadable from the workflow run once the job completes successfully.
+
+Linux vendor source has been stored with requested config changes in `arch/riscv/configs/k3_bianbu_defconfig`; no additional Linux source patch file was provided for this step.
