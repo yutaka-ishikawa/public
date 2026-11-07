@@ -40,7 +40,7 @@ root=os.path.realpath(sys.argv[1]); build=os.path.realpath(sys.argv[2])
 protected=[root, '/', os.path.join(root,'qemu'),os.path.join(root,'opensbi'),
            os.path.join(root,'keystone'),os.path.join(root,'linux-k3'),
            os.path.join(root,'patches'),os.path.join(root,'scripts'),os.path.join(root,'.github')]
-if any(build==p or build.startswith(p+os.sep) for p in protected):
+if build == root or build == '/' or any(build == p or build.startswith(p+os.sep) for p in protected[2:]):
     raise SystemExit('Refusing unsafe build directory: '+build)
 print(build)
 PY
