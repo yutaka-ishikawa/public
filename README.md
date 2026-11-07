@@ -4,6 +4,8 @@ The `main` branch contains `qemu/`, `opensbi/`, `keystone/`, and `linux-k3/`. Or
 
 独立したアプリ開発用サンプルは、[samples/helloworld/README.md](samples/helloworld/README.md)を参照してください。通常のMakefileでhelloをビルド・パッケージ化できます。
 
+実機情報と現在のファームウェアの適合性は、[Milk-V Jupiter 2実機調査](doc/jupiter2-hardware-compatibility.md)にまとめています。
+
 ## Host dependencies
 
 On Ubuntu 24.04 or an equivalent APT-based distribution:

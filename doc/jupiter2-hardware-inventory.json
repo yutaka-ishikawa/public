@@ -1,0 +1,154 @@
+{
+  "review_date_jst": "2026-11-08",
+  "repository_review_commit": "4011d1c9d",
+  "evidence_archive": {
+    "name": "jupiter2-info.tar.gz",
+    "sha256": "d6185ab4ebbf5e7016e803c71f8dc48e3c0e74be11276a7901940256b7fd2dd3"
+  },
+  "source_sha256": {
+    "running.dtb": "19151092f33a1a0b340c21ba3aa88d6494e6726ebb9f30f802db758f38f006a8",
+    "cpuinfo.txt": "ce9c43cda211e5cc1f7d01cdaef46d82d0d7908ec4b6964167f301fe70cb6d51",
+    "iomem.txt": "afe5bf652e8c6c27781638b8f51bd36c3bf6caa4e9e4905e72b19f49b9599cb4",
+    "uname.txt": "08fcfab834040ba77178b058dcd96711a47a07b5cd8ee641fdc8e1b37b52afe8",
+    "dmesg.txt": "5406276360538937eaf53c8dd6a433f1fe505db8279e83b0c8c2ba8d5865f338",
+    "lscpu.txt": "19bb808d2faa91a6dd6c50f0e4739d990ac1f9d74960e3d9a143353893969786"
+  },
+  "model": "SpacemiT K3 Pico ITX",
+  "linux_dtb_root_compatible": [
+    "spacemit,k3-pico-itx"
+  ],
+  "linux_release": "6.18.3-generic",
+  "linux_build": "#1.0.5.4 SMP PREEMPT_DYNAMIC",
+  "sbi": {
+    "specification": "2.0",
+    "implementation_id": "0x1",
+    "implementation_version": "0x10006",
+    "detected_extensions": [
+      "TIME",
+      "IPI",
+      "RFENCE",
+      "SRST",
+      "DBCN",
+      "HSM"
+    ]
+  },
+  "cpu_groups": [
+    {
+      "harts": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "model": "Spacemit(R) X100",
+      "mvendorid": "0x710",
+      "marchid": "0x8000000058000002",
+      "mimpid": "0x33d8a600",
+      "mmu": "sv39"
+    },
+    {
+      "harts": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "model": "Spacemit(R) A100",
+      "mvendorid": "0x710",
+      "marchid": "0x8000000041000002",
+      "mimpid": "0x10000000d5686200",
+      "mmu": "sv39"
+    }
+  ],
+  "all_16_harts_online": true,
+  "linux_reported_common_isa": "rv64imafdcvh_zicbom_zicbop_zicboz_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zaamo_zalrsc_zawrs_zfa_zfbfmin_zfh_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbc_zbs_zkt_zvbb_zvbc_zve32f_zve32x_zve64d_zve64f_zve64x_zvfbfmin_zvfbfwma_zvfh_zvfhmin_zvkb_zvkg_zvkned_zvknha_zvknhb_zvksed_zvksh_zvkt_smaia_smstateen_ssaia_sscofpmf_ssnpm_sstc_svade_svinval_svnapot_svpbmt_sdtrig",
+  "timebase_hz": 24000000,
+  "factory_linux_uses_sstc": true,
+  "linux_dt_memory": {
+    "base": "0x102000000",
+    "size": "0x7fe000000",
+    "end_inclusive": "0x8ffffffff"
+  },
+  "linux_dt_devices": {
+    "clint": {
+      "base": "0xe081c000",
+      "size": "0x4000",
+      "compatible": [
+        "riscv,clint0"
+      ]
+    },
+    "s_imsic": {
+      "base": "0xe0400000",
+      "size": "0x400000",
+      "ids_per_hart": 511,
+      "guest_ids": 63,
+      "hart_index_bits": 4,
+      "guest_index_bits": 6
+    },
+    "s_aplic": {
+      "base": "0xe0804000",
+      "size": "0x4000",
+      "sources": 512
+    },
+    "uart": {
+      "base": "0xd4017000",
+      "size": "0x100",
+      "compatible": [
+        "spacemit,k1-uart",
+        "intel,xscale-uart"
+      ],
+      "reg_shift": 2,
+      "reg_io_width": 4,
+      "irq": 42
+    },
+    "rpmi_reserved_shared_memory": {
+      "base": "0x100e00000",
+      "size": "0x4000"
+    }
+  },
+  "linux_dt_mmode_reservations": [
+    {
+      "base": "0xd4282000",
+      "size": "0x1000"
+    },
+    {
+      "base": "0x100000000",
+      "size": "0x100000"
+    },
+    {
+      "base": "0x100800000",
+      "size": "0x400000"
+    }
+  ],
+  "nor_opensbi_partition": {
+    "offset": "0x1b0000",
+    "size": "0x60000",
+    "size_bytes": 393216,
+    "next_uboot_offset": "0x210000"
+  },
+  "reviewed_local_firmware": {
+    "path": "install/keystone/firmware/k3/fw_dynamic.bin",
+    "sha256": "668bfa1a0c57351456117001f7f8b413825eaff7d8c2ce44ee2e0d6810caceed",
+    "size_bytes": 532320,
+    "sm_trace_enabled": true,
+    "elf_type": "DYN",
+    "elf_relative_fw_end": "0x88000"
+  },
+  "unknown": [
+    "OpenSBI-entry DTB before fixups",
+    "factory OpenSBI commit and defconfig",
+    "per-hart PMP and PMACFG CSR inventory",
+    "actual boot-container and load constraints",
+    "M-mode IPI and timer operation with this firmware",
+    "RPMI reset availability and successful reset with this firmware"
+  ],
+  "scope": "Observed factory Linux environment, not execution of the modified Keystone firmware on hardware. Device serial, MAC addresses and boot PARTUUIDs are omitted."
+}
