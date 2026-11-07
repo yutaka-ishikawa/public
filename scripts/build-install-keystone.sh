@@ -94,11 +94,11 @@ for component in qemu firmware linux; do
  case "$component" in
   qemu) artifact=bin/qemu-system-riscv64;; firmware) artifact=firmware/k3/fw_dynamic.bin;; linux) artifact=boot/k3/Image;;
  esac
- if [[ -s "$BASE_PREFIX/$artifact" ]]; then
+ # Firmware must reflect current SM/OpenSBI sources, even when a base install exists.
+ if [[ $component != firmware && -s "$BASE_PREFIX/$artifact" ]]; then
   case "$component" in
    qemu) mkdir -p "$PREFIX/bin"; install -m 0755 "$BASE_PREFIX/$artifact" "$PREFIX/$artifact";
     if [[ -d "$BASE_PREFIX/share/qemu" ]]; then mkdir -p "$PREFIX/share/qemu"; cp -a "$BASE_PREFIX/share/qemu/." "$PREFIX/share/qemu/"; fi;;
-   firmware) mkdir -p "$PREFIX/firmware/k3"; cp -a "$BASE_PREFIX/firmware/k3/." "$PREFIX/firmware/k3/";;
    linux) mkdir -p "$PREFIX/boot/k3"; cp -a "$BASE_PREFIX/boot/k3/." "$PREFIX/boot/k3/";;
   esac
  else

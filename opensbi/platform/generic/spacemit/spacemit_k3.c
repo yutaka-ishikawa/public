@@ -22,6 +22,9 @@
 #include <sbi/sbi_trap_ldst.h>
 #include <sbi_utils/fdt/fdt_helper.h>
 #include <spacemit/spacemit_config.h>
+#ifdef CONFIG_K3_KEYSTONE_SM
+#include <spacemit/k3_keystone_timer.h>
+#endif
 #include <sbi_utils/cache/cache.h>
 #include <sbi_utils/cci/cci.h>
 
@@ -437,6 +440,10 @@ static int spacemit_k3_vendor_ext_provider(long funcid,
 }
 
 const struct platform_override spacemit_k3 = {
+#ifdef CONFIG_K3_KEYSTONE_SM
+	.extensions_init = k3_keystone_timer_extensions,
+	.fdt_fixup = k3_keystone_timer_fdt_fixup,
+#endif
 	.match_table = spacemit_k3_mach,
 	.early_init = spacemit_k3_early_init,
 	.final_init = spacemit_k3_final_init,

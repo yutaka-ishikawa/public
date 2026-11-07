@@ -44,7 +44,7 @@ bash scripts/build-install-k3.sh --prefix /path/to/bianbu --jobs 5 \
 bash scripts/build-install-keystone.sh --jobs 5
 ```
 
-This builds the SDK, Eyrie and `hello.ke`/`hello-native.ke` using the distro RISC-V toolchain. It reuses K3 QEMU/firmware/kernel artifacts from `install/bianbu/` when present, and builds missing components using the existing K3 scripts. It builds `keystone-driver.ko` against the **same kernel build output** as the installed Image and creates a separate rootfs using `scripts/build-rootfs-keystone.sh`. The Bianbu guest filesystem is not modified.
+This builds the SDK, Eyrie and `hello.ke`/`hello-native.ke` using the distro RISC-V toolchain. It reuses K3 QEMU/kernel artifacts from `install/bianbu/` when present, builds missing components using the existing K3 scripts, and always rebuilds firmware from the current SM/OpenSBI sources. The OpenSBI link also tracks the external SM object so an SM-only update cannot silently reuse an older firmware ELF. It builds `keystone-driver.ko` against the **same kernel build output** as the installed Image and creates a separate rootfs using `scripts/build-rootfs-keystone.sh`. The Bianbu guest filesystem is not modified.
 
 Keystone build outputs live in `.build-keystone/`; the shared K3 build output remains `.build-k3/`. The rootfs overlay is populated without loop mounts or sudo and every imported file's content is verified. A pre-existing Keystone image is never overwritten: choose a new `--prefix` for a fresh installation. Generated SDK tool aliases and CMake compatibility flags avoid changing the system toolchain.
 
@@ -105,6 +105,20 @@ bash run-k3.sh --prefix "$PWD/install/keystone-v2"
 ### Eyrie link errors about stack canaries
 
 If an older checkout fails to link Eyrie with undefined `__stack_chk_guard` or `__stack_chk_fail`, update with `git pull` and rerun the same Keystone build command. Eyrie, its freestanding SDK app/edge libraries, and the native enclave example explicitly disable compiler-generated stack protection because they have no libc/canary provider. Host runners retain the toolchain's normal protection settings. The build refreshes generated Eyrie sources and rebuilds affected objects; deleting the existing guest images is unnecessary.
+
+### Updating the SM/OpenSBI firmware without rebuilding a guest image
+
+Stop the guest first, then rebuild into the installation directory you actually boot:
+
+```bash
+git pull
+bash scripts/build-install-k3.sh --only firmware --prefix "$PWD/install/keystone"
+bash run-k3.sh --image keystone
+```
+
+For another installation (for example `install/keystone-v2`), use that same directory for both the build's and launcher's `--prefix`. No rootfs replacement or kernel rebuild is needed for the SM trap-return/ABI fixes.
+
+With `CONFIG_K3_KEYSTONE_SM`, firmware deliberately uses the machine-timer path required by the current SM. It clears Sstc access and removes `sstc` from both device-tree ISA encodings, so Linux and SBI SET_TIMER agree on that policy. This is a compatibility policy, not full Sstc context virtualization. Firmware builds without Keystone enabled keep their existing timer behavior.
 
 ## QEMU startup: Keystone is the default
 

@@ -115,20 +115,19 @@ void sbi_trap_handler_keystone_enclave(struct sbi_trap_regs *regs)
 	if (mcause & (1UL << (__riscv_xlen - 1))) {
 		mcause &= ~(1UL << (__riscv_xlen - 1));
 		switch (mcause) {
-		case IRQ_M_TIMER: {
+		case IRQ_M_TIMER:
+		case IRQ_M_SOFT:
+      /* RESUME adds four to the saved enclave PC, hence this bias only
+       * applies to the interrupted enclave frame. STOP itself advances the
+       * restored host ECALL PC exactly once. Unlike old sbi_trap_exit(), the
+       * ported helper returns here: do not advance the host PC a second time. */
       regs->mepc -= 4;
-      sbi_sm_stop_enclave(regs, STOP_TIMER_INTERRUPT);
-      regs->a0 = SBI_ERR_SM_ENCLAVE_INTERRUPTED;
-      regs->mepc += 4;
-			break;
-                      }
-		case IRQ_M_SOFT: {
-      regs->mepc -= 4;
-      sbi_sm_stop_enclave(regs, STOP_TIMER_INTERRUPT);
-      regs->a0 = SBI_ERR_SM_ENCLAVE_INTERRUPTED;
-      regs->mepc += 4;
-			break;
-                     }
+      rc = sbi_sm_stop_enclave(regs, STOP_TIMER_INTERRUPT);
+      if (rc) {
+        msg = "enclave interrupt stop failed";
+        goto trap_error;
+      }
+      break;
 		default:
 			msg = "unhandled external interrupt";
 			goto trap_error;

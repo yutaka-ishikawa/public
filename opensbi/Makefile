@@ -608,7 +608,8 @@ $(platform_build_dir)/%.dtb: $(platform_src_dir)/%.dts
 $(platform_build_dir)/%.bin: $(platform_build_dir)/%.elf
 	$(call compile_objcopy,$@,$<)
 
-$(platform_build_dir)/%.elf: $(platform_build_dir)/%.o $(platform_build_dir)/%.elf.ld $(platform_build_dir)/lib/libplatsbi.a
+# The optional SM is passed through link flags, but must also trigger relinking.
+$(platform_build_dir)/%.elf: $(platform_build_dir)/%.o $(platform_build_dir)/%.elf.ld $(platform_build_dir)/lib/libplatsbi.a $(KEYSTONE_K3_SM_LINK_PROBE)
 	$(call compile_elf,$@,$@.ld,$< $(platform_build_dir)/lib/libplatsbi.a)
 
 $(platform_build_dir)/%.dep: $(src_dir)/%.ldS $(KCONFIG_AUTOHEADER)

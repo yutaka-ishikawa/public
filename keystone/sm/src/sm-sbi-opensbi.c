@@ -14,6 +14,20 @@
 #include "sm.h"
 #include "cpu.h"
 
+/* Keystone's legacy ABI uses positive status codes. New OpenSBI accepts only
+ * standard SBI errors from handle(), so complete the frame explicitly and ask
+ * the common dispatcher to leave it alone. Context switches already do this. */
+static int keystone_ecall_return(struct sbi_trap_regs *regs,
+                                struct sbi_ecall_return *out,
+                                uintptr_t status)
+{
+  regs->a0 = status;
+  regs->a1 = out->value;
+  regs->mepc += 4;
+  out->skip_regs_update = true;
+  return 0;
+}
+
 static int sbi_ecall_keystone_enclave_handler(unsigned long extid, unsigned long funcid,
                      struct sbi_trap_regs *regs,
                      struct sbi_ecall_return *out)
@@ -23,27 +37,27 @@ static int sbi_ecall_keystone_enclave_handler(unsigned long extid, unsigned long
 #ifdef KEYSTONE_K3_PMP_N_REG
   if (!sm_is_ready()) {
     sbi_printf("[SM/K3] Keystone SBI function %lu unavailable: SM not initialized\n", funcid);
-    return SBI_ERR_SM_NOT_IMPLEMENTED;
+    return keystone_ecall_return(regs, out, SBI_ERR_SM_NOT_IMPLEMENTED);
   }
   if (funcid == SBI_SM_RANDOM) {
     sbi_printf("[SM/K3] secure random generator not implemented\n");
-    return SBI_ERR_SM_NOT_IMPLEMENTED;
+    return keystone_ecall_return(regs, out, SBI_ERR_SM_NOT_IMPLEMENTED);
   }
   if (funcid == SBI_SM_ATTEST_ENCLAVE || funcid == SBI_SM_GET_SEALING_KEY) {
     sbi_printf("[SM/K3] secure key provider not implemented\n");
-    return SBI_ERR_SM_NOT_IMPLEMENTED;
+    return keystone_ecall_return(regs, out, SBI_ERR_SM_NOT_IMPLEMENTED);
   }
 #endif
-  if (funcid <= FID_RANGE_DEPRECATED) { return SBI_ERR_SM_DEPRECATED; }
+  if (funcid <= FID_RANGE_DEPRECATED) { return keystone_ecall_return(regs, out, SBI_ERR_SM_DEPRECATED); }
   else if (funcid <= FID_RANGE_HOST)
   {
     if (cpu_is_enclave_context())
-      return SBI_ERR_SM_ENCLAVE_SBI_PROHIBITED;
+      return keystone_ecall_return(regs, out, SBI_ERR_SM_ENCLAVE_SBI_PROHIBITED);
   }
   else if (funcid <= FID_RANGE_ENCLAVE)
   {
     if (!cpu_is_enclave_context())
-      return SBI_ERR_SM_ENCLAVE_SBI_PROHIBITED;
+      return keystone_ecall_return(regs, out, SBI_ERR_SM_ENCLAVE_SBI_PROHIBITED);
   }
 
   switch (funcid) {
@@ -95,7 +109,9 @@ static int sbi_ecall_keystone_enclave_handler(unsigned long extid, unsigned long
       break;
   }
 
-  return retval;
+  if (out->skip_regs_update)
+    return 0; /* RUN/RESUME/STOP/EXIT already selected a different frame. */
+  return keystone_ecall_return(regs, out, retval);
 
 }
 

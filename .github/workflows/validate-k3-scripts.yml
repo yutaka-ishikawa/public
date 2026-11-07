@@ -11,6 +11,12 @@ on:
       - 'scripts/install-keystone-guest-tools.sh'
       - 'scripts/guest/**'
       - 'scripts/tests/test-keystone-guest-tools.py'
+      - 'scripts/tests/test-keystone-sm-port.py'
+      - 'scripts/tests/test-keystone-timer-policy.py'
+      - 'keystone/sm/src/**'
+      - 'opensbi/Makefile'
+      - 'opensbi/platform/generic/spacemit/**'
+      - 'opensbi/platform/generic/include/spacemit/k3_keystone_timer.h'
       - 'scripts/build-rootfs-keystone.sh'
       - 'scripts/install-build-deps.sh'
       - 'scripts/tests/test-rootfs-k3.py'
@@ -53,7 +59,11 @@ jobs:
       - name: Install image test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y e2fsprogs fakeroot
+          sudo apt-get install -y e2fsprogs fakeroot libfdt-dev
+      - name: Verify Keystone SM trap and timer contracts
+        run: |
+          python3 scripts/tests/test-keystone-sm-port.py
+          python3 scripts/tests/test-keystone-timer-policy.py
       - name: Verify image creation and Keystone overlay
         run: python3 scripts/tests/test-build-rootfs-k3.py
       - name: Verify guest helper installation and shutdown control
