@@ -1,9 +1,10 @@
-name: K3 fork build validation
+name: K3 upstream clone patch and build
 on:
   workflow_dispatch:
   push:
     paths:
       - '.github/workflows/k3-build.yml'
+      - 'patches/**'
       - 'scripts/**'
 permissions:
   contents: read
@@ -17,13 +18,20 @@ jobs:
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y git make build-essential python3 meson ninja-build pkg-config libglib2.0-dev libpixman-1-dev libfdt-dev libslirp-dev zlib1g-dev device-tree-compiler libcapstone-dev
-      - name: Checkout patched QEMU fork
+      - name: Clone pinned QEMU upstream
         run: |
-          git clone --filter=blob:none --branch k3-patched-20261107 https://github.com/yutaka-ishikawa/qemu.git qemu
-          git -C qemu fetch --no-tags https://github.com/qemu/qemu.git refs/tags/v11.1.3
-          test "$(git -C qemu rev-parse HEAD^)" = "$(git -C qemu rev-parse FETCH_HEAD^{} )"
-          git -C qemu log -1 --oneline
-      - name: Build patched QEMU and verify machine
+          set -Eeuo pipefail
+          git clone --depth 1 --branch v11.1.3 https://github.com/qemu/qemu.git qemu
+          git -C qemu describe --tags --exact-match
+          git -C qemu rev-parse HEAD | tee qemu-upstream-sha.txt
+      - name: Validate and apply QEMU patch
+        run: |
+          set -Eeuo pipefail
+          git -C qemu apply --check "$GITHUB_WORKSPACE/patches/qemu-11.1.3-jupiter2-k3-boot.patch"
+          git -C qemu apply "$GITHUB_WORKSPACE/patches/qemu-11.1.3-jupiter2-k3-boot.patch"
+          git -C qemu diff --check
+          git -C qemu diff --stat | tee qemu-patch-stat.txt
+      - name: Build QEMU and verify Jupiter2 machine
         run: |
           set -Eeuo pipefail
           cd qemu
@@ -31,45 +39,66 @@ jobs:
           ninja -C build qemu-system-riscv64
           ./build/qemu-system-riscv64 -machine help | tee "$GITHUB_WORKSPACE/qemu-machines.txt"
           grep -i jupiter2 "$GITHUB_WORKSPACE/qemu-machines.txt"
-      - uses: actions/upload-artifact@v4
+      - name: Upload QEMU logs
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: qemu-jupiter2-diagnostics
-          path: qemu-machines.txt
+          path: |
+            qemu-machines.txt
+            qemu-upstream-sha.txt
+            qemu-patch-stat.txt
           if-no-files-found: warn
+
   opensbi-keystone:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
-      - name: Install RISC-V build tools
+      - name: Install cross compilation dependencies
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y git make build-essential python3 clang lld llvm binutils
-      - name: Checkout patched forks and verify base
+      - name: Clone pinned OpenSBI and Keystone upstream
         run: |
           set -Eeuo pipefail
-          git clone --filter=blob:none --branch k3-patched-20261107 https://github.com/yutaka-ishikawa/opensbi.git opensbi-k3
-          git clone --filter=blob:none --branch k3-patched-20261107 https://github.com/yutaka-ishikawa/keystone.git keystone
-          test "$(git -C opensbi-k3 rev-parse HEAD^)" = ad6091fd16c4d4a445168f6a479e1b8aadb4931c
-          test "$(git -C keystone rev-parse HEAD^)" = b8c2385355b2afb5b94a4e5dc503936f1502b972
-      - name: Check patched build environment
+          git clone https://github.com/spacemit-com/opensbi.git opensbi-k3
+          git -C opensbi-k3 checkout --detach ad6091fd16c4d4a445168f6a479e1b8aadb4931c
+          git clone https://github.com/keystone-enclave/keystone.git keystone
+          git -C keystone checkout --detach b8c2385355b2afb5b94a4e5dc503936f1502b972
+          printf 'OpenSBI: %s\nKeystone: %s\n' "$(git -C opensbi-k3 rev-parse HEAD)" "$(git -C keystone rev-parse HEAD)" | tee upstream-shas.txt
+      - name: Validate and apply both patches
+        run: |
+          set -Eeuo pipefail
+          git -C opensbi-k3 apply --check "$GITHUB_WORKSPACE/patches/opensbi-k3-keystone-cumulative.patch"
+          git -C keystone apply --check "$GITHUB_WORKSPACE/patches/keystone-k3-cumulative.patch"
+          git -C opensbi-k3 apply "$GITHUB_WORKSPACE/patches/opensbi-k3-keystone-cumulative.patch"
+          git -C keystone apply "$GITHUB_WORKSPACE/patches/keystone-k3-cumulative.patch"
+          git -C opensbi-k3 diff --check
+          git -C keystone diff --check
+          git -C opensbi-k3 diff --stat | tee opensbi-patch-stat.txt
+          git -C keystone diff --stat | tee keystone-patch-stat.txt
+      - name: Check build environment
         run: bash scripts/check_build_environment.sh "$GITHUB_WORKSPACE/keystone" "$GITHUB_WORKSPACE/opensbi-k3"
-      - name: Build SM object
+      - name: Compile Keystone Secure Monitor
         run: bash scripts/build_keystone_sm.sh "$GITHUB_WORKSPACE/keystone" "$GITHUB_WORKSPACE/opensbi-k3" "$GITHUB_WORKSPACE/work"
-      - name: Link OpenSBI firmware
+      - name: Link OpenSBI firmware with Keystone
         run: bash scripts/build_opensbi_link.sh "$GITHUB_WORKSPACE/opensbi-k3" "$GITHUB_WORKSPACE/work"
-      - name: Archive diagnostic logs and firmware
+      - name: Archive diagnostics
         if: always()
         shell: bash
         run: |
           mkdir -p ci-output
-          find work -maxdepth 1 -type f \( -name '*.log' -o -name '*.txt' \) -exec cp {} ci-output/ \; 2>/dev/null || true
-          if test -s work/sm-combined.o; then cp work/sm-combined.o ci-output/; fi
-          F=work/build-opensbi-k3-keystone/platform/generic/firmware
-          for ext in bin elf; do if test -s "$F/fw_dynamic.$ext"; then cp "$F/fw_dynamic.$ext" ci-output/; fi; done
-      - uses: actions/upload-artifact@v4
+          for f in upstream-shas.txt opensbi-patch-stat.txt keystone-patch-stat.txt; do if test -f "$f"; then cp "$f" ci-output/; fi; done
+          if test -d work; then
+            find work -maxdepth 1 -type f \( -name '*.log' -o -name '*.txt' \) -exec cp {} ci-output/ \;
+            test ! -s work/sm-combined.o || cp work/sm-combined.o ci-output/
+            F=work/build-opensbi-k3-keystone/platform/generic/firmware
+            for ext in bin elf; do if test -s "$F/fw_dynamic.$ext"; then cp "$F/fw_dynamic.$ext" ci-output/; fi; done
+          fi
+      - name: Upload OpenSBI and Keystone diagnostics
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: opensbi-keystone-diagnostics
           path: ci-output/
