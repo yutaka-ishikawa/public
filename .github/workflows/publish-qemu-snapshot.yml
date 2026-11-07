@@ -1,0 +1,69 @@
+name: Publish patched QEMU source snapshot
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-qemu-snapshot.yml'
+permissions:
+  contents: write
+jobs:
+  publish-qemu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify target branch does not exist
+        run: |
+          set -Eeuo pipefail
+          if git ls-remote --exit-code https://github.com/$GITHUB_REPOSITORY.git refs/heads/sources/qemu-k3 >/dev/null; then
+            echo "QEMU source branch exists; refusing to overwrite it"
+            exit 0
+          fi
+      - name: Clone QEMU v11.1.3
+        run: |
+          set -Eeuo pipefail
+          git clone --depth 1 --branch v11.1.3 https://github.com/qemu/qemu.git source
+          git -C source rev-parse HEAD | tee qemu-upstream-sha.txt
+      - name: Apply and inspect patch
+        run: |
+          set -Eeuo pipefail
+          git -C source apply --check "$GITHUB_WORKSPACE/patches/qemu-11.1.3-jupiter2-k3-boot.patch"
+          git -C source apply --whitespace=fix "$GITHUB_WORKSPACE/patches/qemu-11.1.3-jupiter2-k3-boot.patch"
+          git -C source diff --check
+          git -C source diff --stat | tee patched-diff-stat.txt
+          test -n "$(git -C source status --porcelain)"
+      - name: Prepare and commit full source snapshot
+        run: |
+          set -Eeuo pipefail
+          cd source
+          if test -d .github/workflows; then
+            test ! -e upstream-github-workflows
+            mv .github/workflows upstream-github-workflows
+          fi
+          rm -rf .git
+          git init -b source-snapshot
+          git add -A
+          git -c user.name='K3 GitHub Actions' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Save QEMU 11.1.3 Jupiter2 patched source snapshot'
+      - name: Publish snapshot branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          cd source
+          REMOTE=https://github.com/$GITHUB_REPOSITORY.git
+          if git ls-remote --exit-code "$REMOTE" refs/heads/sources/qemu-k3 >/dev/null; then
+            echo "QEMU branch already exists, leaving intact"
+            exit 0
+          fi
+          git push "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" HEAD:refs/heads/sources/qemu-k3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: patched-qemu-source
+          path: |
+            qemu-upstream-sha.txt
+            patched-diff-stat.txt
+          if-no-files-found: warn
