@@ -55,3 +55,21 @@ The boot configuration uses `-M jupiter2`, `rva23s64,k3-pmacfg=true,pmp=true,num
 ## Verification status
 
 Saving patched source trees and the Linux import succeeded. **Successful full QEMU + Keystone SM + OpenSBI + Linux compilation and an actual Linux boot have not been established by this setup.** The firmware build scripts perform a diagnostic SM compile/link and must not be treated as evidence of secure enclave functionality or hardware PMP/IOPMP safety. Inspect build logs and fail closed on build errors before using generated images.
+
+## Clean build intermediates after a failed build
+
+The integration build uses `.build-k3/{qemu,firmware,linux}` by default. To clean all three components:
+
+```bash
+bash scripts/clean-k3.sh
+```
+
+Or clean only the failed component (for example, the OpenSBI/Keystone firmware build):
+
+```bash
+bash scripts/clean-k3.sh --only firmware
+```
+
+Use `--only qemu` or `--only linux` for the other components. Preview deletions with `--dry-run`. If building with `--build-dir /path/to/work`, provide the same option to the clean script. Custom build directories must contain the `.k3-build-root` marker created by `build-install-k3.sh`.
+
+The script **never removes** source trees, patches, rootfs files, or files installed to `bin/`, `firmware/k3/`, `boot/k3/`, or `lib/modules/`. Stop running builds before cleaning. This is not a full uninstall.
