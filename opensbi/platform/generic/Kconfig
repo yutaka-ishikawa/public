@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: BSD-2-Clause
+
+config PLATFORM_GENERIC
+	bool
+	select FDT
+	select FDT_DOMAIN
+	select FDT_PMU
+	default y
+
+if PLATFORM_GENERIC
+
+config PLATFORM_GENERIC_NAME
+	string "Platform default name"
+	default "Generic"
+
+config PLATFORM_GENERIC_MAJOR_VER
+	int "Platform major version"
+	range 0 65535
+	default 0
+
+config PLATFORM_GENERIC_MINOR_VER
+	int "Platform minor version"
+	range 0 65535
+	default 1
+
+config PLATFORM_ALLWINNER_D1
+	bool "Allwinner D1 support"
+	depends on FDT_IRQCHIP_PLIC
+	select THEAD_C9XX_PMU
+	default n
+
+config PLATFORM_ANDES_AE350
+	bool "Andes AE350 support"
+	select SYS_ATCSMU
+	select ANDES_PMU
+	select ANDES_PMA
+	default n
+
+config PLATFORM_RENESAS_RZFIVE
+	bool "Renesas RZ/Five support"
+	select ANDES_PMA
+	select ANDES_SBI
+	select ANDES_PMU
+	default n
+
+config PLATFORM_SIFIVE_FU540
+	bool "SiFive FU540 support"
+	default n
+
+config PLATFORM_SIFIVE_FU740
+	bool "SiFive FU740 support"
+	depends on FDT_RESET && FDT_I2C
+	default n
+
+config PLATFORM_SOPHGO_SG2042
+	bool "Sophgo sg2042 support"
+	select THEAD_C9XX_ERRATA
+	select THEAD_C9XX_PMU
+	default n
+
+config PLATFORM_STARFIVE_JH7110
+	bool "StarFive JH7110 support"
+	default n
+
+config PLATFORM_THEAD
+	bool "THEAD C9xx support"
+	select THEAD_C9XX_ERRATA
+	select THEAD_C9XX_PMU
+	default n
+
+config PLATFORM_SPACEMIT_K3
+       bool "Spacemit K3 support"
+       default n
+
+
+if PLATFORM_SPACEMIT_K3
+	choice
+		prompt "K3 PMP policy selection"
+		default K3_PMP_VENDOR
+
+	config K3_PMP_VENDOR
+		bool "Vendor default PMP behavior"
+
+	config K3_PMP_SMEPMP
+		bool "OpenSBI-managed Smepmp policy (experimental)"
+
+	config K3_KEYSTONE_SM
+		bool "K3 Keystone SM integrated PMP owner (NOT READY)"
+		help
+			Mutually exclusive with the explicit Smepmp policy.
+			Firmware is intentionally blocked at compile time pending
+			PMP handoff and hardware verification.
+	endchoice
+
+	config PLATFORM_SPACEMIT_K3_FPGA
+		bool "Spacemit K3 board fpag"
+		default n
+
+	config FIT_SIGNATURE
+		bool "Enable signature build for FIT Images"
+		default n
+		help
+			This option enables build signature for FIT Images,
+			using a hash signed and verified using RSA.
+
+			WARNING: When relying on signed FIT images with a required signature
+			check the legacy image format is disabled by default, so that
+			unsigned images cannot be loaded.
+endif
+
+source "$(OPENSBI_SRC_DIR)/platform/generic/andes/Kconfig"
+source "$(OPENSBI_SRC_DIR)/platform/generic/thead/Kconfig"
+
+endif

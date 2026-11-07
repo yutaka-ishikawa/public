@@ -1,0 +1,40 @@
+#!/usr/bin/make -f
+
+export ARCH=riscv
+
+# This package only targets RISC-V, so default to the standard Debian/Ubuntu
+# cross prefix, which is also correct for native builds.
+export CROSS_COMPILE ?= riscv64-linux-gnu-
+
+# Enable verbose build by default, disable when terse is specified.
+ifeq (,$(filter terse,$(DEB_BUILD_OPTIONS)))
+VERBOSE=1
+else
+VERBOSE=0
+endif
+
+# get the commit ID
+GIT_INSIDE := $(shell git rev-parse --is-inside-work-tree 2>/dev/null)
+ifeq ($(GIT_INSIDE),true)
+	COMMIT_ID := $(shell git rev-parse --short HEAD)
+endif
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	make \
+		V=$(VERBOSE) \
+		PLATFORM_DEFCONFIG=k3_defconfig \
+		PLATFORM=generic ; \
+
+override_dh_gencontrol:
+	echo "misc:CommitId=${COMMIT_ID}" >> debian/opensbi-spacemit.substvars
+	dh_gencontrol
+
+override_dh_installdocs:
+	dh_installdocs --exclude=doxygen.cfg
+
+override_dh_install:
+	chmod -x build/platform/generic/firmware/fw_*.bin
+	dh_install

@@ -1,0 +1,272 @@
+#!/bin/sh
+set -e
+
+# returns 0 if running in chroot, 1 if not
+running_in_chroot() {
+    if [ "${SYSTEMD_IGNORE_CHROOT:-0}" = "1" ]; then
+        return 1
+    fi
+
+    if [ -e "/proc/1/root" ]; then
+        root_dev_ino=$(stat -c '%d:%i' / 2>/dev/null) || return 0
+        proc1_root_dev_ino=$(stat -L -c '%d:%i' /proc/1/root 2>/dev/null) || return 0
+
+        [ "$root_dev_ino" = "$proc1_root_dev_ino" ] && return 1 || return 0
+    fi
+
+    if [ ! -d "/proc" ] || [ ! -r "/proc/version" ]; then
+        [ "$$" = "1" ] && return 1 || return 0
+    fi
+
+    return 0
+}
+
+case "$1" in
+configure)
+    target=""
+    # Detect a Spacemit K3 / X100 platform.  Different kernels expose the SoC
+    # identity differently, so accept any of:
+    #   - "Spacemit(R) X100" model string in /proc/cpuinfo (BSP kernels)
+    #   - "spacemit,x100" uarch line in /proc/cpuinfo (mainline kernels)
+    #   - "spacemit,k3" in /proc/device-tree/compatible (device tree)
+    if grep -q 'Spacemit(R) X100' /proc/cpuinfo \
+        || grep -q 'spacemit,x100' /proc/cpuinfo \
+        || { [ -r /proc/device-tree/compatible ] &&
+             grep -qa 'spacemit,k3' /proc/device-tree/compatible; }; then
+        target="spacemit"
+    else
+        echo "Running not in Spacemit K3/X100, skipping install opensbi to bootloader partition."
+        exit 0
+    fi
+
+    if running_in_chroot; then
+        echo "Running in chroot, skipping install opensbi to bootloader partition."
+        exit 0
+    fi
+
+    # Ensure mtdblock is loaded.  It is built-in on SpacemiT kernels but ships
+    # as a module on mainline kernels (e.g. Ubuntu), where /dev/mtdblock*
+    # won't exist until the module is loaded.
+    modprobe mtdblock 2>/dev/null || true
+
+    BOOT_MODE=""
+    for x in $(cat /proc/cmdline); do
+        case $x in
+        root=UUID=*)
+            ROOT=${x#root=UUID=}
+            DEVICES=$(blkid -s UUID | grep "$ROOT" | awk '{print $1}')
+            DEVICE_COUNT=$(echo "$DEVICES" | wc -l)
+            if [ "$DEVICE_COUNT" -gt 1 ]; then
+                echo "Warning: Multiple devices found with the same UUID $ROOT:"
+                echo "$DEVICES"
+                echo "This may cause installation issues. Please ensure unique UUIDs."
+                exit 0
+            fi
+            ROOT=$(echo "$DEVICES" | head -n1)
+            ;;
+        root=*)
+            ROOT=${x#root=}
+            ;;
+        boot_mode=*)
+            BOOT_MODE=${x#boot_mode=}
+            ;;
+        esac
+    done
+
+    # 根据boot_mode获取启动介质设备
+    get_boot_device_from_mode() {
+        local mode=$1
+        case $mode in
+        emmc)
+            echo "/dev/mmcblk2"
+            ;;
+        sdcard)
+            echo "/dev/mmcblk0"
+            ;;
+        nor)
+            if [ -e "/dev/mtdblock0" ]; then
+                echo "/dev/mtdblock0"
+            else
+                echo ""
+            fi
+            ;;
+        nand)
+            # NAND设备也使用MTD子系统，通常是/dev/mtdblock0
+            if [ -e "/dev/mtdblock0" ]; then
+                echo "/dev/mtdblock0"
+            else
+                echo ""
+            fi
+            ;;
+        ufs)
+            echo "/dev/sda"
+            ;;
+        *)
+            echo ""
+            ;;
+        esac
+    }
+
+    # 从rootfs设备路径获取基础设备
+    get_base_device() {
+        local dev=$1
+        case $dev in
+        "/dev/mmcblk0"*)
+            echo "/dev/mmcblk0"
+            ;;
+        "/dev/mmcblk2"*)
+            echo "/dev/mmcblk2"
+            ;;
+        "/dev/sda"*)
+            echo "/dev/sda"
+            ;;
+        "/dev/nvme0n1"*)
+            echo "/dev/nvme0n1"
+            ;;
+        *)
+            echo ""
+            ;;
+        esac
+    }
+
+    # 确定目标设备：如果有boot_mode且与rootfs设备不同，使用启动设备；否则使用rootfs设备
+    TARGET_DEVICE=""
+    if [ -n "$BOOT_MODE" ]; then
+        BOOT_DEVICE=$(get_boot_device_from_mode "$BOOT_MODE")
+        if [ -n "$BOOT_DEVICE" ] && [ -n "$ROOT" ]; then
+            ROOT_BASE_DEVICE=$(get_base_device "$ROOT")
+            # 比较启动设备和rootfs基础设备
+            if [ "$BOOT_DEVICE" != "$ROOT_BASE_DEVICE" ]; then
+                TARGET_DEVICE="$BOOT_DEVICE"
+                echo "Boot device ($BOOT_MODE -> $BOOT_DEVICE) differs from rootfs device ($ROOT_BASE_DEVICE), using boot device."
+            else
+                TARGET_DEVICE="$ROOT_BASE_DEVICE"
+                echo "Boot device matches rootfs device, using $TARGET_DEVICE."
+            fi
+        elif [ -n "$BOOT_DEVICE" ]; then
+            TARGET_DEVICE="$BOOT_DEVICE"
+            echo "Using boot device from boot_mode=$BOOT_MODE: $TARGET_DEVICE"
+        else
+            echo "Unsupported boot_mode=$BOOT_MODE, unable to determine boot device."
+            exit 1
+        fi
+    fi
+
+    # 如果没有确定目标设备（无boot_mode或解析失败），使用原有逻辑
+    if [ -z "$TARGET_DEVICE" ] && [ -n "$ROOT" ]; then
+        TARGET_DEVICE=$(get_base_device "$ROOT")
+    fi
+
+    # UEFI启动且未指定boot_mode时，若检测到NOR flash则回退到NOR+存储设备组合的启动逻辑
+    # 此场景通常为：NOR存放opensbi，SSD/UFS/eMMC存放rootfs
+    if [ -d "/sys/firmware/efi" ] && [ -z "$BOOT_MODE" ] && [ -f "/proc/mtd" ]; then
+        echo "UEFI boot without boot_mode, NOR flash detected, falling back to NOR boot device."
+        TARGET_DEVICE="/dev/mtdblock0"
+        BOOT_MODE="nor"
+    fi
+
+    if [ -n "$TARGET_DEVICE" ]; then
+        case $TARGET_DEVICE in
+        "/dev/mmcblk0")
+            OPENSBI=/dev/mmcblk0
+            # 以KB为单位
+            OPENSBI_SEEK=7168
+            ;;
+        "/dev/mmcblk2")
+            OPENSBI=/dev/mmcblk2
+            # 以KB为单位
+            OPENSBI_SEEK=7168
+            ;;
+        "/dev/sda")
+            OPENSBI=/dev/sda
+            # 以KB为单位
+            OPENSBI_SEEK=7168
+            ;;
+        "/dev/mtdblock0")
+            # 解析 /proc/mtd 判断分区布局
+            if [ ! -f "/proc/mtd" ]; then
+                echo "Error: /proc/mtd not found, cannot determine MTD partition layout"
+                exit 1
+            fi
+
+            # 获取 mtd0 的名称
+            MTD0_NAME=$(grep '^mtd0:' /proc/mtd | awk -F'"' '{print $2}')
+            
+            if [ "$MTD0_NAME" = "bootinfo" ]; then
+                # mtd0 是 bootinfo，说明各组件有独立分区，按分区编号写入
+                echo "Detected MTD partition layout: independent partitions"
+                OPENSBI=/dev/mtdblock4
+                # 以KB为单位
+                OPENSBI_SEEK=0
+            else
+                # mtd0 是整个设备，使用偏移方式写入
+                echo "Detected MTD partition layout: single device with offsets (mtd0=$MTD0_NAME)"
+                OPENSBI=/dev/mtdblock0
+                # 以KB为单位
+                OPENSBI_SEEK=1728
+            fi
+            ;;
+        "/dev/nvme0n1")
+            # NVMe+NOR 组合，检查 MTD 分区布局
+            if [ -f "/proc/mtd" ]; then
+                # 有 MTD，从 NOR 启动
+                MTD0_NAME=$(grep '^mtd0:' /proc/mtd | awk -F'"' '{print $2}')
+                
+                if [ "$MTD0_NAME" = "bootinfo" ]; then
+                    # mtd0 是 bootinfo，独立分区布局
+                    OPENSBI=/dev/mtdblock4
+                    # 以KB为单位
+                    OPENSBI_SEEK=0
+                else
+                    # mtd0 是整个设备，使用偏移方式
+                    OPENSBI=/dev/mtdblock0
+                    # 以KB为单位
+                    OPENSBI_SEEK=1728
+                fi
+            else
+                # 没有 MTD，使用 eMMC 启动
+                OPENSBI=/dev/mmcblk2
+                # 以KB为单位
+                OPENSBI_SEEK=1728
+            fi
+            ;;
+        *)
+            echo "Unsupported target device=$TARGET_DEVICE"
+            exit 1
+            ;;
+        esac
+    else
+        echo "Unable to determine target device (missing root= or boot_mode= in cmdline)"
+        exit 1
+    fi
+
+    ITB_DIR=/usr/lib/riscv64-linux-gnu/opensbi/generic
+    if [ -e "$ITB_DIR/fw_dynamic_sign.itb" ]; then
+        OPENSBI_ITB="$ITB_DIR/fw_dynamic_sign.itb"
+    else
+        OPENSBI_ITB="$ITB_DIR/fw_dynamic.itb"
+    fi
+
+    # 待检查文件列表
+    files="$OPENSBI_ITB $OPENSBI"
+    for file in $files; do
+        if [ ! -e "$file" ]; then
+            # 任意不存在则退出
+            echo "Missing $file"
+            exit 1
+        fi
+    done
+
+    # 此前已经做了所有检查
+    if [ ! -b "$OPENSBI" ]; then
+        echo "Error: $OPENSBI is not a block device (mtdblock not available in this kernel?)"
+        exit 0
+    fi
+
+    set -x
+    dd if=$OPENSBI_ITB of=$OPENSBI seek=$OPENSBI_SEEK bs=1K && sync
+    set +x
+    ;;
+esac
+
+exit 0

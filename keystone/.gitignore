@@ -1,0 +1,10 @@
+*~
+*.swp
+.venv/
+build*/
+riscv/
+riscv64/
+riscv32/
+
+# K3 development-only build-time private key. Never commit or archive.
+/sm/src/platform/spacemit_k3/k3_dev_key_generated.inc

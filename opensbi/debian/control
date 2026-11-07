@@ -1,0 +1,27 @@
+Source: opensbi-spacemit
+Section: misc
+Priority: optional
+Maintainer: weizhi.li <weizhi.li@spacemit.com>
+Build-Depends: debhelper-compat (=13),
+ python3:any,
+ u-boot-tools,
+ device-tree-compiler,
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Vcs-Browser: https://github.com/spacemit-com/opensbi
+Vcs-Git: https://github.com/spacemit-com/opensbi
+Homepage: https://github.com/riscv-software-src/opensbi
+XBS-Commit-Id: ${misc:CommitId}
+
+Package: opensbi-spacemit
+Architecture: riscv64
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ kmod,
+Description: RISC-V Open Source Supervisor Binary Interface
+ An open-source reference implementation of the RISC-V SBI
+ specifications for platform-specific firmwares executing in M-mode.
+ .
+ The following firmware platforms are provided:
+ generic
