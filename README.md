@@ -2,6 +2,8 @@
 
 The `main` branch contains `qemu/`, `opensbi/`, `keystone/`, and `linux-k3/`. Original patches are under `patches/`.
 
+独立したアプリ開発用サンプルは、[sample/README.md](sample/README.md)を参照してください。通常のMakefileでhelloをビルド・パッケージ化できます。
+
 ## Host dependencies
 
 On Ubuntu 24.04 or an equivalent APT-based distribution:

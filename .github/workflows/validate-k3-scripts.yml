@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'sample/**'
       - 'scripts/build-install-k3.sh'
       - 'scripts/build-rootfs-k3.sh'
       - 'scripts/build-install-keystone.sh'
@@ -87,6 +88,11 @@ jobs:
         run: python3 scripts/tests/test-keystone-loader-entry.py
       - name: Verify Eyrie entry layout with build-id generation
         run: python3 scripts/tests/test-keystone-runtime-entry.py
+      - name: Build standalone Makefile sample
+        run: |
+          make -C sample -j2
+          make -C sample check
+          qemu-riscv64 sample/build/hello | grep -Fx 'hello, world!'
       - name: Build and exercise static guest module loader
         run: |
           set -euo pipefail
