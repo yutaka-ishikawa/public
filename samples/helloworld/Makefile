@@ -1,7 +1,7 @@
 # Application build only: reuse an already built Keystone SDK and hello runtime.
 .DEFAULT_GOAL := all
 SAMPLE_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-REPO_DIR := $(abspath $(SAMPLE_DIR)/..)
+REPO_DIR := $(abspath $(SAMPLE_DIR)/../..)
 KEYSTONE_BUILD_DIR ?= $(REPO_DIR)/.build-keystone
 SDK_DIR ?= $(KEYSTONE_BUILD_DIR)/sdk-install
 RUNTIME_DIR ?= $(KEYSTONE_BUILD_DIR)/examples/hello

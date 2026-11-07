@@ -1,6 +1,6 @@
 # Makefileで開発するKeystone helloサンプル
 
-`keystone/examples/hello`と同じCアプリとC++ runnerを、通常のGNU Makefileでビルドするサンプルです。`sample`内のビルド・パッケージ化ではCMakeを呼びません。作成済みのKeystone SDKと、`io_syscall linux_syscall env_setup`を有効にしたhello用Eyrieランタイムを再利用します。
+`keystone/examples/hello`と同じCアプリとC++ runnerを、通常のGNU Makefileでビルドするサンプルです。`samples/helloworld`内のビルド・パッケージ化ではCMakeを呼びません。作成済みのKeystone SDKと、`io_syscall linux_syscall env_setup`を有効にしたhello用Eyrieランタイムを再利用します。
 
 ## ファイル構成
 
@@ -37,24 +37,24 @@ bash scripts/build-install-keystone.sh --only sdk
 .build-keystone/examples/hello/.options_log
 ```
 
-Eyrieは、このリポジトリの入口配置修正を含む版を使用してください。詳細は[入口でGNU build-idを実行して停止した問題](../doc/keystone-eyrie-entry-build-id.md)を参照してください。
+Eyrieは、このリポジトリの入口配置修正を含む版を使用してください。詳細は[入口でGNU build-idを実行して停止した問題](../../doc/keystone-eyrie-entry-build-id.md)を参照してください。
 
 ## ビルド：開発用ホストで実行
 
 リポジトリのルートで実行します。
 
 ```bash
-make -C sample -j4
-make -C sample check
+make -C samples/helloworld -j4
+make -C samples/helloworld check
 ```
 
-`sample`へ移動して`make`を実行しても構いません。デフォルトのクロスコンパイラは`riscv64-linux-gnu-gcc`／`riscv64-linux-gnu-g++`です。生成物はすべて`sample/build`に置かれます。
+`samples/helloworld`へ移動して`make`を実行しても構いません。デフォルトのクロスコンパイラは`riscv64-linux-gnu-gcc`／`riscv64-linux-gnu-g++`です。生成物はすべて`samples/helloworld/build`に置かれます。
 
 ```text
-sample/build/hello          # 静的リンクしたenclaveアプリ
-sample/build/hello-runner   # SDKとリンクしたゲスト側runner
-sample/build/pkg/           # パッケージに含めるファイル
-sample/build/hello.ke       # 自己展開型パッケージ
+samples/helloworld/build/hello          # 静的リンクしたenclaveアプリ
+samples/helloworld/build/hello-runner   # SDKとリンクしたゲスト側runner
+samples/helloworld/build/pkg/           # パッケージに含めるファイル
+samples/helloworld/build/hello.ke       # 自己展開型パッケージ
 ```
 
 `make check`はパッケージの整合性を検査します。enclaveの実行確認は、後述のQEMUゲスト内で行います。
@@ -62,19 +62,19 @@ sample/build/hello.ke       # 自己展開型パッケージ
 別のSDKビルドディレクトリを使う場合：
 
 ```bash
-make -C sample KEYSTONE_BUILD_DIR=/absolute/path/to/keystone-build
+make -C samples/helloworld KEYSTONE_BUILD_DIR=/absolute/path/to/keystone-build
 ```
 
 SDKとEyrieの場所を個別に指定する場合：
 
 ```bash
-make -C sample \
+make -C samples/helloworld \
   SDK_DIR=/absolute/path/to/sdk-install \
   RUNTIME_DIR=/absolute/path/to/examples/hello \
   CROSS_COMPILE=riscv64-linux-gnu-
 ```
 
-`CC`、`CXX`、`CPPFLAGS`、`CFLAGS`、`CXXFLAGS`、`LDFLAGS`、`LDLIBS`、`MAKESELF`も指定できます。コンパイラやSDKの場所、ビルドフラグを変更する場合は、一度`make -C sample clean`してから再ビルドしてください。
+`CC`、`CXX`、`CPPFLAGS`、`CFLAGS`、`CXXFLAGS`、`LDFLAGS`、`LDLIBS`、`MAKESELF`も指定できます。コンパイラやSDKの場所、ビルドフラグを変更する場合は、一度`make -C samples/helloworld clean`してから再ビルドしてください。
 
 ## 実行：QEMU内のゲストLinuxで実行
 
@@ -98,7 +98,7 @@ fi
 続いて、サンプルパッケージをゲストの`/tmp`へコピーして実行します。
 
 ```bash
-cp /mnt/host/sample/build/hello.ke /tmp/sample-hello.ke
+cp /mnt/host/samples/helloworld/build/hello.ke /tmp/sample-hello.ke
 workdir=$(mktemp -d /tmp/sample-hello.XXXXXX)
 bash /tmp/sample-hello.ke --target "$workdir/payload"
 ```
@@ -120,8 +120,8 @@ rm -f /tmp/sample-hello.ke
 
 ## アプリの編集と再実行
 
-1. 開発用ホストで`sample/eapp/hello.c`を編集します。enclaveのメモリ設定や起動処理を変える場合は`sample/host/host.cpp`を編集します。
-2. `make -C sample -j4`で再ビルドします。
+1. 開発用ホストで`samples/helloworld/eapp/hello.c`を編集します。enclaveのメモリ設定や起動処理を変える場合は`samples/helloworld/host/host.cpp`を編集します。
+2. `make -C samples/helloworld -j4`で再ビルドします。
 3. ゲストへパッケージを再コピーし、新しい展開先で実行します。
 
 通常のアプリ編集では、ファームウェア・カーネル・rootfsの再ビルドやQEMUの再起動は不要です。Eyrieの機能・プラグインやSDK自体を変更した場合は、それらを先に再ビルドしてください。このMakefileはEyrie自体のビルドは行いません。
@@ -129,7 +129,7 @@ rm -f /tmp/sample-hello.ke
 ビルド成果物の削除：
 
 ```bash
-make -C sample clean
+make -C samples/helloworld clean
 ```
 
 ## 実行前の注意点
