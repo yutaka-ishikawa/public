@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Static RISC-V module loader for base rootfs images without the kmod package.
+# Static RISC-V module, mount and power tools for the diagnostic guest.
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 if [[ ${1:-} == --help || ${1:-} == -h ]]; then
  echo "Usage: bash scripts/build-keystone-guest-tools.sh [OUTPUT [BUILD_DIR [JOBS]]]"
- echo 'Default output: .build-keystone/guest-tools/busybox (static RISC-V insmod/lsmod)'
+ echo 'Default output: .build-keystone/guest-tools/busybox (static RISC-V module, mount and shutdown tools)'
  exit 0
 fi
 (($# <= 3)) || { echo 'Too many arguments' >&2; exit 2; }
@@ -36,10 +36,13 @@ OUT="$WORK/objects"
 mkdir -p "$OUT"
 make -C "$SRC" O="$OUT" allnoconfig > "$WORK/config.log"
 sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/; s/# CONFIG_BUSYBOX is not set/CONFIG_BUSYBOX=y/; s/# CONFIG_SHOW_USAGE is not set/CONFIG_SHOW_USAGE=y/; s/# CONFIG_INSMOD is not set/CONFIG_INSMOD=y/; s/# CONFIG_LSMOD is not set/CONFIG_LSMOD=y/' "$OUT/.config"
+for option in POWEROFF REBOOT SYNC MOUNT MOUNTPOINT FEATURE_MOUNT_FLAGS MKDIR UNAME; do
+ sed -i "s/# CONFIG_${option} is not set/CONFIG_${option}=y/" "$OUT/.config"
+done
 make -C "$SRC" O="$OUT" CROSS_COMPILE="$CROSS_COMPILE" -j "$JOBS"
 "${CROSS_COMPILE}readelf" -h "$OUT/busybox" | grep -q 'Machine:.*RISC-V'
 if "${CROSS_COMPILE}readelf" -l "$OUT/busybox" | grep -q INTERP; then
- echo 'Guest module loader must be statically linked' >&2; exit 4
+ echo 'Guest tools must be statically linked' >&2; exit 4
 fi
 TEMP=$(mktemp "${OUTPUT}.tmp.XXXXXX")
 trap 'rm -f "$TEMP"' EXIT

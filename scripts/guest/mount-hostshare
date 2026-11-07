@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+if [ "$#" -gt 1 ]; then echo 'Usage: mount-hostshare [MOUNTPOINT] (default: /mnt/host)' >&2; exit 2; fi
+bb=${KEYSTONE_GUEST_BUSYBOX:-/usr/libexec/keystone/busybox}
+target=${1:-/mnt/host}
+"$bb" mkdir -p "$target"
+if "$bb" mountpoint -q "$target"; then
+ echo "Already mounted: $target (check /proc/mounts for the source)"
+ exit 0
+fi
+# run-k3.sh exposes --hostfs with the fixed 9P mount tag hostshare.
+if ! "$bb" mount -t 9p -o trans=virtio,version=9p2000.L hostshare "$target"; then
+ echo 'Host share mount failed. Launch QEMU with run-k3.sh --hostfs /path/to/share and a kernel with built-in 9P/Virtio support.' >&2
+ exit 1
+fi
+echo "Host filesystem mounted at $target"

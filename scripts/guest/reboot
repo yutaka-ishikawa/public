@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+if [ "$#" -ne 0 ]; then echo 'Usage: reboot (or shutdown -r now)' >&2; exit 2; fi
+exec /usr/sbin/shutdown -r now

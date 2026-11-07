@@ -1,0 +1,23 @@
+#!/bin/sh
+# Diagnostic init=/bin/bash has no init daemon to handle a shutdown request.
+set -eu
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+bb=${KEYSTONE_GUEST_BUSYBOX:-/usr/libexec/keystone/busybox}
+action=poweroff
+case ${1:-} in
+ -h|-P) shift;;
+ -r) action=reboot; shift;;
+ --help) echo 'Usage: shutdown [-h|-P|-r] [now|0]'; exit 0;;
+esac
+if [ "$#" -gt 1 ]; then echo 'Usage: shutdown [-h|-P|-r] [now|0]' >&2; exit 2; fi
+case ${1:-now} in
+ now|0) :;;
+ *) echo 'Only immediate shutdown is supported: shutdown -h now or shutdown -r now' >&2; exit 2;;
+esac
+"$bb" sync
+# Leave root clean before invoking the kernel directly instead of signalling Bash PID 1.
+if ! "$bb" mount -o remount,ro / /; then
+ echo 'Could not remount root read-only; shutdown cancelled. Stop writers and retry.' >&2
+ exit 1
+fi
+exec "$bb" "$action" -f

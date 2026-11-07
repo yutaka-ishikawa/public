@@ -8,6 +8,9 @@ on:
       - 'scripts/build-rootfs-k3.sh'
       - 'scripts/build-install-keystone.sh'
       - 'scripts/build-keystone-guest-tools.sh'
+      - 'scripts/install-keystone-guest-tools.sh'
+      - 'scripts/guest/**'
+      - 'scripts/tests/test-keystone-guest-tools.py'
       - 'scripts/build-rootfs-keystone.sh'
       - 'scripts/install-build-deps.sh'
       - 'scripts/tests/test-rootfs-k3.py'
@@ -38,6 +41,8 @@ jobs:
           bash -n scripts/build-rootfs-k3.sh
           bash -n scripts/build-install-keystone.sh
           bash -n scripts/build-keystone-guest-tools.sh
+          bash -n scripts/install-keystone-guest-tools.sh
+          for helper in scripts/guest/*; do bash -n "$helper"; done
           bash -n scripts/build-rootfs-keystone.sh
           bash -n scripts/install-build-deps.sh
           bash -n run-k3.sh
@@ -51,6 +56,8 @@ jobs:
           sudo apt-get install -y e2fsprogs fakeroot
       - name: Verify image creation and Keystone overlay
         run: python3 scripts/tests/test-build-rootfs-k3.py
+      - name: Verify guest helper installation and shutdown control
+        run: python3 scripts/tests/test-keystone-guest-tools.py
       - name: Verify rootfs selection and data preservation
         run: python3 scripts/tests/test-rootfs-k3.py
       - name: Install SDK test tools
@@ -65,7 +72,10 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/build-keystone-guest-tools.sh
-          qemu-riscv64 .build-keystone/guest-tools/busybox --list | grep -x insmod
+          qemu-riscv64 .build-keystone/guest-tools/busybox --list > /tmp/keystone-applets
+          for applet in insmod lsmod mount mountpoint sync poweroff reboot; do
+            grep -x "$applet" /tmp/keystone-applets
+          done
           if qemu-riscv64 .build-keystone/guest-tools/busybox insmod /nonexistent-keystone-test.ko; then
             exit 1
           fi

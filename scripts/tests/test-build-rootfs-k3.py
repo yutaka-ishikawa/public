@@ -110,6 +110,11 @@ class BuildRootfsTests(unittest.TestCase):
         module = overlay / "usr/lib/modules/test/extra/keystone-driver.ko"
         module.parent.mkdir(parents=True)
         module.write_bytes(b"driver fixture")
+        fake_busybox = self.work / "busybox-fixture"
+        fake_busybox.write_bytes(b"guest tool binary fixture")
+        result = subprocess.run(["bash", str(ROOT / "scripts/install-keystone-guest-tools.sh"),
+                                 str(overlay), str(fake_busybox)], text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
         bianbu = self.work / "bianbu-existing.img"
         bianbu.write_bytes(b"existing guest modifications")
         result = subprocess.run(["bash", str(ROOT / "scripts/build-rootfs-keystone.sh"),
@@ -120,6 +125,9 @@ class BuildRootfsTests(unittest.TestCase):
         self.assertIn("Mode:  0755", self.debug("stat /usr/share/keystone/examples/hello.ke"))
         self.assertEqual(self.debug("cat /usr/lib/modules/test/extra/keystone-driver.ko"), "driver fixture")
         self.assertIn("keystone-root", self.debug("stats"))
+        for helper in ("/usr/bin/run-keystone-hello", "/usr/bin/mount-hostshare", "/usr/sbin/shutdown",
+                       "/usr/sbin/poweroff", "/usr/sbin/reboot", "/usr/libexec/keystone/busybox"):
+            self.assertIn("Mode:  0755", self.debug("stat " + helper), helper)
         self.assertEqual(bianbu.read_bytes(), b"existing guest modifications")
         before = self.image.stat().st_mtime_ns
         result = subprocess.run(["bash", str(ROOT / "scripts/build-rootfs-keystone.sh"),

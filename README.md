@@ -61,26 +61,40 @@ Other options include `--prefix DIR`, `--build-dir DIR`, `--rootfs-archive FILE`
 bash scripts/build-install-keystone.sh --only sdk
 ```
 
-### Existing images reporting `insmod: not found`
+### Host filesystem mounts, guest tools and shutdown
 
-For an already-running guest, a full image rebuild is unnecessary. On the host, from the repository root:
+New Keystone images contain `/usr/bin/run-keystone-hello`, `/usr/bin/mount-hostshare`, `shutdown`, `poweroff` and `reboot`. Static BusyBox provides the module-loading, mount and power-control operations without requiring kmod or a running init daemon. From the guest:
+
+```bash
+mount-hostshare                       # mount hostshare at /mnt/host
+mount-hostshare /mnt/project          # alternative guest mount point
+/usr/bin/run-keystone-hello
+shutdown -h now                       # sync, remount root read-only, power off
+# Alternatively: poweroff, reboot, or shutdown -r now
+```
+
+The shutdown helper supports only immediate shutdown (`now` or `0`), and cancels if the root filesystem cannot be remounted read-only. This behavior is intended for the default diagnostic `init=/bin/bash` boot. QEMU exposes the repository by default; choose another host directory with `bash run-k3.sh --hostfs /path/to/share`.
+
+If an existing image lacks the helper files or `insmod`, update it without rebuilding. On the host, from the repository root:
 
 ```bash
 git pull
 bash scripts/build-keystone-guest-tools.sh
 ```
 
-In the guest, when using the launcher's default repository host share:
+In the running guest, bootstrap the share using the existing mount command (the launcher must share the repository):
 
 ```bash
 mkdir -p /mnt/host
-mount -t 9p -o trans=virtio,version=9p2000.L hostshare /mnt/host
-/mnt/host/.build-keystone/guest-tools/busybox insmod \
-  "/usr/lib/modules/$(uname -r)/extra/keystone-driver.ko"
+mountpoint -q /mnt/host || mount -t 9p -o trans=virtio,version=9p2000.L hostshare /mnt/host
+bash /mnt/host/scripts/install-keystone-guest-tools.sh
 /usr/bin/run-keystone-hello
+shutdown -h now
 ```
 
-For a fresh image with the loader included, keep the existing image and build into a new destination:
+The installer copies only guest helper tools. It reports if `hello.ke` is absent: in that case, build/boot a Keystone rootfs containing the examples and matching driver. Installing the helper alone does not add examples to a plain Bianbu image.
+
+For a fresh image, retain the existing image and build into a new destination:
 
 ```bash
 bash scripts/build-install-keystone.sh \
