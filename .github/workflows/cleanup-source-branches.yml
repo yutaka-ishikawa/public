@@ -25,7 +25,7 @@ jobs:
           git fetch --no-tags --filter=blob:none origin main             refs/heads/sources/qemu-k3:refs/remotes/origin/sources/qemu-k3             refs/heads/sources/opensbi-k3:refs/remotes/origin/sources/opensbi-k3             refs/heads/sources/keystone-k3:refs/remotes/origin/sources/keystone-k3
           for name in qemu opensbi keystone; do
             BRANCH="sources/${name}-k3"
-            SUBTREE=$(git rev-parse "FETCH_HEAD:${name}" 2>/dev/null || git rev-parse "origin/main:${name}")
+            SUBTREE=$(git rev-parse "origin/main:${name}")
             ORIGINAL=$(git rev-parse "refs/remotes/origin/${BRANCH}^{tree}")
             if [ "$SUBTREE" != "$ORIGINAL" ]; then
               echo "::error::Tree mismatch for $name: $SUBTREE != $ORIGINAL. Refusing deletion."
