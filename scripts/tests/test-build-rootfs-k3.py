@@ -2,6 +2,9 @@
 """Integration tests requiring mke2fs >= 1.47.2 with libarchive support."""
 import hashlib
 import io
+import os
+import shutil
+import shlex
 from pathlib import Path
 import subprocess
 import tarfile
@@ -44,11 +47,11 @@ class BuildRootfsTests(unittest.TestCase):
             tar.addfile(device)
         self.image = self.work / "bianbu.img"
 
-    def build(self, checksum=""):
+    def build(self, checksum="", env=None):
         return subprocess.run([
             "bash", str(ROOT / "scripts/build-rootfs-k3.sh"), str(self.image),
             str(self.work / "build"), str(self.archive), checksum,
-        ], text=True, capture_output=True)
+        ], text=True, capture_output=True, env=env)
 
     def debug(self, command):
         return subprocess.run(["debugfs", "-R", command, str(self.image)],
@@ -70,6 +73,33 @@ class BuildRootfsTests(unittest.TestCase):
         before = self.image.stat().st_mtime_ns
         self.assertEqual(self.build().returncode, 0)
         self.assertEqual(self.image.stat().st_mtime_ns, before)
+
+    def test_directory_fallback_preserves_metadata(self):
+        real_mke2fs = shutil.which("mke2fs")
+        bindir = self.work / "bin"
+        bindir.mkdir()
+        wrapper = bindir / "mke2fs"
+        wrapper.write_text(
+            '#!/bin/sh\n'
+            'previous=""\n'
+            'for arg in "$@"; do\n'
+            ' if [ "$previous" = "-d" ] && [ ! -d "$arg" ]; then\n'
+            '  echo "Not a directory" >&2; exit 1\n'
+            ' fi\n previous=$arg\ndone\n'
+            f'exec {shlex.quote(real_mke2fs)} "$@"\n'
+        )
+        wrapper.chmod(0o755)
+        env = dict(os.environ, PATH=str(bindir) + os.pathsep + os.environ["PATH"])
+        result = self.build(env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("using directory input", result.stdout)
+        self.assertEqual(self.image.stat().st_size, 8 * 1024**3)
+        stat = self.debug("stat /var/owned")
+        self.assertRegex(stat, r"User:\s+123\s+Group:\s+456")
+        self.assertIn("Mode:  0640", stat)
+        self.assertIn("Links: 2", stat)
+        self.assertIn("Type: character special", self.debug("stat /dev/null"))
+        self.assertFalse(list((self.work / "build").glob("stage.*")))
 
     def test_bad_checksum_never_publishes_image(self):
         result = self.build("0" * 64)

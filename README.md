@@ -4,7 +4,7 @@ The `main` branch contains four source directories: `qemu/`, `opensbi/`, `keysto
 
 ## All-in-one build and installation
 
-Install prerequisites on Ubuntu 24.04 or equivalent: `build-essential`, `ninja-build`, `meson`, `pkg-config`, `libglib2.0-dev`, `libpixman-1-dev`, `libfdt-dev`, `libslirp-dev`, `zlib1g-dev`, `libcapstone-dev`, `clang`, `lld`, `llvm`, `binutils`, `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves`, `python3`, `curl`, `e2fsprogs`. Rootfs creation requires `mke2fs` with libarchive tarball support (e2fsprogs 1.47.2 or newer; the Ubuntu 24.04 default is too old).
+Install prerequisites on Ubuntu 24.04 or equivalent: `build-essential`, `ninja-build`, `meson`, `pkg-config`, `libglib2.0-dev`, `libpixman-1-dev`, `libfdt-dev`, `libslirp-dev`, `zlib1g-dev`, `libcapstone-dev`, `clang`, `lld`, `llvm`, `binutils`, `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves`, `python3`, `curl`, `e2fsprogs`, `fakeroot`. Older `mke2fs` builds, including Ubuntu 24.04, use directory input under fakeroot; no e2fsprogs upgrade is required.
 
 From repository root:
 
@@ -34,7 +34,7 @@ share/k3/build-manifest.txt
 rootfs/bianbu-rootfs.img
 ```
 
-Build intermediates go into `.build-k3/`. QEMU's install target may also install runtime support files in `share/`. A full build first creates `rootfs/bianbu-rootfs.img`: an **8 GiB sparse ext4 filesystem** labeled `bianbu-root`, populated from [Bianbu 26.04 base for RISC-V](https://archive.spacemit.com/bianbu-base/bianbu-base-26.04-base-riscv64.tar.gz). The archive is cached under `.build-k3/rootfs/`. The script uses `mke2fs -d` tarball support to preserve numeric owners, permissions, links and device nodes without sudo, loop devices or a mounted staging filesystem. Existing nonempty images are retained unchanged, including guest modifications.
+Build intermediates go into `.build-k3/`. QEMU's install target may also install runtime support files in `share/`. A full build first creates `rootfs/bianbu-rootfs.img`: an **8 GiB sparse ext4 filesystem** labeled `bianbu-root`, populated from [Bianbu 26.04 base for RISC-V](https://archive.spacemit.com/bianbu-base/bianbu-base-26.04-base-riscv64.tar.gz). The archive is cached under `.build-k3/rootfs/`. The script uses `mke2fs -d` tarball support when available. Older builds automatically fall back to extraction and directory input in one fakeroot session, preserving numeric owners, permissions, links and device nodes without sudo, loop devices or a mounted staging filesystem. The directory fallback preserves Unix permission bits; extended ACLs and file capabilities are not restored. Install `fakeroot` before building on Ubuntu 24.04 (`sudo apt-get install fakeroot`). Existing nonempty images are retained unchanged, including guest modifications.
 
 To create just the image, or use an archive downloaded separately:
 
