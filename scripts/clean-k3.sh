@@ -49,6 +49,12 @@ if [[ ! -d "$BUILD_DIR" ]]; then
   echo "No build directory exists: $BUILD_DIR (nothing to clean)"
   exit 0
 fi
+if [[ "$BUILD_DIR" != "$ROOT/.build-k3" ]]; then
+  if [[ ! -f "$BUILD_DIR/.k3-build-root" ]] || [[ "$(cat "$BUILD_DIR/.k3-build-root")" != "k3-build-dir-v1" ]]; then
+    echo "Refusing unrecognized custom build directory (marker missing): $BUILD_DIR" >&2
+    exit 3
+  fi
+fi
 if [[ "$COMPONENT" == all ]]; then
   names=(qemu firmware linux)
 else
