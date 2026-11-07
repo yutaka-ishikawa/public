@@ -1,0 +1,8 @@
+# Generated build and installation outputs at repository root
+/.build-k3/
+/bin/
+/boot/
+/firmware/
+/lib/modules/
+/share/k3/
+/rootfs/
