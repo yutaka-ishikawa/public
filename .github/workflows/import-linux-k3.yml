@@ -1,0 +1,73 @@
+name: Import patched K3 Linux kernel source
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/import-linux-k3.yml'
+permissions:
+  contents: write
+concurrency:
+  group: linux-k3-import
+  cancel-in-progress: false
+jobs:
+  import-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Check target directory is empty
+        run: |
+          set -Eeuo pipefail
+          if [ -e linux-k3/Makefile ]; then
+            echo "::error::linux-k3 already populated; refusing to overwrite source"
+            exit 1
+          fi
+      - name: Clone official K3 Linux source at pinned commit
+        run: |
+          set -Eeuo pipefail
+          git clone --depth 1 --single-branch --branch k3-br-v1.0.y --filter=blob:none https://github.com/spacemit-com/linux-6.18.git linux-upstream
+          git -C linux-upstream fetch --depth=1 origin 7d17e358c660f1046eb1f27f26eea33955813afd
+          git -C linux-upstream checkout --detach 7d17e358c660f1046eb1f27f26eea33955813afd
+          test "$(git -C linux-upstream rev-parse HEAD)" = 7d17e358c660f1046eb1f27f26eea33955813afd
+          test -s linux-upstream/arch/riscv/configs/k3_bianbu_defconfig
+      - name: Apply requested config changes to kernel source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          C=linux-upstream/arch/riscv/configs/k3_bianbu_defconfig
+          linux-upstream/scripts/config --file "$C" -e VIRTIO_MENU -e PCI_MSI -e VIRTIO_PCI -e VIRTIO_MMIO -e VIRTIO_BLK -e PCI_HOST_GENERIC -e NET_9P -e NET_9P_VIRTIO -e 9P_FS -e VIRTIO_NET
+          git -C linux-upstream diff --check
+          git -C linux-upstream diff -- arch/riscv/configs/k3_bianbu_defconfig | tee linux-k3-config.patch
+      - name: Import patched upstream source tree
+        run: |
+          set -Eeuo pipefail
+          mkdir linux-k3
+          rsync -a --exclude='/.git/' linux-upstream/ linux-k3/
+          cat > linux-k3/K3_SOURCE_PROVENANCE.md <<'EOF'
+          # K3 Linux source provenance
+          Upstream: https://github.com/spacemit-com/linux-6.18
+          Branch: k3-br-v1.0.y
+          Commit: 7d17e358c660f1046eb1f27f26eea33955813afd
+          Changes: requested VirtIO / PCI / 9P settings inserted into arch/riscv/configs/k3_bianbu_defconfig
+          Build: bash scripts/build-linux-k3.sh (from repository root)
+          EOF
+          git add -A linux-k3
+          git add linux-k3-config.patch
+          git diff --cached --stat | tail -n 15
+          git -c user.name='K3 GitHub Actions' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Import SpacemiT K3 Linux 6.18 with requested configuration'
+      - name: Push new Linux directory to main
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git push origin HEAD:main
+          echo "Imported linux-k3 directory into main" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-k3-config-change
+          path: linux-k3-config.patch
+          if-no-files-found: warn
