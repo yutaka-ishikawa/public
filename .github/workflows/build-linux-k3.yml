@@ -1,0 +1,55 @@
+name: Build K3 Linux Image DTBs and modules
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'linux-k3/**'
+      - 'scripts/build-linux-k3.sh'
+      - '.github/workflows/build-linux-k3.yml'
+permissions:
+  contents: read
+concurrency:
+  group: linux-k3-build
+  cancel-in-progress: false
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install RISC-V cross-compiler and kernel dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu bc bison flex libssl-dev libelf-dev libncurses-dev dwarves python3 rsync cpio xz-utils
+      - name: Check imported K3 source and provenance
+        run: |
+          set -Eeuo pipefail
+          test -s linux-k3/Makefile
+          test -s linux-k3/arch/riscv/configs/k3_bianbu_defconfig
+          cat linux-k3/K3_SOURCE_PROVENANCE.md
+          printf 'Source checkout commit: %s\n' "$GITHUB_SHA"
+      - name: Build kernel Image DTBs and modules
+        env:
+          JOBS: '4'
+          CROSS_COMPILE: riscv64-linux-gnu-
+        run: bash scripts/build-linux-k3.sh
+      - name: Package outputs and config
+        run: |
+          set -Eeuo pipefail
+          mkdir -p linux-k3-artifacts
+          cp linux-k3/build-k3/arch/riscv/boot/Image linux-k3-artifacts/
+          cp linux-k3/build-k3/.config linux-k3-artifacts/k3.config
+          cp linux-k3/build-k3/Image.sha256 linux-k3-artifacts/
+          mkdir -p linux-k3-artifacts/dtbs
+          rsync -a --include='*/' --include='*.dtb' --exclude='*' linux-k3/build-k3/arch/riscv/boot/dts/ linux-k3-artifacts/dtbs/
+          make -C linux-k3 O="$GITHUB_WORKSPACE/linux-k3/build-k3" ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- INSTALL_MOD_PATH="$GITHUB_WORKSPACE/module-stage" modules_install
+          tar -C module-stage -czf linux-k3-artifacts/modules.tar.gz lib/modules
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-k3-image-dtbs-modules
+          path: linux-k3-artifacts/
+          if-no-files-found: warn
