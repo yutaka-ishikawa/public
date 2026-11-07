@@ -1,0 +1,2261 @@
+diff --git a/Makefile b/Makefile
+index bc798090..a241f1dd 100755
+--- a/Makefile
++++ b/Makefile
+@@ -240,7 +240,10 @@ savedefconfig: $(platform_src_dir)/Kconfig $(src_dir)/Kconfig
+ 	$(CMD_PREFIX)mkdir -p $(KCONFIG_DIR)
+ 	$(CMD_PREFIX)$(src_dir)/scripts/Kconfiglib/savedefconfig.py --kconfig $(src_dir)/Kconfig --out $(KCONFIG_DIR)/defconfig
+ 
+-$(KCONFIG_CONFIG): $(platform_src_dir)/configs/$(PLATFORM_DEFCONFIG)
++$(KCONFIG_CONFIG): $(platform_src_dir)/configs/$(PLATFORM_DEFCONFIG) $(src_dir)/scripts/k3_validate_pmp_policy.py
++	$(CMD_PREFIX)python3 $(src_dir)/scripts/k3_validate_pmp_policy.py $(platform_src_dir)/configs/$(PLATFORM_DEFCONFIG)
++	$(CMD_PREFIX)python3 $(src_dir)/scripts/k3_keystone_policy_audit.py $(src_dir)
++	$(CMD_PREFIX)python3 $(src_dir)/scripts/k3_verify_smepmp_exclusion.py $(src_dir)
+ 	$(CMD_PREFIX)mkdir -p $(KCONFIG_DIR)
+ 	$(CMD_PREFIX)$(src_dir)/scripts/Kconfiglib/defconfig.py --kconfig $(src_dir)/Kconfig $(platform_src_dir)/configs/$(PLATFORM_DEFCONFIG)
+ 
+@@ -380,6 +383,9 @@ CFLAGS		+=	$(GENFLAGS)
+ CFLAGS		+=	$(platform-cflags-y)
+ CFLAGS		+=	-fPIE -pie
+ CFLAGS		+=	$(firmware-cflags-y)
++# Optional Keystone PMP cold-boot diagnostics (default off).
++K3_PMP_BOOT_TRACE ?= 0
++CFLAGS          += -DK3_PMP_BOOT_TRACE=$(K3_PMP_BOOT_TRACE)
+ 
+ CPPFLAGS	+=	$(GENFLAGS)
+ CPPFLAGS	+=	$(platform-cppflags-y)
+diff --git a/include/sbi/k3_a1_csr_preflight.h b/include/sbi/k3_a1_csr_preflight.h
+new file mode 100644
+index 00000000..56fdf2e2
+--- /dev/null
++++ b/include/sbi/k3_a1_csr_preflight.h
+@@ -0,0 +1,129 @@
++/* SPDX-License-Identifier: BSD-2-Clause */
++/* K3 A1-E: read-only local PMP shape preflight, NOT an ownership proof.
++ * This is deliberately conservative. Hardware capabilities, CSR snapshots,
++ * cross-Hart agreement, address-specific priorities and M-mode holds still
++ * require independent verification before any PMP write or S-mode entry.
++ */
++#ifndef __K3_A1_CSR_PREFLIGHT_H__
++#define __K3_A1_CSR_PREFLIGHT_H__
++#include <stdint.h>
++#define K3_A1_CSR_MAX 16U
++#define K3_A1_CSR_A 0x18U
++#define K3_A1_CSR_NAPOT 0x18U
++#define K3_A1_CSR_RWX 0x07U
++#define K3_A1_CSR_LOCK 0x80U
++/* Bit meanings from RISC-V Smepmp mseccfg, not an extension-presence test. */
++#define K3_A1_CSR_MSECCFG_POLICY 0x07U
++
++enum k3_a1_preflight_result {
++ K3_A1_PF_OK=0, K3_A1_PF_BAD_INPUT=-1,
++ K3_A1_PF_ACTIVE_SMEPMP=-2, K3_A1_PF_NO_GLOBAL_ALLOW=-3,
++ K3_A1_PF_SHADOWED=-4, K3_A1_PF_LOCKED=-5,
++ K3_A1_PF_NO_SLOTS=-6, K3_A1_PF_AMBIGUOUS=-7
++};
++struct k3_a1_csr_measured_entry {
++ uint64_t prot, addr;
++ unsigned int log2len;
++};
++struct k3_a1_csr_measured {
++ unsigned int count, granularity;
++ unsigned int pmp_addrbits; /* implemented PMPADDR bits, not RV64 XLEN */
++ unsigned int mseccfg_valid;
++ uint64_t mseccfg;
++ struct k3_a1_csr_measured_entry entry[K3_A1_CSR_MAX];
++};
++struct k3_a1_local_candidate {
++ unsigned int old_allow, fallback;
++ uint16_t firmware_entries, free_keystone_entries;
++};
++/* This gate only establishes structural suitability of a *local* legacy-PMP
++ * image. No caller may treat PF_OK as permission to transfer ownership.
++ * If anything is ambiguous, reject and preserve the existing build gate.
++ */
++static inline int k3_a1_preflight_local(
++ const struct k3_a1_csr_measured *m, struct k3_a1_local_candidate *out)
++{
++ unsigned int i, old=K3_A1_CSR_MAX, fallback;
++ uint16_t fw=0, free_mask=0;
++ if (!m || !out || m->count < 5 || m->count > K3_A1_CSR_MAX ||
++     m->granularity > 64 ||
++     m->pmp_addrbits == 0 || m->pmp_addrbits > 62)
++  return K3_A1_PF_BAD_INPUT;
++#ifdef K3_QEMU_PMP16
++ /* Emulator contract: all 16 harts expose exactly 16 PMP entries.
++  * This is deliberately not the physical K3 A100 PMP count. */
++ if (m->count != 16U) return K3_A1_PF_BAD_INPUT;
++#endif
++ /* Check *active* mode bits. Having the Smepmp extension is not denial. */
++ if (m->mseccfg_valid && (m->mseccfg & K3_A1_CSR_MSECCFG_POLICY))
++  return K3_A1_PF_ACTIVE_SMEPMP;
++ for (i=0;i<m->count;i++) {
++  const struct k3_a1_csr_measured_entry *e=&m->entry[i];
++  unsigned int mode=(unsigned int)e->prot & K3_A1_CSR_A;
++  if (e->prot & ~(uint64_t)0xffU) return K3_A1_PF_BAD_INPUT;
++  if (mode!=0 && mode!=0x08U && mode!=0x10U && mode!=0x18U)
++   return K3_A1_PF_BAD_INPUT;
++  /* pmp_get() can decode a full-coverage NAPOT as order 57
++   * on a machine with 54 implemented PMPADDR bits. Comparing against
++   * RV64 XLEN (64) incorrectly rejects this valid fallback.
++   */
++  if (mode==K3_A1_CSR_NAPOT && e->addr==0 &&
++      e->log2len >= m->pmp_addrbits + 2U &&
++      ((unsigned int)e->prot & K3_A1_CSR_RWX)==K3_A1_CSR_RWX) {
++   if (old!=K3_A1_CSR_MAX) return K3_A1_PF_AMBIGUOUS;
++   if (e->prot & K3_A1_CSR_LOCK) return K3_A1_PF_LOCKED;
++   old=i;
++  }
++ }
++ if (old==K3_A1_CSR_MAX) return K3_A1_PF_NO_GLOBAL_ALLOW;
++ /* A1-E root-domain layout: all OpenSBI PMP entries (grants or denies),
++  * then untouched Keystone slots, with all-range fallback last. */
++ if (old == m->count - 1U) {
++  unsigned int seen_free = 0;
++  for (i=0; i<old; i++) {
++   const struct k3_a1_csr_measured_entry *e=&m->entry[i];
++   if (e->prot & K3_A1_CSR_LOCK) return K3_A1_PF_LOCKED;
++   if (e->prot & K3_A1_CSR_A) {
++    if (seen_free)
++     return K3_A1_PF_SHADOWED;
++    fw |= (uint16_t)(1U << i);
++   } else {
++    seen_free = 1;
++    free_mask |= (uint16_t)(1U << i);
++   }
++  }
++  if (!fw || __builtin_popcount((unsigned int)free_mask)<3)
++   return K3_A1_PF_NO_SLOTS;
++  out->old_allow = old;
++  out->fallback = old;
++  out->firmware_entries = fw;
++  out->free_keystone_entries = free_mask;
++  return K3_A1_PF_OK;
++ }
++ /* Denies must take priority over the old broad allow, and all active
++  * entries after it would be unknown aliases for the Keystone PMP plan. */
++ for (i=0;i<old;i++) {
++  const struct k3_a1_csr_measured_entry *e=&m->entry[i];
++  if (!((unsigned int)e->prot & K3_A1_CSR_A) ||
++      (e->prot & K3_A1_CSR_RWX)) return K3_A1_PF_SHADOWED;
++  fw |= (uint16_t)(1U<<i);
++ }
++ if (!fw) return K3_A1_PF_SHADOWED;
++ for (i=old+1;i<m->count;i++) {
++  const struct k3_a1_csr_measured_entry *e=&m->entry[i];
++  if ((e->prot & K3_A1_CSR_A) || (e->prot & K3_A1_CSR_LOCK))
++   return K3_A1_PF_NO_SLOTS;
++  free_mask |= (uint16_t)(1U<<i);
++ }
++ fallback=m->count-1;
++ /* Need a fallback after all Keystone deny slots and at least two
++  * independent slots for SM + dynamic Enclave denial. */
++ if (fallback <= old+2 || __builtin_popcount((unsigned int)free_mask)<3)
++  return K3_A1_PF_NO_SLOTS;
++ out->old_allow=old;
++ out->fallback=fallback;
++ out->firmware_entries=fw;
++ out->free_keystone_entries=free_mask;
++ return K3_A1_PF_OK;
++}
++#endif
+diff --git a/include/sbi/k3_e2_hart_quarantine.h b/include/sbi/k3_e2_hart_quarantine.h
+new file mode 100644
+index 00000000..b847a0d5
+--- /dev/null
++++ b/include/sbi/k3_e2_hart_quarantine.h
+@@ -0,0 +1,211 @@
++/* SPDX-License-Identifier: BSD-2-Clause */
++/* K3 E2: Hart admission ledger. These are SOFTWARE states, not PMP proofs.
++ * Initial STOPPED is quarantine, never an ACK. A successful local CSR
++ * snapshot is diagnostic only and does not authorize an S/U-mode entry.
++ * No production code may publish `verified` until the verified A1 PMP
++ * transaction and CSR comparison have been connected.
++ */
++#ifndef __K3_E2_HART_QUARANTINE_H__
++#define __K3_E2_HART_QUARANTINE_H__
++#include <stdint.h>
++
++#define K3_E2_HART_COUNT 16U
++#define K3_E2_FULL_MASK UINT16_C(0xffff)
++#define K3_E2_OK 0
++#define K3_E2_BAD -1
++#define K3_E2_DENY -2
++#define K3_E2_BUSY -3
++
++struct k3_e2_ledger {
++ unsigned int lock;
++ uint16_t present, stopped, pending, snapshot, verified, running;
++ uint64_t epoch;
++ uint64_t proof_epoch[K3_E2_HART_COUNT];
++ unsigned int initialized, poisoned;
++};
++
++static inline int k3_e2_lock(struct k3_e2_ledger *s)
++{
++ unsigned int expected=0;
++ return s && __atomic_compare_exchange_n(&s->lock,&expected,1,0,
++                  __ATOMIC_ACQUIRE,__ATOMIC_RELAXED) ? 0 : K3_E2_BUSY;
++}
++static inline void k3_e2_unlock(struct k3_e2_ledger *s)
++{ __atomic_store_n(&s->lock,0,__ATOMIC_RELEASE); }
++/* Coldboot-only; under OpenSBI coldboot sequencing, before starting other
++ * Harts. All 16 Hart indices MUST be present. No phantom/DTB-only ACK. */
++static inline int k3_e2_cold_init(struct k3_e2_ledger *s,
++                                    uint16_t actual_harts, unsigned boot_hart)
++{
++ unsigned i;
++ if (!s || boot_hart >= K3_E2_HART_COUNT ||
++     actual_harts!=K3_E2_FULL_MASK || s->initialized) return K3_E2_BAD;
++ s->present=actual_harts;
++ s->stopped=actual_harts & (uint16_t)~(1U<<boot_hart);
++ s->pending=(uint16_t)(1U<<boot_hart);
++ s->snapshot=s->verified=s->running=0;
++ s->epoch=0; s->poisoned=0;
++ for (i=0;i<K3_E2_HART_COUNT;i++) s->proof_epoch[i]=0;
++ __atomic_store_n(&s->initialized,1,__ATOMIC_RELEASE);
++ return K3_E2_OK;
++}
++/* Must be serialized with the HSM STOP/START transition AND the global
++ * Keystone protection publisher. Caller guarantees protection INACTIVE
++ * until HSM Start finishes; fail if this cannot be established. */
++static inline int k3_e2_reserve_start(struct k3_e2_ledger *s,unsigned hart)
++{
++ uint16_t bit;
++ if (!s || hart>=K3_E2_HART_COUNT) return K3_E2_BAD;
++ if (k3_e2_lock(s)) return K3_E2_BUSY;
++ bit=(uint16_t)(1U<<hart);
++ if (!s->initialized || s->poisoned || !(s->present&bit) ||
++     !(s->stopped&bit) || (s->pending&bit) || s->epoch) {
++  k3_e2_unlock(s);return K3_E2_DENY;
++ }
++ s->stopped &= (uint16_t)~bit;
++ s->pending |= bit;
++ s->snapshot &= (uint16_t)~bit;
++ s->verified &= (uint16_t)~bit;
++ s->proof_epoch[hart]=0;
++ k3_e2_unlock(s); return K3_E2_OK;
++}
++static inline int k3_e2_cancel_start(struct k3_e2_ledger *s,unsigned hart)
++{
++ uint16_t bit;
++ if (!s || hart>=K3_E2_HART_COUNT) return K3_E2_BAD;
++ if (k3_e2_lock(s)) return K3_E2_BUSY;
++ bit=(uint16_t)(1U<<hart);
++ if (!s->initialized || s->poisoned || !(s->pending&bit)) {
++  k3_e2_unlock(s);return K3_E2_DENY;
++ }
++ s->pending &= (uint16_t)~bit;
++ s->stopped |= bit;
++ s->snapshot &= (uint16_t)~bit;
++ s->verified &= (uint16_t)~bit;
++ s->proof_epoch[hart]=0;
++ k3_e2_unlock(s); return K3_E2_OK;
++}
++/* Snapshot is an observation, not proof of A1 first-match enforcement. */
++static inline int k3_e2_note_snapshot(struct k3_e2_ledger *s,unsigned hart)
++{
++ uint16_t bit;
++ if (!s || hart>=K3_E2_HART_COUNT) return K3_E2_BAD;
++ if (k3_e2_lock(s)) return K3_E2_BUSY;
++ bit=(uint16_t)(1U<<hart);
++ if (!s->initialized || s->poisoned || !(s->pending&bit)) {
++  k3_e2_unlock(s);return K3_E2_DENY;
++ }
++ s->snapshot |= bit;
++ k3_e2_unlock(s);return K3_E2_OK;
++}
++/* No firmware caller: future verified A1 transaction must supply an epoch
++ * only after shadow+deny+old-allow removal+CSR readback on this Hart. */
++static inline int k3_e2_verified_local(struct k3_e2_ledger *s,unsigned hart,
++                                       uint64_t epoch, int csr_exact_match)
++{
++ uint16_t bit;
++ if (!s || hart>=K3_E2_HART_COUNT) return K3_E2_BAD;
++ if (k3_e2_lock(s)) return K3_E2_BUSY;
++ bit=(uint16_t)(1U<<hart);
++ if (!s->initialized || s->poisoned || !epoch ||
++     epoch!=s->epoch || !csr_exact_match ||
++     !(s->pending&bit) || !(s->snapshot&bit)) {
++  k3_e2_unlock(s);return K3_E2_DENY;
++ }
++ s->verified |= bit;
++ s->proof_epoch[hart]=epoch;
++ k3_e2_unlock(s);return K3_E2_OK;
++}
++/* Initial HSM Start is NOT a dynamic PMP update: each Hart must first
++ * successfully configure and read back its local OpenSBI PMP layout, pass
++ * the A1-E local preflight, and record a snapshot. No cross-Hart IPI or
++ * dynamic epoch is required at boot. Once a dynamic epoch exists, an
++ * unproved Start remains denied; snapshot is NOT an epoch ACK.
++ */
++static inline int k3_e2_finish_start(struct k3_e2_ledger *s,unsigned hart)
++{
++ uint16_t bit;
++ if (!s || hart>=K3_E2_HART_COUNT) return K3_E2_BAD;
++ if (k3_e2_lock(s)) return K3_E2_BUSY;
++ bit=(uint16_t)(1U<<hart);
++ if (!s->initialized || s->poisoned || !(s->present&bit) ||
++     !(s->pending&bit) || !(s->snapshot&bit) || (s->running&bit)) {
++  k3_e2_unlock(s);return K3_E2_DENY;
++ }
++ if (!s->epoch) {
++  /* First boot only: proof_epoch=0 and verified=0 are intentional. */
++  if ((s->verified&bit) || s->proof_epoch[hart]) {
++   k3_e2_unlock(s);return K3_E2_DENY;
++  }
++ } else if (!(s->verified&bit) ||
++            s->proof_epoch[hart]!=s->epoch) {
++  /* Never treat a boot snapshot as proof of a dynamic PMP epoch. */
++  k3_e2_unlock(s);return K3_E2_DENY;
++ }
++ s->pending &= (uint16_t)~bit;
++ s->running |= bit;
++ k3_e2_unlock(s);return K3_E2_OK;
++}
++/* Only safe after the real STOPPED transition; future starts must replay. */
++static inline int k3_e2_mark_stopped(struct k3_e2_ledger *s,unsigned hart)
++{
++ uint16_t bit;
++ if (!s || hart>=K3_E2_HART_COUNT) return K3_E2_BAD;
++ if (k3_e2_lock(s)) return K3_E2_BUSY;
++ bit=(uint16_t)(1U<<hart);
++ if (!s->initialized || s->poisoned || !(s->running&bit)) {
++  k3_e2_unlock(s);return K3_E2_DENY;
++ }
++ s->running &= (uint16_t)~bit;
++ s->stopped |= bit;
++ s->verified &= (uint16_t)~bit;
++ s->snapshot &= (uint16_t)~bit;
++ s->proof_epoch[hart]=0;
++ k3_e2_unlock(s);return K3_E2_OK;
++}
++/* Classify a Hart at dynamic PMP update target capture. Initial STARTED
++ * Harts have local boot PMP evidence (snapshot), not a dynamic-epoch ACK.
++ * All STARTED Harts remain targets for the first real IPI transaction;
++ * no synthetic ACK is created. Unexpected/pending states fail closed.
++ * Return 0=STOPPED quarantine, 1=STARTED target, negative=reject. */
++static inline int k3_e2_classify_target(struct k3_e2_ledger *s,
++                                       unsigned hart, int hsm_state)
++{
++ uint16_t bit;
++ int rc=K3_E2_DENY;
++ if (!s || hart>=K3_E2_HART_COUNT) return K3_E2_BAD;
++ if (k3_e2_lock(s)) return K3_E2_BUSY;
++ bit=(uint16_t)(1U<<hart);
++ if (!s->initialized || s->poisoned || !(s->present&bit) ||
++     (s->pending&bit)) goto done;
++ if (hsm_state==0 && (s->stopped&bit) && !(s->running&bit))
++  rc=0;
++ else if (hsm_state==1 && (s->running&bit) &&
++          (s->snapshot&bit) &&
++          ((!s->epoch && !(s->verified&bit) && !s->proof_epoch[hart]) ||
++           (s->epoch && (s->verified&bit) &&
++            s->proof_epoch[hart]==s->epoch)))
++  rc=1;
++done:
++ k3_e2_unlock(s);
++ return rc;
++}
++/* Future global coordinator ONLY. No production publisher in this stage.
++ * Fail closed if any start is pending, local PMP is unknown, or running
++ * Harts' readback doesn't match. STOPPED Harts are quarantined, not ACKed;
++ * the HSM protection gate MUST reject starts while enclaves exist. */
++static inline int k3_e2_can_activate(const struct k3_e2_ledger *s)
++{
++ unsigned i;
++ uint16_t running;
++ if (!s || !s->initialized || s->poisoned || !s->epoch ||
++     s->pending || !s->running ||
++     (uint16_t)(s->running|s->stopped)!=s->present ||
++     s->verified!=s->running) return K3_E2_DENY;
++ running=s->running;
++ for (i=0;i<K3_E2_HART_COUNT;i++)
++  if ((running&(1U<<i)) && s->proof_epoch[i]!=s->epoch)
++   return K3_E2_DENY;
++ return K3_E2_OK;
++}
++#endif
+diff --git a/include/sbi/k3_keystone_boot_slots.h b/include/sbi/k3_keystone_boot_slots.h
+new file mode 100644
+index 00000000..2a89b16b
+--- /dev/null
++++ b/include/sbi/k3_keystone_boot_slots.h
+@@ -0,0 +1,36 @@
++/* SPDX-License-Identifier: BSD-2-Clause */
++/* Jupiter2 QEMU-only deterministic 16-PMP boot slot layout.
++ * Every root-domain entry (denies and grants) precedes Keystone free slots;
++ * the root-domain universal S/U allow is always index 15.
++ * This is a slot plan, not a substitute for hardware CSR readback.
++ */
++#ifndef __K3_KEYSTONE_BOOT_SLOTS_H__
++#define __K3_KEYSTONE_BOOT_SLOTS_H__
++#include <stdint.h>
++#define K3_BOOT_PMP_COUNT 16U
++#define K3_BOOT_FALLBACK 15U
++#define K3_BOOT_MIN_KEYSTONE 3U
++struct k3_boot_pmp_plan {
++ uint16_t opensbi_mask;
++ uint16_t keystone_mask;
++ uint8_t firmware_entries;
++ uint8_t fallback_index;
++};
++static inline int k3_boot_plan_slots(unsigned int pmp_count,
++ unsigned int firmware_entries, unsigned int broad_allow_entries,
++ struct k3_boot_pmp_plan *out)
++{
++ unsigned int i;
++ uint16_t reserved = (uint16_t)(1U << K3_BOOT_FALLBACK);
++ if (!out || pmp_count != K3_BOOT_PMP_COUNT ||
++     !firmware_entries || broad_allow_entries != 1U ||
++     firmware_entries + K3_BOOT_MIN_KEYSTONE > K3_BOOT_FALLBACK)
++  return -1;
++ for (i = 0; i < firmware_entries; i++) reserved |= (uint16_t)(1U << i);
++ out->firmware_entries = (uint8_t)firmware_entries;
++ out->fallback_index = K3_BOOT_FALLBACK;
++ out->opensbi_mask = reserved;
++ out->keystone_mask = (uint16_t)(0xffffU & ~reserved);
++ return 0;
++}
++#endif
+diff --git a/include/sbi/k3_pmp_partition_evidence.h b/include/sbi/k3_pmp_partition_evidence.h
+new file mode 100644
+index 00000000..016243a9
+--- /dev/null
++++ b/include/sbi/k3_pmp_partition_evidence.h
+@@ -0,0 +1,138 @@
++/* SPDX-License-Identifier: BSD-2-Clause */
++/* K3 Stage 207: pure, fail-closed PMP partition evidence validator.
++ * No PMP writes; NOT an authorization to hand off ownership or boot SM.
++ * This checks caller-supplied snapshots only. An M-mode CSR inventory and
++ * cross-hart synchronization must supply and attest the evidence in future.
++ */
++#ifndef K3_PMP_PARTITION_EVIDENCE_H
++#define K3_PMP_PARTITION_EVIDENCE_H
++
++#include <stdint.h>
++
++#define K3_PMP_EVIDENCE_MAX_HARTS 16U
++#define K3_PMP_EVIDENCE_MAX_REGS  16U
++
++enum k3_pmp_evidence_result {
++ K3_PMP_EVIDENCE_OK = 0,
++ K3_PMP_EVIDENCE_BAD_INPUT = -1,
++ K3_PMP_EVIDENCE_UNVERIFIED = -2,
++ K3_PMP_EVIDENCE_OVERLAP = -3,
++ K3_PMP_EVIDENCE_OUT_OF_RANGE = -4,
++ K3_PMP_EVIDENCE_ACTIVE_UNOWNED = -5,
++ K3_PMP_EVIDENCE_LOCKED_KEYSTONE = -6,
++ K3_PMP_EVIDENCE_NONUNIFORM = -7,
++ K3_PMP_EVIDENCE_NO_CAPACITY = -8,
++ K3_PMP_EVIDENCE_PRIORITY_UNKNOWN = -9,
++ K3_PMP_EVIDENCE_PRIORITY_CONFLICT = -10,
++ K3_PMP_EVIDENCE_DYNAMIC_PRIORITY_UNKNOWN = -11,
++ K3_PMP_EVIDENCE_DYNAMIC_PRIORITY_CONFLICT = -12
++};
++
++/* Bit positions are PMP entry numbers, not hart IDs. No CSR is read here. */
++struct k3_pmp_hart_evidence {
++ uint8_t present;
++ uint8_t pmp_count;
++ uint8_t csr_snapshot_verified;
++ uint8_t legacy_pmp_mode_verified;
++ uint16_t opensbi_reserved; /* Includes every active pre-handoff entry. */
++ uint16_t keystone_reserved; /* Disjoint from OpenSBI, fixed for this boot. */
++ uint16_t active_entries;   /* PMP A!=OFF from verified CSR snapshot. */
++ uint16_t locked_entries;   /* PMP L bit from verified CSR snapshot. */
++ /* Measurements of FIRST-MATCH PMP priority over the exact SM range.
++  * Never infer them from allocation masks or DTB. */
++ uint8_t sm_priority_verified;
++ uint16_t prior_su_allow_sm_overlap; /* active earlier permissive rules */
++ /* Does any lower-index OpenSBI permissive PMP match a possible dynamic
++  * Enclave address before the Keystone deny region? Include all-RAM allow.
++  * Requires actual root domain/PMP range analysis, not just CSR mask bits. */
++ uint8_t dynamic_priority_verified;
++ uint16_t prior_su_allow_dynamic_overlap;
++};
++
++struct k3_pmp_partition_evidence {
++ uint8_t hart_count; /* K3: exactly 16 Hart indices; no assumptions on IDs */
++ struct k3_pmp_hart_evidence hart[K3_PMP_EVIDENCE_MAX_HARTS];
++};
++
++/* No trust decision may be made on an absent/partial CSR measurement. */
++static inline int k3_pmp_validate_partition_evidence(
++ const struct k3_pmp_partition_evidence *e)
++{
++ unsigned int i;
++ if (!e || e->hart_count != K3_PMP_EVIDENCE_MAX_HARTS)
++  return K3_PMP_EVIDENCE_BAD_INPUT;
++ for (i = 0; i < K3_PMP_EVIDENCE_MAX_HARTS; i++) {
++  const struct k3_pmp_hart_evidence *h = &e->hart[i];
++  uint32_t valid;
++  if (!h->present || h->pmp_count == 0 ||
++      h->pmp_count > K3_PMP_EVIDENCE_MAX_REGS)
++   return K3_PMP_EVIDENCE_BAD_INPUT;
++#ifdef K3_QEMU_PMP16
++  /* Reject a mixed or under-provisioned virtual Hart. Fail closed. */
++  if (h->pmp_count != 16U) return K3_PMP_EVIDENCE_BAD_INPUT;
++#endif
++  if (!h->csr_snapshot_verified || !h->legacy_pmp_mode_verified)
++   return K3_PMP_EVIDENCE_UNVERIFIED;
++  valid = (1U << h->pmp_count) - 1U;
++  if (((uint32_t)(h->opensbi_reserved | h->keystone_reserved |
++                   h->active_entries | h->locked_entries) & ~valid) != 0)
++   return K3_PMP_EVIDENCE_OUT_OF_RANGE;
++  if (!h->keystone_reserved || (h->opensbi_reserved & h->keystone_reserved))
++   return K3_PMP_EVIDENCE_OVERLAP;
++  if (h->active_entries & ~h->opensbi_reserved)
++   return K3_PMP_EVIDENCE_ACTIVE_UNOWNED;
++  if (h->locked_entries & h->keystone_reserved)
++   return K3_PMP_EVIDENCE_LOCKED_KEYSTONE;
++ }
++ return K3_PMP_EVIDENCE_OK;
++}
++
++/* Returns 1 only if a fixed identical Keystone slot set works on all harts.
++ * A failure is evidence for *investigation*, not a reason to loosen guards. */
++static inline int k3_pmp_partition_has_uniform_keystone_slots(
++ const struct k3_pmp_partition_evidence *e)
++{
++ unsigned int i;
++ uint16_t mask;
++ if (k3_pmp_validate_partition_evidence(e) != K3_PMP_EVIDENCE_OK)
++  return 0;
++ mask = e->hart[0].keystone_reserved;
++ for (i = 1; i < K3_PMP_EVIDENCE_MAX_HARTS; i++)
++  if (e->hart[i].keystone_reserved != mask) return 0;
++ return 1;
++}
++
++/* Candidate A: both OpenSBI AND Keystone use identical fixed slot numbers.
++ * Require an actual CSR-backed check of first-match precedence: a lower
++ * OpenSBI PMP allow rule must not shadow the Keystone SM deny region.
++ * Synthetic callers can test this validator, but cannot certify hardware. */
++static inline int k3_pmp_validate_uniform_partition(
++ const struct k3_pmp_partition_evidence *e, uint16_t *keystone_mask)
++{
++ unsigned int i;
++ uint16_t osm, ksm;
++ int ret = k3_pmp_validate_partition_evidence(e);
++ if (ret != K3_PMP_EVIDENCE_OK) return ret;
++ osm = e->hart[0].opensbi_reserved;
++ ksm = e->hart[0].keystone_reserved;
++ /* SM deny, OS allow and at least one dynamic Enclave region. */
++ if (!osm || __builtin_popcount((unsigned int)ksm) < 3)
++  return K3_PMP_EVIDENCE_NO_CAPACITY;
++ for (i = 0; i < K3_PMP_EVIDENCE_MAX_HARTS; ++i) {
++  const struct k3_pmp_hart_evidence *h = &e->hart[i];
++  if (h->opensbi_reserved != osm || h->keystone_reserved != ksm)
++   return K3_PMP_EVIDENCE_NONUNIFORM;
++  if (!h->sm_priority_verified)
++   return K3_PMP_EVIDENCE_PRIORITY_UNKNOWN;
++  if (h->prior_su_allow_sm_overlap)
++   return K3_PMP_EVIDENCE_PRIORITY_CONFLICT;
++  if (!h->dynamic_priority_verified)
++   return K3_PMP_EVIDENCE_DYNAMIC_PRIORITY_UNKNOWN;
++  if (h->prior_su_allow_dynamic_overlap)
++   return K3_PMP_EVIDENCE_DYNAMIC_PRIORITY_CONFLICT;
++ }
++ if (keystone_mask) *keystone_mask = ksm;
++ return K3_PMP_EVIDENCE_OK;
++}
++
++#endif
+diff --git a/include/sbi/sbi_hart.h b/include/sbi/sbi_hart.h
+index 4c36c778..59bca375 100644
+--- a/include/sbi/sbi_hart.h
++++ b/include/sbi/sbi_hart.h
+@@ -131,6 +131,28 @@ unsigned int sbi_hart_pmp_count(struct sbi_scratch *scratch);
+ unsigned int sbi_hart_pmp_log2gran(struct sbi_scratch *scratch);
+ unsigned int sbi_hart_pmp_addrbits(struct sbi_scratch *scratch);
+ unsigned int sbi_hart_mhpm_bits(struct sbi_scratch *scratch);
++/* Stage 202: irreversible OpenSBI PMP-writer gate (Keystone builds only).
++ * Do not engage until a separately validated all-Hart transfer protocol exists.
++ * Not a replacement for per-Hart CSR ownership/readback validation.
++ */
++#ifdef CONFIG_K3_KEYSTONE_SM
++/* Read-only local PMP inventory. Called only from trusted M-mode code.
++ * A successful snapshot is local evidence, NOT cross-Hart authorization. */
++#define K3_A1_SNAPSHOT_REGS 16U
++struct k3_a1_pmp_entry_snapshot {
++ unsigned long prot, addr, log2len;
++};
++struct k3_a1_local_pmp_snapshot {
++ unsigned int pmp_count, pmp_log2gran;
++ unsigned long mseccfg;
++ unsigned int mseccfg_valid;
++ struct k3_a1_pmp_entry_snapshot entry[K3_A1_SNAPSHOT_REGS];
++};
++int sbi_hart_keystone_a1_read_pmp_snapshot(struct sbi_scratch *scratch,
++                         struct k3_a1_local_pmp_snapshot *out);
++void sbi_hart_keystone_pmp_block_opensbi(void);
++bool sbi_hart_keystone_pmp_opensbi_blocked(void);
++#endif
+ int sbi_hart_pmp_configure(struct sbi_scratch *scratch);
+ int sbi_hart_map_saddr(unsigned long base, unsigned long size);
+ int sbi_hart_unmap_saddr(void);
+diff --git a/lib/sbi/sbi_dbtr.c b/lib/sbi/sbi_dbtr.c
+index a966e910..4ec1d415 100644
+--- a/lib/sbi/sbi_dbtr.c
++++ b/lib/sbi/sbi_dbtr.c
+@@ -524,7 +524,13 @@ int sbi_dbtr_read_trig(unsigned long smode,
+ 	shmem_base = hart_shmem_base(hs);
+ 
+ 	for_each_trig_entry(shmem_base, trig_count, typeof(*entry), entry) {
+-		sbi_hart_map_saddr((unsigned long)entry, sizeof(*entry));
++		/* Do not access shared memory when the mapping was denied. */
++		{
++			int map_rc = sbi_hart_map_saddr((unsigned long)entry, sizeof(*entry));
++			if (map_rc) {
++				return map_rc;
++			}
++		}
+ 		xmit = &entry->data;
+ 		trig = INDEX_TO_TRIGGER((_idx + trig_idx_base));
+ 		xmit->tstate = cpu_to_lle(trig->state);
+@@ -559,7 +565,13 @@ int sbi_dbtr_install_trig(unsigned long smode,
+ 
+ 	/* Check requested triggers configuration */
+ 	for_each_trig_entry(shmem_base, trig_count, typeof(*entry), entry) {
+-		sbi_hart_map_saddr((unsigned long)entry, sizeof(*entry));
++		/* Do not access shared memory when the mapping was denied. */
++		{
++			int map_rc = sbi_hart_map_saddr((unsigned long)entry, sizeof(*entry));
++			if (map_rc) {
++				return map_rc;
++			}
++		}
+ 		recv = (struct sbi_dbtr_data_msg *)(&entry->data);
+ 		ctrl = recv->tdata1;
+ 
+@@ -588,9 +600,15 @@ int sbi_dbtr_install_trig(unsigned long smode,
+ 		 * Since we have already checked if enough triggers are
+ 		 * available, trigger allocation must succeed.
+ 		 */
+-		trig = sbi_alloc_trigger();
++		/* Do not access shared memory when the mapping was denied. */
++		{
++			int map_rc = sbi_hart_map_saddr((unsigned long)entry, sizeof(*entry));
++			if (map_rc) {
++				return map_rc;
++			}
++		}
+ 
+-		sbi_hart_map_saddr((unsigned long)entry, sizeof(*entry));
++		trig = sbi_alloc_trigger();
+ 
+ 		recv = (struct sbi_dbtr_data_msg *)(&entry->data);
+ 		xmit = (struct sbi_dbtr_id_msg *)(&entry->id);
+@@ -672,7 +690,13 @@ int sbi_dbtr_update_trig(unsigned long smode,
+ 		return SBI_ERR_BAD_RANGE;
+ 
+ 	for_each_trig_entry(shmem_base, trig_count, typeof(*entry), entry) {
+-		sbi_hart_map_saddr((unsigned long)entry, sizeof(*entry));
++		/* Do not access shared memory when the mapping was denied. */
++		{
++			int map_rc = sbi_hart_map_saddr((unsigned long)entry, sizeof(*entry));
++			if (map_rc) {
++				return map_rc;
++			}
++		}
+ 		trig_idx = entry->id.idx;
+ 
+ 		if (trig_idx >= hs->total_trigs) {
+diff --git a/lib/sbi/sbi_domain_context.c b/lib/sbi/sbi_domain_context.c
+index 56beae2f..40f9544d 100644
+--- a/lib/sbi/sbi_domain_context.c
++++ b/lib/sbi/sbi_domain_context.c
+@@ -101,7 +101,20 @@ static void switch_to_next_domain_context(struct hart_context *ctx,
+ 	struct sbi_domain *current_dom = ctx->dom;
+ 	struct sbi_domain *target_dom = dom_ctx->dom;
+ 	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
++#ifndef CONFIG_K3_KEYSTONE_SM
+ 	unsigned int pmp_count = sbi_hart_pmp_count(scratch);
++#endif
++
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* ADR-002: A live Keystone PMP policy must never be erased by
++	 * OpenSBI domain switching.  Domain migration has no validated
++	 * SM-owned PMP transition yet; fail closed before changing either
++	 * hart ownership or PMP CSRs.  This is a temporary restriction,
++	 * NOT an implementation of domain migration.
++	 */
++	sbi_printf("K3 Keystone: domain switch blocked (PMP ownership)\n");
++	sbi_hart_hang();
++#endif
+ 
+ 	/* Assign current hart to target domain */
+ 	spin_lock(&current_dom->assigned_harts_lock);
+@@ -114,11 +127,18 @@ static void switch_to_next_domain_context(struct hart_context *ctx,
+ 	sbi_hartmask_set_hartindex(hartindex, &target_dom->assigned_harts);
+ 	spin_unlock(&target_dom->assigned_harts_lock);
+ 
+-	/* Reconfigure PMP settings for the new domain */
++	/* Reconfigure PMP settings for the new domain.
++	 * Keystone has no validated SM-owned domain migration protocol.
++	 * Exclude the OpenSBI PMP mutation sequence from Keystone objects
++	 * even though the entry gate above already hangs (defense in depth).
++	 * Do not treat this as enabling domain migration.
++	 */
++#ifndef CONFIG_K3_KEYSTONE_SM
+ 	for (int i = 0; i < pmp_count; i++) {
+ 		pmp_disable(i);
+ 	}
+ 	sbi_hart_pmp_configure(scratch);
++#endif
+ 
+ 	/* Save current CSR context and restore target domain's CSR context */
+ 	ctx->sstatus	= csr_swap(CSR_SSTATUS, dom_ctx->sstatus);
+diff --git a/lib/sbi/sbi_ecall_dbcn.c b/lib/sbi/sbi_ecall_dbcn.c
+index 1b0aebdc..504ba2ab 100644
+--- a/lib/sbi/sbi_ecall_dbcn.c
++++ b/lib/sbi/sbi_ecall_dbcn.c
+@@ -46,7 +46,13 @@ static int sbi_ecall_dbcn_handler(unsigned long extid, unsigned long funcid,
+ 					regs->a1, regs->a0, smode,
+ 					SBI_DOMAIN_READ|SBI_DOMAIN_WRITE))
+ 			return SBI_ERR_INVALID_PARAM;
+-		sbi_hart_map_saddr(regs->a1, regs->a0);
++		/* Do not access shared memory when the mapping was denied. */
++		{
++			int map_rc = sbi_hart_map_saddr(regs->a1, regs->a0);
++			if (map_rc) {
++				return map_rc;
++			}
++		}
+ 		if (funcid == SBI_EXT_DBCN_CONSOLE_WRITE)
+ 			out->value = sbi_nputs((const char *)regs->a1, regs->a0);
+ 		else
+diff --git a/lib/sbi/sbi_hart.c b/lib/sbi/sbi_hart.c
+index 14eb26b3..e5c11c1b 100644
+--- a/lib/sbi/sbi_hart.c
++++ b/lib/sbi/sbi_hart.c
+@@ -288,6 +288,8 @@ unsigned int sbi_hart_mhpm_bits(struct sbi_scratch *scratch)
+ 	return hfeatures->mhpm_bits;
+ }
+ 
++/* Smepmp-only setup must not be compiled in Keystone builds. */
++#ifndef CONFIG_K3_KEYSTONE_SM
+ /*
+  * Returns Smepmp flags for a given domain and region based on permissions.
+  */
+@@ -448,6 +450,175 @@ static int sbi_hart_smepmp_configure(struct sbi_scratch *scratch,
+ 	return 0;
+ }
+ 
++#endif /* !CONFIG_K3_KEYSTONE_SM */
++
++#ifdef CONFIG_K3_KEYSTONE_SM
++#include <sbi/k3_keystone_boot_slots.h>
++/* Diagnostic only: enabled by K3_PMP_BOOT_TRACE=1 at build time. */
++#if defined(K3_PMP_BOOT_TRACE) && K3_PMP_BOOT_TRACE
++#define K3_PMP_TRACE(...) sbi_printf("[K3-PMP] " __VA_ARGS__)
++#else
++#define K3_PMP_TRACE(...) do { } while (0)
++#endif
++/* K3 Keystone integration: root domain is the authority for PMP permissions.
++ * Preserve every OpenSBI domain entry (including S/U MMIO grants) and its
++ * original relative priority. The universal S/U allow, if present, must be
++ * the final PMP rule so Keystone's dynamic denial entries precede it.
++ * A root-domain mapping must NEVER be dropped to obtain Keystone slots.
++ */
++static bool k3_root_is_global_allow(const struct sbi_domain_memregion *r)
++{
++ return r->base == 0 && r->order == __riscv_xlen &&
++        (r->flags & SBI_DOMAIN_MEMREGION_SU_ACCESS_MASK) ==
++          (SBI_DOMAIN_MEMREGION_SU_READABLE |
++           SBI_DOMAIN_MEMREGION_SU_WRITABLE |
++           SBI_DOMAIN_MEMREGION_SU_EXECUTABLE) &&
++        !(r->flags & SBI_DOMAIN_MEMREGION_ENF_PERMISSIONS);
++}
++
++static unsigned long k3_root_pmp_permissions(const struct sbi_domain_memregion *r)
++{
++ unsigned long prot = 0;
++ if (r->flags & SBI_DOMAIN_MEMREGION_ENF_PERMISSIONS)
++  prot |= PMP_L;
++ if (r->flags & SBI_DOMAIN_MEMREGION_SU_READABLE)
++  prot |= PMP_R;
++ if (r->flags & SBI_DOMAIN_MEMREGION_SU_WRITABLE)
++  prot |= PMP_W;
++ if (r->flags & SBI_DOMAIN_MEMREGION_SU_EXECUTABLE)
++  prot |= PMP_X;
++ return prot;
++}
++
++static int k3_keystone_root_pmp_configure(struct sbi_scratch *scratch,
++                                        unsigned int count,
++                                        unsigned int gran,
++                                        unsigned long addr_max)
++{
++ struct sbi_domain_memregion *reg;
++ struct sbi_domain *dom = sbi_domain_thishart_ptr();
++ struct k3_boot_pmp_plan plan;
++ unsigned int regular = 0, broad = 0, slot = 0, i;
++ unsigned int free_slots;
++ unsigned long prot = 0, addr = 0, len = 0, expected;
++ int rc;
++ K3_PMP_TRACE("root-enter hart=%lu dom=%p count=%u gran=%u addrmax=0x%lx\n",
++       csr_read(CSR_MHARTID), dom, count, gran, addr_max);
++ if (!dom || count != K3_BOOT_PMP_COUNT) {
++  K3_PMP_TRACE("REJECT unsupported PMP hardware/domain count=%u dom=%p\n", count, dom);
++  return SBI_ENOTSUPP;
++ }
++
++ /* Do not assume two firmware entries or discard any SU-allowed MMIO.
++  * Domain order is the first-match priority; only the all-range fallback
++  * is placed last, where it remains lower priority than enclave denies.
++  */
++ sbi_domain_for_each_memregion(dom, reg) {
++  unsigned long paddr = reg->base >> PMP_SHIFT;
++  expected = k3_root_pmp_permissions(reg);
++  K3_PMP_TRACE("region base=0x%lx order=%lu flags=0x%lx pmp=0x%lx\n",
++      reg->base, reg->order, reg->flags, expected);
++  if (gran > reg->order || paddr >= addr_max) {
++   K3_PMP_TRACE("REJECT unrepresentable region base=0x%lx order=%lu gran=%u\n",
++       reg->base, reg->order, gran);
++   return SBI_ENOTSUPP;
++  }
++  /* Legacy PMP has no per-mode M permission encoding without Smepmp.
++   * OpenSBI's legacy conversion is the definition of effective PMP here.
++   */
++  if (k3_root_is_global_allow(reg)) broad++;
++  else regular++;
++ }
++ if (k3_boot_plan_slots(count, regular, broad, &plan)) {
++  K3_PMP_TRACE("REJECT root PMP capacity/order regular=%u broad=%u count=%u\n",
++       regular, broad, count);
++  return SBI_ENOTSUPP;
++ }
++ free_slots = __builtin_popcount((unsigned int)plan.keystone_mask);
++ K3_PMP_TRACE("root plan regular=%u broad=%u opensbi-mask=0x%x keystone-mask=0x%x free=%u\n",
++       regular, broad, plan.opensbi_mask, plan.keystone_mask, free_slots);
++
++ /* Never overwrite a pre-existing active or locked hardware entry. */
++ for (i = 0; i < count; i++) {
++  rc = pmp_get(i, &prot, &addr, &len);
++  if (rc || (prot & (PMP_A | PMP_L))) {
++   K3_PMP_TRACE("REJECT preexisting PMP index=%u rc=%d prot=0x%lx\n",i,rc,prot);
++   return SBI_EDENIED;
++  }
++ }
++
++ /* Original root-domain relative order, except full-range fallback. */
++ sbi_domain_for_each_memregion(dom, reg) {
++  if (k3_root_is_global_allow(reg)) continue;
++  expected = k3_root_pmp_permissions(reg);
++  K3_PMP_TRACE("set root slot=%u base=0x%lx order=%lu prot=0x%lx\n",
++      slot,reg->base,reg->order,expected);
++  rc = pmp_set(slot++, expected, reg->base, reg->order);
++  if (rc) return rc;
++ }
++ sbi_domain_for_each_memregion(dom, reg) {
++  if (!k3_root_is_global_allow(reg)) continue;
++  expected = k3_root_pmp_permissions(reg);
++  K3_PMP_TRACE("set fallback slot=%u prot=0x%lx\n",plan.fallback_index,expected);
++  rc = pmp_set(plan.fallback_index, expected,reg->base,reg->order);
++  if (rc) return rc;
++ }
++
++ slot = 0;
++ sbi_domain_for_each_memregion(dom, reg) {
++  if (k3_root_is_global_allow(reg)) continue;
++  expected = k3_root_pmp_permissions(reg);
++  rc = pmp_get(slot, &prot, &addr, &len);
++  if (rc || !(prot & PMP_A) ||
++      (prot & (PMP_R|PMP_W|PMP_X|PMP_L)) != expected ||
++      addr != reg->base || len != reg->order) {
++   K3_PMP_TRACE("FAIL root readback slot=%u rc=%d prot=0x%lx exp=0x%lx addr=0x%lx len=%lu\n",
++      slot,rc,prot,expected,addr,len);
++   return SBI_EFAIL;
++  }
++  slot++;
++ }
++ sbi_domain_for_each_memregion(dom, reg) {
++  unsigned int required_order;
++  if (!k3_root_is_global_allow(reg)) continue;
++  expected = k3_root_pmp_permissions(reg);
++  rc = pmp_get(plan.fallback_index, &prot, &addr, &len);
++  /*
++   * PMPADDR encodes physical address bits [PMP_SHIFT + N - 1 : PMP_SHIFT],
++   * where N is sbi_hart_pmp_addrbits().
++   *
++   * A fallback covering the full PMP-addressable physical
++   * address space must cover at least 2^(N + PMP_SHIFT) bytes.
++   */
++    required_order =
++        sbi_hart_pmp_addrbits(scratch) + PMP_SHIFT;
++  if (rc || !(prot & PMP_A) ||
++      (prot & (PMP_R|PMP_W|PMP_X|PMP_L)) != expected ||
++      addr != reg->base || len < required_order) {
++//   K3_PMP_TRACE("FAIL fallback readback slot=%u rc=%d prot=0x%lx expected=0x%lx\n",
++      
++//     plan.fallback_index,rc,prot,expected);
++     K3_PMP_TRACE(
++	 "FAIL fallback readback slot=%u rc=%d "
++	 "prot=0x%lx expected=0x%lx "
++	 "addr=0x%lx expected_addr=0x%lx "
++	 "len=%lu expected_len=%lu\n",
++	 plan.fallback_index, rc,
++	 prot, expected,
++	 addr, reg->base,
++	 len, reg->order);
++     return SBI_EFAIL;
++  }
++ }
++ sbi_printf("K3 PMP: OpenSBI entries=%u fallback=%u Keystone free=%u mask=0x%x\n",
++       regular,plan.fallback_index,free_slots,plan.keystone_mask);
++ K3_PMP_TRACE("root-config PASS hart=%lu root=%u Keystone-free=%u\n",
++       csr_read(CSR_MHARTID),regular+1,free_slots);
++ return 0;
++}
++#endif
++
++#ifndef CONFIG_K3_KEYSTONE_SM
+ static int sbi_hart_oldpmp_configure(struct sbi_scratch *scratch,
+ 				     unsigned int pmp_count,
+ 				     unsigned int pmp_log2gran,
+@@ -481,7 +652,9 @@ static int sbi_hart_oldpmp_configure(struct sbi_scratch *scratch,
+ 
+ 		pmp_addr = reg->base >> PMP_SHIFT;
+ 		if (pmp_log2gran <= reg->order && pmp_addr < pmp_addr_max) {
+-			pmp_set(pmp_idx++, pmp_flags, reg->base, reg->order);
++			int rc = pmp_set(pmp_idx++, pmp_flags, reg->base, reg->order);
++			if (rc)
++				return rc;
+ 		} else {
+ #if 0
+ 			sbi_printf("Can not configure pmp for domain %s because"
+@@ -495,13 +668,72 @@ static int sbi_hart_oldpmp_configure(struct sbi_scratch *scratch,
+ 	return 0;
+ }
+ 
++#endif /* !CONFIG_K3_KEYSTONE_SM */
++#ifdef CONFIG_K3_KEYSTONE_SM
++/* Once set, OpenSBI must not reprogram PMP through its normal paths.
++ * This bit is a preparatory fail-closed gate; production handoff remains
++ * disabled pending PMP capability, CSR readback and Hart admission proof.
++ */
++/* K3 A1: collect local CSR facts without modifying PMP state.
++ * Unsafe to invoke from ordinary S-mode; it is only callable from M-mode.
++ * All-Hart completeness, priority analysis, park and ownership handoff are
++ * deliberately NOT inferred from this function's return value. */
++int sbi_hart_keystone_a1_read_pmp_snapshot(
++  struct sbi_scratch *scratch, struct k3_a1_local_pmp_snapshot *out)
++{
++ unsigned int i, count;
++ int rc;
++ if (!scratch || !out) return SBI_EINVAL;
++ count=sbi_hart_pmp_count(scratch);
++ if (!count || count > K3_A1_SNAPSHOT_REGS) return SBI_ENOTSUPP;
++ sbi_memset(out, 0, sizeof(*out));
++ out->pmp_count=count;
++ out->pmp_log2gran=sbi_hart_pmp_log2gran(scratch);
++ if (sbi_hart_has_extension(scratch,SBI_HART_EXT_SMEPMP)) {
++  out->mseccfg=csr_read(CSR_MSECCFG);
++  out->mseccfg_valid=1;
++ }
++ for (i=0;i<count;i++) {
++  rc=pmp_get(i,&out->entry[i].prot,&out->entry[i].addr,
++             &out->entry[i].log2len);
++  if (rc) { sbi_memset(out,0,sizeof(*out)); return rc; }
++ }
++ return 0;
++}
++
++static unsigned long k3_keystone_block_opensbi_pmp;
++
++void sbi_hart_keystone_pmp_block_opensbi(void)
++{
++	__atomic_store_n(&k3_keystone_block_opensbi_pmp, 1UL, __ATOMIC_RELEASE);
++}
++
++bool sbi_hart_keystone_pmp_opensbi_blocked(void)
++{
++	return __atomic_load_n(&k3_keystone_block_opensbi_pmp,
++				       __ATOMIC_ACQUIRE) != 0;
++}
++#endif
++
++/* Keep normal SBI S-mode buffer access helpers available in all builds.
++ * The only excluded behavior in Keystone mode is the Smepmp-specific PMP
++ * mutation. Keystone needs no temporary Smepmp PMP mapping.
++ */
+ int sbi_hart_map_saddr(unsigned long addr, unsigned long size)
+ {
+ 	/* shared R/W access for M and S/U mode */
++#ifndef CONFIG_K3_KEYSTONE_SM
+ 	unsigned int pmp_flags = (PMP_W | PMP_X);
+ 	unsigned long order, base = 0;
+ 	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
++#endif
+ 
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* No Smepmp temporary mapping is needed in this build mode. */
++	(void)addr;
++	(void)size;
++	return SBI_OK;
++#else
+ 	/* If Smepmp is not supported no special mapping is required */
+ 	if (!sbi_hart_has_extension(scratch, SBI_HART_EXT_SMEPMP))
+ 		return SBI_OK;
+@@ -523,23 +755,35 @@ int sbi_hart_map_saddr(unsigned long addr, unsigned long size)
+ 		}
+ 	}
+ 
+-	pmp_set(SBI_SMEPMP_RESV_ENTRY, pmp_flags, base, order);
+-
+-	return SBI_OK;
++	return pmp_set(SBI_SMEPMP_RESV_ENTRY, pmp_flags, base, order);
++#endif /* CONFIG_K3_KEYSTONE_SM */
+ }
+ 
+ int sbi_hart_unmap_saddr(void)
+ {
++#ifndef CONFIG_K3_KEYSTONE_SM
+ 	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
++#else
++	/* Keystone never installs a Smepmp temporary mapping. */
++	return SBI_OK;
++#endif
+ 
++#ifndef CONFIG_K3_KEYSTONE_SM
+ 	if (!sbi_hart_has_extension(scratch, SBI_HART_EXT_SMEPMP))
+ 		return SBI_OK;
+-
+ 	return pmp_disable(SBI_SMEPMP_RESV_ENTRY);
++#endif
+ }
+ 
+ int sbi_hart_pmp_configure(struct sbi_scratch *scratch)
+ {
++#ifdef CONFIG_K3_KEYSTONE_SM
++	if (sbi_hart_keystone_pmp_opensbi_blocked()) {
++        K3_PMP_TRACE("REJECT blocked Hart=%lu rc=%d\n", csr_read(CSR_MHARTID), SBI_EDENIED);
++        return SBI_EDENIED;
++    }
++#endif
++
+ 	int rc;
+ 	unsigned int pmp_bits, pmp_log2gran;
+ 	unsigned int pmp_count = sbi_hart_pmp_count(scratch);
+@@ -552,12 +796,26 @@ int sbi_hart_pmp_configure(struct sbi_scratch *scratch)
+ 	pmp_bits = sbi_hart_pmp_addrbits(scratch) - 1;
+ 	pmp_addr_max = (1UL << pmp_bits) | ((1UL << pmp_bits) - 1);
+ 
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/*
++	 * Keystone selects the legacy PMP initialization path regardless
++	 * of hardware Smepmp capability. Do not configure Smepmp policy.
++	 * Platform-provided CSR state still requires independent validation.
++	 */
++	K3_PMP_TRACE("configure-start Hart=%lu count=%u log2gran=%u addrbits=%u\n",
++        csr_read(CSR_MHARTID), pmp_count, pmp_log2gran,
++        sbi_hart_pmp_addrbits(scratch));
++    rc = k3_keystone_root_pmp_configure(scratch, pmp_count,
++                                        pmp_log2gran, pmp_addr_max);
++    K3_PMP_TRACE("configure-return Hart=%lu rc=%d\n", csr_read(CSR_MHARTID), rc);
++#else
+ 	if (sbi_hart_has_extension(scratch, SBI_HART_EXT_SMEPMP))
+ 		rc = sbi_hart_smepmp_configure(scratch, pmp_count,
+ 						pmp_log2gran, pmp_addr_max);
+ 	else
+ 		rc = sbi_hart_oldpmp_configure(scratch, pmp_count,
+ 						pmp_log2gran, pmp_addr_max);
++#endif
+ 
+ 	/*
+ 	 * As per section 3.7.2 of privileged specification v1.12,
+diff --git a/lib/sbi/sbi_hsm.c b/lib/sbi/sbi_hsm.c
+index cf0eb84b..2affaa77 100644
+--- a/lib/sbi/sbi_hsm.c
++++ b/lib/sbi/sbi_hsm.c
+@@ -7,6 +7,44 @@
+  *   Atish Patra <atish.patra@wdc.com>
+  */
+ 
++#ifdef CONFIG_K3_KEYSTONE_SM
++#include <sbi/k3_e2_hart_quarantine.h>
++#include <sbi/sbi_error.h>
++/* A1-E/E2 ledger: STOPPED != acknowledged. This is only an admission
++ * prerequisite. A verified CSR/ownership publisher is still unavailable. */
++static struct k3_e2_ledger k3_e2_hsm_ledger;
++static unsigned int k3_e2_boot_index;
++static unsigned int k3_e2_boot_finished;
++
++/* Called by Keystone under k3_global_hsm_gate at target capture.
++ * hsm_state: 0 STOPPED, 1 STARTED, -1 unexpected. */
++int sbi_hsm_k3_e2_classify_target(unsigned int hartindex, int hsm_state)
++{
++ return k3_e2_classify_target(&k3_e2_hsm_ledger,hartindex,hsm_state);
++}
++
++int sbi_hsm_k3_e2_note_local_snapshot(unsigned int hartindex)
++{
++ return k3_e2_note_snapshot(&k3_e2_hsm_ledger, hartindex) ? SBI_EDENIED : 0;
++}
++
++/* Call from the Keystone HSM admission API WHILE its global transition
++ * gate is held. The two states must never be updated in separate windows. */
++int sbi_hsm_k3_e2_start_reserve(unsigned int hartindex)
++{
++ return k3_e2_reserve_start(&k3_e2_hsm_ledger,hartindex) ? SBI_EDENIED : 0;
++}
++int sbi_hsm_k3_e2_start_cancel(unsigned int hartindex)
++{
++ return k3_e2_cancel_start(&k3_e2_hsm_ledger,hartindex) ? SBI_EDENIED : 0;
++}
++/* Called with the Keystone HSM/PMP global gate held (except the cold
++ * boot Hart before any secondary can start). Initial HSM Start requires
++ * a validated local PMP snapshot, NOT a dynamic epoch/remote IPI ACK.
++ * Later dynamic-epoch starts must still pass the verified epoch guard. */
++/* Implemented after sbi_hsm_data declaration. */
++#endif
++
+ #include <sbi/riscv_asm.h>
+ #include <sbi/riscv_barrier.h>
+ #include <sbi/riscv_encoding.h>
+@@ -35,6 +73,11 @@
+ 	state == (oldstate);						\
+ })
+ 
++#ifdef CONFIG_K3_KEYSTONE_SM
++extern int k3_keystone_hsm_start_begin(unsigned int hartindex);
++extern int k3_keystone_hsm_start_cancel(unsigned int hartindex);
++#endif
++
+ static const struct sbi_hsm_device *hsm_dev = NULL;
+ static unsigned long hart_data_offset;
+ 
+@@ -51,6 +94,30 @@ struct sbi_hsm_data {
+ #endif
+ 	atomic_t start_ticket;
+ };
++#ifdef CONFIG_K3_KEYSTONE_SM
++int sbi_hsm_k3_e2_finish_and_mark_started(unsigned int hartindex)
++{
++ struct sbi_scratch *scratch;
++ struct sbi_hsm_data *hdata;
++ if (hartindex >= K3_E2_HART_COUNT ||
++     !(scratch=sbi_hartindex_to_scratch(hartindex))) return SBI_EDENIED;
++ hdata=sbi_scratch_offset_ptr(scratch,hart_data_offset);
++ if (k3_e2_finish_start(&k3_e2_hsm_ledger,hartindex)) {
++  sbi_printf("K3 E2: HSM Start denied hartindex=%u epoch=%lu "
++             "pending=0x%x snapshot=0x%x verified=0x%x\n",
++             hartindex, (unsigned long)k3_e2_hsm_ledger.epoch,
++             k3_e2_hsm_ledger.pending, k3_e2_hsm_ledger.snapshot,
++             k3_e2_hsm_ledger.verified);
++  return SBI_EDENIED;
++ }
++ if (atomic_cmpxchg(&hdata->state,SBI_HSM_STATE_START_PENDING,
++                   SBI_HSM_STATE_STARTED)!=SBI_HSM_STATE_START_PENDING) {
++  __atomic_store_n(&k3_e2_hsm_ledger.poisoned,1,__ATOMIC_RELEASE);
++  return SBI_EFAIL;
++ }
++ return 0;
++}
++#endif
+ 
+ bool sbi_hsm_hart_change_state(struct sbi_scratch *scratch, long oldstate,
+ 			       long newstate)
+@@ -145,10 +212,24 @@ void __noreturn sbi_hsm_hart_start_finish(struct sbi_scratch *scratch,
+ 	struct sbi_hsm_data *hdata = sbi_scratch_offset_ptr(scratch,
+ 							    hart_data_offset);
+ 
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* Cold-boot coordinator is alone; later starts are serialized by
++	 * Keystone's shared HSM/PMP gate (finish publishes STARTED inside it). */
++	if (sbi_hartid_to_hartindex(hartid)==k3_e2_boot_index &&
++	    !k3_e2_boot_finished) {
++		if (sbi_hsm_k3_e2_finish_and_mark_started(k3_e2_boot_index))
++			sbi_hart_hang();
++		k3_e2_boot_finished=1;
++	} else {
++		extern int k3_keystone_hsm_start_finish(unsigned int);
++		if (k3_keystone_hsm_start_finish(sbi_hartid_to_hartindex(hartid)))
++			sbi_hart_hang();
++	}
++#else
+ 	if (!__sbi_hsm_hart_change_state(hdata, SBI_HSM_STATE_START_PENDING,
+ 					 SBI_HSM_STATE_STARTED))
+ 		sbi_hart_hang();
+-
++#endif
+ 	next_arg1 = scratch->next_arg1;
+ 	next_addr = scratch->next_addr;
+ 	next_mode = scratch->next_mode;
+@@ -261,6 +342,23 @@ int sbi_hsm_init(struct sbi_scratch *scratch, bool cold_boot)
+ 				    SBI_HSM_STATE_STOPPED);
+ 			ATOMIC_INIT(&hdata->start_ticket, 0);
+ 		}
++#ifdef CONFIG_K3_KEYSTONE_SM
++		/* Every valid Hart is explicitly quarantined before an S-mode
++		 * entry. Never assume Hart indices from DTB or the CPU count. */
++		{
++			u16 actual=0;
++			if (sbi_scratch_last_hartindex() != K3_E2_HART_COUNT-1)
++				return SBI_EFAIL;
++			for (i=0; i<K3_E2_HART_COUNT; i++) {
++				if (!sbi_hartindex_to_scratch(i)) return SBI_EFAIL;
++				actual |= (u16)(1U<<i);
++			}
++			if (k3_e2_cold_init(&k3_e2_hsm_ledger,actual,
++						current_hartindex())) return SBI_EFAIL;
++			k3_e2_boot_index=current_hartindex();
++			k3_e2_boot_finished=0;
++		}
++#endif
+ 	} else {
+ 		sbi_hsm_hart_wait(scratch);
+ 	}
+@@ -277,6 +375,11 @@ void __noreturn sbi_hsm_exit(struct sbi_scratch *scratch)
+ 	if (!__sbi_hsm_hart_change_state(hdata, SBI_HSM_STATE_STOP_PENDING,
+ 					 SBI_HSM_STATE_STOPPED))
+ 		goto fail_exit;
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* Revoke the old local proof. Next Start must re-validate PMP. */
++	if (k3_e2_mark_stopped(&k3_e2_hsm_ledger, current_hartindex()))
++		goto fail_exit;
++#endif
+ 
+ 	if (hsm_device_has_hart_hotplug()) {
+ 		if (hsm_device_hart_stop() != SBI_ENOTSUPP)
+@@ -336,8 +439,25 @@ int sbi_hsm_hart_start(struct sbi_scratch *scratch,
+ 	 * other harts see reading of init_count and writing to *rscratch
+ 	 * before hdata->state is set to SBI_HSM_STATE_START_PENDING.
+ 	 */
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* Serialize admission against offline-target selection and generation
++	 * publication; refuse a hart that missed an enclave PMP update. */
++	rc = k3_keystone_hsm_start_begin(hartindex);
++	if (rc)
++		goto err;
++#endif
+ 	hstate = atomic_cmpxchg(&hdata->state, SBI_HSM_STATE_STOPPED,
+ 				SBI_HSM_STATE_START_PENDING);
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* HSM Start reservation stays active until warm-start completion. */
++#endif
++#ifdef CONFIG_K3_KEYSTONE_SM
++	if (hstate != SBI_HSM_STATE_STOPPED) {
++		extern int k3_keystone_hsm_start_cancel(unsigned int hartindex);
++		if (k3_keystone_hsm_start_cancel(hartindex))
++			sbi_hart_hang();
++	}
++#endif
+ 	if (hstate == SBI_HSM_STATE_STARTED) {
+ 		rc = SBI_EALREADY;
+ 		goto err;
+@@ -362,6 +482,10 @@ int sbi_hsm_hart_start(struct sbi_scratch *scratch,
+ 	if (!rc)
+ 		return 0;
+ 
++#ifdef CONFIG_K3_KEYSTONE_SM
++	{ extern int k3_keystone_hsm_start_cancel(unsigned int hartindex);
++	  if (k3_keystone_hsm_start_cancel(hartindex)) sbi_hart_hang(); }
++#endif
+ 	/* If it fails to start, change hart state back to stop */
+ 	__sbi_hsm_hart_change_state(hdata, SBI_HSM_STATE_START_PENDING,
+ 				    SBI_HSM_STATE_STOPPED);
+@@ -370,8 +494,26 @@ err:
+ 	return rc;
+ }
+ 
++/* The Keystone-owned HSM gate is optional and only linked in a fully
++ * integrated SM build. It does not replace vendor HSM state transitions. */
++#ifdef CONFIG_K3_KEYSTONE_SM
++extern int k3_keystone_hsm_stop_begin(void);
++extern void k3_keystone_hsm_stop_end(void);
++extern int k3_keystone_hsm_start_begin(unsigned int hartindex);
++extern int k3_keystone_hsm_start_cancel(unsigned int hartindex);
++#endif
++
+ int sbi_hsm_hart_stop(struct sbi_scratch *scratch, bool exitnow)
+ {
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* Fixed-online K3 policy: after initial HSM Start, all 16 harts
++	 * remain STARTED. Never execute STOP_PENDING or the exit path.
++	 * Returning a documented error also covers internal stop callers.
++	 * The normal (non-Keystone) OpenSBI path is unchanged. */
++	(void)scratch;
++	(void)exitnow;
++	return SBI_EDENIED;
++#endif
+ 	const struct sbi_domain *dom = sbi_domain_thishart_ptr();
+ 	struct sbi_hsm_data *hdata = sbi_scratch_offset_ptr(scratch,
+ 							    hart_data_offset);
+@@ -379,9 +521,25 @@ int sbi_hsm_hart_stop(struct sbi_scratch *scratch, bool exitnow)
+ 	if (!dom)
+ 		return SBI_EFAIL;
+ 
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* Acquire before the transition so a concurrent update cannot select
++	 * this hart and then lose it while awaiting its PMP ACK. */
++	{
++		int rc = k3_keystone_hsm_stop_begin();
++		if (rc)
++			return rc;
++	}
++#endif
+ 	if (!__sbi_hsm_hart_change_state(hdata, SBI_HSM_STATE_STARTED,
+-					 SBI_HSM_STATE_STOP_PENDING))
++					 SBI_HSM_STATE_STOP_PENDING)) {
++#ifdef CONFIG_K3_KEYSTONE_SM
++		k3_keystone_hsm_stop_end();
++#endif
+ 		return SBI_EFAIL;
++	}
++#ifdef CONFIG_K3_KEYSTONE_SM
++	k3_keystone_hsm_stop_end();
++#endif
+ 
+ 	if (exitnow)
+ 		sbi_exit(scratch);
+@@ -481,6 +639,16 @@ void __noreturn sbi_hsm_hart_resume_finish(struct sbi_scratch *scratch,
+ int sbi_hsm_hart_suspend(struct sbi_scratch *scratch, u32 suspend_type,
+ 			 ulong raddr, ulong rmode, ulong arg1)
+ {
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* K3 fixed-online policy also forbids retentive and non-retentive
++	 * suspend. An abnormal hardware stop is outside the runtime model. */
++	(void)scratch;
++	(void)suspend_type;
++	(void)raddr;
++	(void)rmode;
++	(void)arg1;
++	return SBI_EDENIED;
++#endif
+ 	int ret;
+ 	const struct sbi_domain *dom = sbi_domain_thishart_ptr();
+ 	struct sbi_hsm_data *hdata = sbi_scratch_offset_ptr(scratch,
+diff --git a/lib/sbi/sbi_init.c b/lib/sbi/sbi_init.c
+index 6338efd6..b8f16e8f 100644
+--- a/lib/sbi/sbi_init.c
++++ b/lib/sbi/sbi_init.c
+@@ -33,6 +33,130 @@
+ #include <sbi/sbi_version.h>
+ #include <sbi/sbi_unit_test.h>
+ 
++/* K3 A1-E/E2: local PMP protection must be verified before each Hart is
++ * admitted to S-mode. STOPPED Harts require local validation on their later
++ * HSM Start; they are not treated as completed IPI targets. The existing
++ * cold/warm/resume gate remains fail-closed until the actual PMP allocation
++ * and required global policy consistency are established. No all-Hart M-mode
++ * HOLD/RELEASE scheme is implied by this gate.
++ */
++#ifdef CONFIG_K3_KEYSTONE_SM
++extern int k3_pmp_sync_initialize(void);
++extern int sm_init(bool cold_boot);
++extern int k3_keystone_allow_initial_hsm_starts(void);
++extern int k3_pmp_boot_partition_admit(unsigned short, unsigned short, int);
++#include <sbi/k3_a1_csr_preflight.h>
++
++static void k3_keystone_a1_post_pmp_before_smode(struct sbi_scratch *scratch,
++                                                  u32 hartid)
++{
++	struct k3_a1_local_pmp_snapshot snapshot;
++	int rc;
++
++	rc = sbi_hart_keystone_a1_read_pmp_snapshot(scratch, &snapshot);
++	if (rc) {
++		sbi_printf("K3 A1-E: PMP snapshot failed on Hart %u: %d\n", hartid, rc);
++		sbi_hart_hang();
++	}
++
++	/* Optional serial inventory for a dedicated, authorized M-mode
++	 * diagnostic run. Read-only: never writes CSR, never exposes key data.
++	 * Deliberately disabled unless the diagnostic macro is explicitly set.
++	 * A log is evidence for review, not an authenticated security proof. */
++#ifdef K3_A1_DIAG_PMP_SNAPSHOT
++	{
++		unsigned int i;
++		sbi_printf("K3_A1_CSR hart=%u count=%u gran=%u mseccfg_valid=%u mseccfg=%lx\n",
++		           hartid, snapshot.pmp_count, snapshot.pmp_log2gran,
++		           snapshot.mseccfg_valid, snapshot.mseccfg);
++		for (i = 0; i < snapshot.pmp_count; ++i)
++			sbi_printf("K3_A1_CSR hart=%u idx=%u prot=%lx addr=%lx log2len=%lu\n",
++			           hartid, i, snapshot.entry[i].prot,
++			           snapshot.entry[i].addr, snapshot.entry[i].log2len);
++	}
++#endif
++	/* Inspect *actual local* legacy-PMP shape before recording a local
++	 * observation. This is preflight, not an authorization to hand over. */
++	{
++		struct k3_a1_csr_measured measured = {0};
++		struct k3_a1_local_candidate candidate = {0};
++		unsigned int i;
++		measured.count = snapshot.pmp_count;
++		measured.granularity = snapshot.pmp_log2gran;
++		measured.pmp_addrbits = sbi_hart_pmp_addrbits(scratch);
++		measured.mseccfg = snapshot.mseccfg;
++		measured.mseccfg_valid = snapshot.mseccfg_valid;
++		for (i = 0; i < snapshot.pmp_count; i++) {
++			measured.entry[i].prot = snapshot.entry[i].prot;
++			measured.entry[i].addr = snapshot.entry[i].addr;
++			measured.entry[i].log2len = snapshot.entry[i].log2len;
++		}
++		rc = k3_a1_preflight_local(&measured, &candidate);
++		if (rc) {
++			sbi_printf("K3 A1-E: local PMP shape rejected on Hart %u: %d\n",
++			           hartid, rc);
++			sbi_hart_hang();
++		}
++		/* A1-E boot partition: admit only the already-migrated local CSR
++		 * layout. The cold-boot Hart fixes the common masks; a subsequent
++		 * Hart must match exactly. This is NOT enclave readiness. */
++		if (candidate.fallback != 15U || candidate.old_allow != 15U ||
++		    k3_pmp_boot_partition_admit(
++		      (unsigned short)(candidate.firmware_entries | 0x8000U),
++		      candidate.free_keystone_entries,
++		      hartid == sbi_domain_thishart_ptr()->boot_hartid)) {
++			sbi_printf("K3 A1-E: boot partition not committed on Hart %u\n", hartid);
++			sbi_hart_hang();
++		}
++	}
++	/* E2: record local observation only. No STOPPED Hart is an ACK. */
++	{
++		extern int sbi_hsm_k3_e2_note_local_snapshot(unsigned int);
++		if (sbi_hsm_k3_e2_note_local_snapshot(
++				sbi_hartid_to_hartindex(hartid))) sbi_hart_hang();
++	}
++
++	/* The common slot mask is now committed. This is not SM readiness:
++	 * the caller MUST run sm_init() and reject S-mode entry unless SM
++	 * PMP memory isolation is independently established. */
++	(void)snapshot;
++	return;
++}
++#endif
++
++/* K3 migration evidence acquisition: normal OpenSBI only, read-only.
++ * Build explicitly with K3_PMP_DIAG_READONLY=1. The diagnostic is NOT a
++ * proof of DMA/IOPMP protection, and STOPPED Harts produce no snapshot
++ * until they are started by the existing HSM mechanism. */
++#if defined(K3_PMP_DIAG_READONLY) && defined(CONFIG_PLATFORM_SPACEMIT_K3) && !defined(CONFIG_K3_KEYSTONE_SM)
++static void k3_pmp_diag_readonly(struct sbi_scratch *scratch, u32 hartid)
++{
++    unsigned int i, count = sbi_hart_pmp_count(scratch);
++    unsigned long prot, base, log2len;
++    int rc;
++    /* Vendor Smepmp mode can revoke M-mode access to console MMIO once
++     * configured. Do not risk a post-PMP console fault just for evidence.
++     * Its installed PMP state must be gathered with a separate verified
++     * diagnostic path; a missing record is never treated as success. */
++    if (sbi_hart_has_extension(scratch, SBI_HART_EXT_SMEPMP))
++        return;
++    sbi_printf("K3_PMP_DIAG hart=%u count=%u gran=%u smepmp=%u\n",
++               hartid, count, sbi_hart_pmp_log2gran(scratch),
++               sbi_hart_has_extension(scratch, SBI_HART_EXT_SMEPMP) ? 1U : 0U);
++    /* Report all implemented entries; no guessed fixed 8/16 slot count. */
++    for (i = 0; i < count; i++) {
++        rc = pmp_get(i, &prot, &base, &log2len);
++        if (rc) {
++            sbi_printf("K3_PMP_DIAG hart=%u idx=%u error=%d\n", hartid, i, rc);
++            continue;
++        }
++        sbi_printf("K3_PMP_DIAG hart=%u idx=%u prot=0x%lx base=0x%lx log2len=%lu\n",
++                   hartid, i, prot, base, log2len);
++    }
++    sbi_printf("K3_PMP_DIAG hart=%u end=1\n", hartid);
++}
++#endif
++
+ #define BANNER                                              \
+ 	"   ____                    _____ ____ _____\n"     \
+ 	"  / __ \\                  / ____|  _ \\_   _|\n"  \
+@@ -298,6 +422,20 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
+ 		sbi_hart_hang();
+ 	}
+ 
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* Register the existing Keystone PMP IPI event exactly once on cold
++	 * boot, after the OpenSBI IPI core is ready and while all Hart scratch
++	 * areas can still be allocated. The event is *not* a PMP admission:
++	 * the post-PMP gate and SM init still fail closed until verified.
++	 * Warm boot must reuse the registration rather than reallocating it.
++	 */
++	rc = k3_pmp_sync_initialize();
++	if (rc) {
++		sbi_printf("%s: K3 PMP IPI init failed (error %d)\n", __func__, rc);
++		sbi_hart_hang();
++	}
++#endif
++
+ 	rc = sbi_tlb_init(scratch, true);
+ 	if (rc) {
+ 		sbi_printf("%s: tlb init failed (error %d)\n", __func__, rc);
+@@ -375,13 +513,44 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
+ 	 * Configure PMP at last because if SMEPMP is detected,
+ 	 * M-mode access to the S/U space will be rescinded.
+ 	 */
++#if defined(CONFIG_K3_KEYSTONE_SM) && defined(K3_PMP_BOOT_TRACE) && K3_PMP_BOOT_TRACE
++    sbi_printf("[K3-PMP] init_coldboot before configure hart=%u\n", hartid);
++#endif
+ 	rc = sbi_hart_pmp_configure(scratch);
++#if defined(CONFIG_K3_KEYSTONE_SM) && defined(K3_PMP_BOOT_TRACE) && K3_PMP_BOOT_TRACE
++    sbi_printf("[K3-PMP] init_coldboot after configure hart=%u rc=%d\n", hartid, rc);
++#endif
+ 	if (rc) {
+ 		sbi_printf("%s: PMP configure failed (error %d)\n",
+ 			   __func__, rc);
+ 		sbi_hart_hang();
+ 	}
+ 
++#if defined(K3_PMP_DIAG_READONLY) && defined(CONFIG_PLATFORM_SPACEMIT_K3) && !defined(CONFIG_K3_KEYSTONE_SM)
++	k3_pmp_diag_readonly(scratch, hartid);
++#endif
++
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* A1-E MUST run after local root-domain PMP initialization, while
++	 * still in M-mode and before the HSM path switches into S/U-mode.
++	 * This gate is currently fail-closed until the global proof exists.
++	 */
++	k3_keystone_a1_post_pmp_before_smode(scratch, hartid);
++	rc = sm_init(true);
++	if (rc) {
++		sbi_printf("K3 Keystone: sm_init unavailable (error %d); S-mode admission denied\n", rc);
++		sbi_hart_hang();
++	}
++	/* Only the initial HSM Start window is opened here. At this point
++	 * dynamic enclave updates remain unavailable because all 16 Hart
++	 * HSM states have not yet reached STARTED. No new IPI barrier. */
++	rc = k3_keystone_allow_initial_hsm_starts();
++	if (rc) {
++		sbi_printf("K3 Keystone: initial HSM Start admission failed (%d)\n", rc);
++		sbi_hart_hang();
++	}
++#endif
++
+ 	count = sbi_scratch_offset_ptr(scratch, init_count_offset);
+ 	(*count)++;
+ 
+@@ -458,6 +627,23 @@ static void __noreturn init_warm_startup(struct sbi_scratch *scratch,
+ 	if (rc)
+ 		sbi_hart_hang();
+ 
++#if defined(K3_PMP_DIAG_READONLY) && defined(CONFIG_PLATFORM_SPACEMIT_K3) && !defined(CONFIG_K3_KEYSTONE_SM)
++	k3_pmp_diag_readonly(scratch, hartid);
++#endif
++
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* A1-E MUST run after local root-domain PMP initialization, while
++	 * still in M-mode and before the HSM path switches into S/U-mode.
++	 * This gate is currently fail-closed until the global proof exists.
++	 */
++	k3_keystone_a1_post_pmp_before_smode(scratch, hartid);
++	rc = sm_init(false);
++	if (rc) {
++		sbi_printf("K3 Keystone: warm sm_init unavailable (error %d); S-mode admission denied\n", rc);
++		sbi_hart_hang();
++	}
++#endif
++
+ 	count = sbi_scratch_offset_ptr(scratch, init_count_offset);
+ 	(*count)++;
+ 
+@@ -479,6 +665,15 @@ static void __noreturn init_warm_resume(struct sbi_scratch *scratch,
+ 	if (rc)
+ 		sbi_hart_hang();
+ 
++#if defined(K3_PMP_DIAG_READONLY) && defined(CONFIG_PLATFORM_SPACEMIT_K3) && !defined(CONFIG_K3_KEYSTONE_SM)
++	k3_pmp_diag_readonly(scratch, hartid);
++#endif
++
++#ifdef CONFIG_K3_KEYSTONE_SM
++	/* Never resume S-mode with a fresh unverified PMP layout. */
++	k3_keystone_a1_post_pmp_before_smode(scratch, hartid);
++#endif
++
+ 	sbi_hsm_hart_resume_finish(scratch, hartid);
+ }
+ 
+diff --git a/lib/sbi/sbi_mpxy.c b/lib/sbi/sbi_mpxy.c
+index e8f305be..be1f913f 100644
+--- a/lib/sbi/sbi_mpxy.c
++++ b/lib/sbi/sbi_mpxy.c
+@@ -291,7 +291,13 @@ int sbi_mpxy_set_shmem(unsigned long shmem_phys_lo,
+ 	if (flags == SBI_EXT_MPXY_SHMEM_FLAG_OVERWRITE_RETURN) {
+ 		ret_buf = (unsigned long *)(ulong)SHMEM_PHYS_ADDR(shmem_phys_hi,
+ 								  shmem_phys_lo);
+-		sbi_hart_map_saddr((unsigned long)ret_buf, mpxy_shmem_size);
++		/* Do not access shared memory when the mapping was denied. */
++		{
++			int map_rc = sbi_hart_map_saddr((unsigned long)ret_buf, mpxy_shmem_size);
++			if (map_rc) {
++				return map_rc;
++			}
++		}
+ 		ret_buf[0] = cpu_to_lle(ms->shmem.shmem_addr_lo);
+ 		ret_buf[1] = cpu_to_lle(ms->shmem.shmem_addr_hi);
+ 		sbi_hart_unmap_saddr();
+@@ -324,7 +330,13 @@ int sbi_mpxy_get_channel_ids(u32 start_index)
+ 		return SBI_ERR_INVALID_PARAM;
+ 
+ 	shmem_base = hart_shmem_base(ms);
+-	sbi_hart_map_saddr((unsigned long)hart_shmem_base(ms), mpxy_shmem_size);
++	/* Do not access shared memory when the mapping was denied. */
++	{
++		int map_rc = sbi_hart_map_saddr((unsigned long)hart_shmem_base(ms), mpxy_shmem_size);
++		if (map_rc) {
++			return map_rc;
++		}
++	}
+ 
+ 	/** number of channel ids which can be stored in shmem adjusting
+ 	 * for remaining and returned fields */
+@@ -383,7 +395,13 @@ int sbi_mpxy_read_attrs(u32 channel_id, u32 base_attr_id, u32 attr_count)
+ 	shmem_base = hart_shmem_base(ms);
+ 	end_id = base_attr_id + attr_count - 1;
+ 
+-	sbi_hart_map_saddr((unsigned long)hart_shmem_base(ms), mpxy_shmem_size);
++	/* Do not access shared memory when the mapping was denied. */
++	{
++		int map_rc = sbi_hart_map_saddr((unsigned long)hart_shmem_base(ms), mpxy_shmem_size);
++		if (map_rc) {
++			return map_rc;
++		}
++	}
+ 
+ 	/* Standard attributes range check */
+ 	if (mpxy_is_std_attr(base_attr_id)) {
+@@ -537,7 +555,13 @@ int sbi_mpxy_write_attrs(u32 channel_id, u32 base_attr_id, u32 attr_count)
+ 	shmem_base = hart_shmem_base(ms);
+ 	end_id = base_attr_id + attr_count - 1;
+ 
+-	sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
++	/* Do not access shared memory when the mapping was denied. */
++	{
++		int map_rc = sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
++		if (map_rc) {
++			return map_rc;
++		}
++	}
+ 
+ 	mem_ptr = (u32 *)shmem_base;
+ 
+@@ -627,7 +651,13 @@ int sbi_mpxy_send_message(u32 channel_id, u8 msg_id,
+ 		return SBI_ERR_INVALID_PARAM;
+ 
+ 	shmem_base = hart_shmem_base(ms);
+-	sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
++	/* Do not access shared memory when the mapping was denied. */
++	{
++		int map_rc = sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
++		if (map_rc) {
++			return map_rc;
++		}
++	}
+ 
+ 	if (resp_data_len) {
+ 		resp_buf = shmem_base;
+@@ -675,7 +705,13 @@ int sbi_mpxy_get_notification_events(u32 channel_id, unsigned long *events_len)
+ 		return SBI_ERR_NOT_SUPPORTED;
+ 
+ 	shmem_base = hart_shmem_base(ms);
+-	sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
++	/* Do not access shared memory when the mapping was denied. */
++	{
++		int map_rc = sbi_hart_map_saddr((unsigned long)shmem_base, mpxy_shmem_size);
++		if (map_rc) {
++			return map_rc;
++		}
++	}
+ 	eventsbuf = shmem_base;
+ 	ret = channel->get_notification_events(channel, eventsbuf,
+ 					       mpxy_shmem_size,
+diff --git a/lib/sbi/sbi_pmu.c b/lib/sbi/sbi_pmu.c
+index b9ff7af3..debeac1f 100644
+--- a/lib/sbi/sbi_pmu.c
++++ b/lib/sbi/sbi_pmu.c
+@@ -1008,7 +1008,13 @@ int sbi_pmu_event_get_info(unsigned long shmem_phys_lo, unsigned long shmem_phys
+ 					 SBI_DOMAIN_READ | SBI_DOMAIN_WRITE))
+ 		return SBI_ERR_INVALID_ADDRESS;
+ 
+-	sbi_hart_map_saddr(shmem_phys_lo, shmem_size);
++	/* Do not access shared memory when the mapping was denied. */
++	{
++		int map_rc = sbi_hart_map_saddr(shmem_phys_lo, shmem_size);
++		if (map_rc) {
++			return map_rc;
++		}
++	}
+ 
+ 	einfo = (struct sbi_pmu_event_info *)(shmem_phys_lo);
+ 	for (i = 0; i < num_events; i++) {
+diff --git a/lib/sbi/sbi_sse.c b/lib/sbi/sbi_sse.c
+index c9f9a9dd..d068b89d 100644
+--- a/lib/sbi/sbi_sse.c
++++ b/lib/sbi/sbi_sse.c
+@@ -947,7 +947,14 @@ int sbi_sse_read_attrs(uint32_t event_id, uint32_t base_attr_id,
+ 	if (!e)
+ 		return SBI_EINVAL;
+ 
+-	sbi_hart_map_saddr(output_phys_lo, sizeof(unsigned long) * attr_count);
++	/* Do not access shared memory when the mapping was denied. */
++	{
++		int map_rc = sbi_hart_map_saddr(output_phys_lo, sizeof(unsigned long) * attr_count);
++		if (map_rc) {
++			sse_event_put(e);
++			return map_rc;
++		}
++	}
+ 
+ 	/*
+ 	 * Copy all attributes at once since struct sse_event_attrs is matching
+@@ -975,7 +982,13 @@ static int sse_write_attrs(struct sbi_sse_event *e, uint32_t base_attr_id,
+ 	uint32_t id, end_id = base_attr_id + attr_count;
+ 	unsigned long *attrs = (unsigned long *)input_phys;
+ 
+-	sbi_hart_map_saddr(input_phys, sizeof(unsigned long) * attr_count);
++	/* Do not access shared memory when the mapping was denied. */
++	{
++		int map_rc = sbi_hart_map_saddr(input_phys, sizeof(unsigned long) * attr_count);
++		if (map_rc) {
++			return map_rc;
++		}
++	}
+ 
+ 	for (id = base_attr_id; id < end_id; id++) {
+ 		val = attrs[attr++];
+diff --git a/platform/generic/Kconfig b/platform/generic/Kconfig
+index e25c2c0a..e842949a 100644
+--- a/platform/generic/Kconfig
++++ b/platform/generic/Kconfig
+@@ -74,6 +74,24 @@ config PLATFORM_SPACEMIT_K3
+ 
+ 
+ if PLATFORM_SPACEMIT_K3
++	choice
++		prompt "K3 PMP policy selection"
++		default K3_PMP_VENDOR
++
++	config K3_PMP_VENDOR
++		bool "Vendor default PMP behavior"
++
++	config K3_PMP_SMEPMP
++		bool "OpenSBI-managed Smepmp policy (experimental)"
++
++	config K3_KEYSTONE_SM
++		bool "K3 Keystone SM integrated PMP owner (NOT READY)"
++		help
++			Mutually exclusive with the explicit Smepmp policy.
++			Firmware is intentionally blocked at compile time pending
++			PMP handoff and hardware verification.
++	endchoice
++
+ 	config PLATFORM_SPACEMIT_K3_FPGA
+ 		bool "Spacemit K3 board fpag"
+ 		default n
+diff --git a/platform/generic/configs/k3_keystone_audit_defconfig b/platform/generic/configs/k3_keystone_audit_defconfig
+new file mode 100644
+index 00000000..8ff25c93
+--- /dev/null
++++ b/platform/generic/configs/k3_keystone_audit_defconfig
+@@ -0,0 +1,37 @@
++CONFIG_PLATFORM_SPACEMIT_K3=y
++CONFIG_FDT_CPPC=y
++CONFIG_FDT_CPPC_RPMI=y
++CONFIG_FDT_HSM=y
++CONFIG_FDT_HSM_RPMI=y
++CONFIG_FDT_IPI=y
++CONFIG_FDT_IPI_MSWI=y
++CONFIG_FDT_IPI_PLICSW=y
++CONFIG_FDT_IRQCHIP=y
++CONFIG_FDT_IRQCHIP_APLIC=y
++CONFIG_FDT_IRQCHIP_IMSIC=y
++CONFIG_FDT_IRQCHIP_PLIC=y
++CONFIG_FDT_MAILBOX=y
++CONFIG_RPMI_MAILBOX=y
++CONFIG_FDT_MAILBOX_RPMI_SHMEM=y
++CONFIG_FDT_RESET=y
++CONFIG_FDT_RESET_HTIF=y
++CONFIG_FDT_RESET_RPMI=y
++CONFIG_FDT_RESET_SUNXI_WDT=y
++CONFIG_FDT_SERIAL=y
++CONFIG_FDT_SERIAL_UART8250=y
++CONFIG_FDT_SUSPEND=y
++CONFIG_FDT_SUSPEND_RPMI=y
++CONFIG_FDT_TIMER=y
++CONFIG_FDT_TIMER_MTIMER=y
++CONFIG_FDT_MPXY=y
++CONFIG_FDT_MPXY_RPMI_MBOX=y
++CONFIG_FDT_MPXY_RPMI_CLOCK=y
++CONFIG_FDT_MPXY_RPMI_VOLTAGE=y
++CONFIG_FDT_MPXY_RPMI_DOMAIN=y
++CONFIG_FDT_MPXY_RPMI_RTC=y
++CONFIG_FDT_MPXY_RPMI_PWRKEY=y
++CONFIG_FDT_MPXY_OPTEED=y
++CONFIG_CCI=y
++CONFIG_CCI_550=y
++CONFIG_K3_KEYSTONE_SM=y
++CONFIG_ENABLE_LOGGING=y
+diff --git a/platform/generic/configs/k3_smepmp_audit_defconfig b/platform/generic/configs/k3_smepmp_audit_defconfig
+new file mode 100644
+index 00000000..2ae713b6
+--- /dev/null
++++ b/platform/generic/configs/k3_smepmp_audit_defconfig
+@@ -0,0 +1,36 @@
++CONFIG_PLATFORM_SPACEMIT_K3=y
++CONFIG_FDT_CPPC=y
++CONFIG_FDT_CPPC_RPMI=y
++CONFIG_FDT_HSM=y
++CONFIG_FDT_HSM_RPMI=y
++CONFIG_FDT_IPI=y
++CONFIG_FDT_IPI_MSWI=y
++CONFIG_FDT_IPI_PLICSW=y
++CONFIG_FDT_IRQCHIP=y
++CONFIG_FDT_IRQCHIP_APLIC=y
++CONFIG_FDT_IRQCHIP_IMSIC=y
++CONFIG_FDT_IRQCHIP_PLIC=y
++CONFIG_FDT_MAILBOX=y
++CONFIG_RPMI_MAILBOX=y
++CONFIG_FDT_MAILBOX_RPMI_SHMEM=y
++CONFIG_FDT_RESET=y
++CONFIG_FDT_RESET_HTIF=y
++CONFIG_FDT_RESET_RPMI=y
++CONFIG_FDT_RESET_SUNXI_WDT=y
++CONFIG_FDT_SERIAL=y
++CONFIG_FDT_SERIAL_UART8250=y
++CONFIG_FDT_SUSPEND=y
++CONFIG_FDT_SUSPEND_RPMI=y
++CONFIG_FDT_TIMER=y
++CONFIG_FDT_TIMER_MTIMER=y
++CONFIG_FDT_MPXY=y
++CONFIG_FDT_MPXY_RPMI_MBOX=y
++CONFIG_FDT_MPXY_RPMI_CLOCK=y
++CONFIG_FDT_MPXY_RPMI_VOLTAGE=y
++CONFIG_FDT_MPXY_RPMI_DOMAIN=y
++CONFIG_FDT_MPXY_RPMI_RTC=y
++CONFIG_FDT_MPXY_RPMI_PWRKEY=y
++CONFIG_FDT_MPXY_OPTEED=y
++CONFIG_CCI=y
++CONFIG_CCI_550=y
++CONFIG_K3_PMP_SMEPMP=y
+diff --git a/platform/generic/objects.mk b/platform/generic/objects.mk
+index c4a8fee2..1989f7c8 100644
+--- a/platform/generic/objects.mk
++++ b/platform/generic/objects.mk
+@@ -41,3 +41,28 @@ else
+   FW_PAYLOAD_OFFSET=0x200000
+ endif
+ FW_PAYLOAD_FDT_OFFSET=$(FW_JUMP_FDT_OFFSET)
++
++# Opt-in read-only PMP inventory in NORMAL vendor K3 firmware. Unlike the
++# Keystone link probe, this configuration retains the ordinary boot path.
++# Never confuse CSR inventory with proof of Keystone/IOPMP isolation.
++ifeq ($(K3_PMP_DIAG_READONLY),1)
++platform-cflags-y += -DK3_PMP_DIAG_READONLY=1
++endif
++
++# Explicit developer-only compile/link diagnostic: the K3 platform's
++# normal Keystone #error remains active unless this switch is set AND an
++# SM linker input is supplied. The resulting ELF is NOT boot-authorized:
++# K3's pre-S-mode PMP gate and SM init both halt unconditionally.
++ifeq ($(KEYSTONE_K3_DIAGNOSTIC_LINK),1)
++ifeq ($(strip $(KEYSTONE_K3_SM_LINK_PROBE)),)
++$(error K3 diagnostic requires KEYSTONE_K3_SM_LINK_PROBE=<SM link-only object>)
++endif
++platform-cflags-y += -DK3_KEYSTONE_DIAGNOSTIC_LINK=1
++platform-cppflags-y += -DK3_KEYSTONE_DIAGNOSTIC_LINK=1
++endif
++
++# Stage 195: non-bootable link-analysis option only. Does not enable SM.
++# The bundle must be built separately from Keystone's real sources.
++ifneq ($(KEYSTONE_K3_SM_LINK_PROBE),)
++platform-ldflags-y += -Wl,--undefined=sm_init $(KEYSTONE_K3_SM_LINK_PROBE)
++endif
+diff --git a/platform/generic/spacemit/spacemit_k3.c b/platform/generic/spacemit/spacemit_k3.c
+index e6f81fba..61e93fcf 100644
+--- a/platform/generic/spacemit/spacemit_k3.c
++++ b/platform/generic/spacemit/spacemit_k3.c
+@@ -215,6 +215,21 @@ static int spacemit_k3_early_init(bool cold_boot, const void *fdt, const struct
+ }
+ 
+ 
++/* ADR-002: compile-time isolation of Keystone PMP policy.
++ * Integration guard: the real SM requires K3 platform/PMP/IPI wiring.
++ * Fail at compilation if someone enables the incomplete integration.
++ */
++#if defined(CONFIG_K3_KEYSTONE_SM) && !defined(K3_KEYSTONE_DIAGNOSTIC_LINK)
++/* Compile is permitted for developer analysis. Runtime S-mode admission
++ * remains blocked until PMP ownership, SM placement and IOPMP are proved.
++ * No successful Keystone SBI service is exposed with unverified protection. */
++#endif
++/* K3_KEYSTONE_DIAGNOSTIC_LINK permits *compile/link testing only*.
++ * The boot admission gate in sbi_init.c and sm_init() remain fail-closed.
++ * No diagnostic ELF may be installed or treated as production firmware. */
++
++/* Keystone SM init belongs in the post-PMP, pre-S-mode gate in
++ * lib/sbi/sbi_init.c; final_init is too early for A1-E. */
+ unsigned long hart_imisc_save_offset;
+ 
+ static int spacemit_k3_final_init(bool cold_boot, void *fdt, const struct fdt_match *match)
+@@ -222,6 +237,10 @@ static int spacemit_k3_final_init(bool cold_boot, void *fdt, const struct fdt_ma
+ 	if (cold_boot)
+ 		hart_imisc_save_offset = sbi_scratch_alloc_offset(sizeof(struct imsic_config));
+ 
++	/* A1-E: Keystone SM is initialized after PMP ownership proof in
++	 * lib/sbi/sbi_init.c, never from this pre-PMP final_init hook.
++	 */
++
+ 	return 0;
+ }
+ 
+diff --git a/scripts/k3_keystone_policy_audit.py b/scripts/k3_keystone_policy_audit.py
+new file mode 100644
+index 00000000..a02e95d2
+--- /dev/null
++++ b/scripts/k3_keystone_policy_audit.py
+@@ -0,0 +1,61 @@
++#!/usr/bin/env python3
++"""Policy regression gate for K3 Keystone; source-level guarantees only."""
++import argparse
++from pathlib import Path
++import re
++import sys
++
++
++def function_body(src, function):
++    m = re.search(r'\b(?:static\s+)?(?:int|void|bool)\s+' + re.escape(function) + r'\s*\([^;]*?\)\s*\{', src, re.S)
++    if not m:
++        raise ValueError('missing function '+function)
++    start=m.end(); depth=1
++    for j in range(start,len(src)):
++        if src[j]=='{': depth+=1
++        if src[j]=='}': depth-=1
++        if depth==0: return src[start:j]
++    raise ValueError('unterminated function '+function)
++
++
++def audit(root):
++    failures=[]; results=[]
++    def check(label, ok):
++        results.append((label,ok))
++        if not ok: failures.append(label)
++    hart=(root/'lib/sbi/sbi_hart.c').read_text()
++    kconfig=(root/'platform/generic/Kconfig').read_text()
++    pmp=function_body(hart,'sbi_hart_pmp_configure')
++    kbranch=re.search(r'#ifdef CONFIG_K3_KEYSTONE_SM(.*?)#else(.*?)#endif',pmp,re.S)
++    check('Keystone PMP configure branch exists',kbranch is not None)
++    if kbranch:
++        ks=kbranch.group(1)
++        check('Keystone uses deterministic boot slot layout', 'k3_keystone_root_pmp_configure(' in ks and 'k3_boot_plan_slots' in hart)
++        check('No Smepmp capability-based rejection in Keystone PMP init', not re.search(r'SBI_HART_EXT_SMEPMP|SBI_ENOTSUPP',ks))
++        check('No Smepmp initializer in Keystone PMP init', 'sbi_hart_smepmp_configure(' not in ks)
++        check('Vendor Smepmp path retained', 'sbi_hart_smepmp_configure(' in kbranch.group(2))
++    check('Kconfig explicit PMP mode choice', bool(re.search(r'choice\s+prompt "K3 PMP policy selection".*?config K3_PMP_VENDOR.*?config K3_PMP_SMEPMP.*?config K3_KEYSTONE_SM.*?endchoice',kconfig,re.S)))
++    init=(root/'lib/sbi/sbi_init.c').read_text()
++    check('Keystone runtime admission remains fail-closed',
++          'k3_keystone_a1_post_pmp_before_smode' in init and
++          'k3_pmp_boot_partition_admit(' in init and
++          'sm_init unavailable' in init and
++          'sbi_hart_hang();' in init)
++    check('Smepmp setter remains void', bool(re.search(r'static void sbi_hart_smepmp_set\(',hart)))
++    check('Keystone buffer access helpers preserved', all('sbi_hart_'+n+'_saddr' in hart for n in ('map','unmap')))
++    map_body=function_body(hart,'sbi_hart_map_saddr')
++    unmap_body=function_body(hart,'sbi_hart_unmap_saddr')
++    check('Legacy Smepmp capability-based helper removed', 'k3_keystone_sbi_buffer_access_permitted' not in hart)
++    check('Keystone map has explicit no-mapping branch', bool(re.search(r'#ifdef CONFIG_K3_KEYSTONE_SM.*?return SBI_OK;.*?#else',map_body,re.S)))
++    check('Keystone unmap has explicit no-mapping branch', bool(re.search(r'#else.*?return SBI_OK;.*?#endif',unmap_body,re.S)))
++    check('Keystone buffer map not keyed to hardware extension', 'SBI_HART_EXT_SMEPMP' not in re.search(r'#ifdef CONFIG_K3_KEYSTONE_SM(.*?)#else',map_body,re.S).group(1))
++    check('Keystone buffer unmap not keyed to hardware extension', 'SBI_HART_EXT_SMEPMP' not in re.search(r'#else(.*?)#endif',unmap_body,re.S).group(1))
++    return results,failures
++
++if __name__=='__main__':
++    parser=argparse.ArgumentParser(); parser.add_argument('root',type=Path);args=parser.parse_args()
++    try: results,failures=audit(args.root)
++    except (OSError,ValueError) as e: print('AUDIT ERROR:',e);sys.exit(2)
++    for name,ok in results:print(('PASS' if ok else 'FAIL')+' '+name)
++    print(f'TOTAL {len(results)} tests, {len(failures)} failure(s)')
++    sys.exit(1 if failures else 0)
+diff --git a/scripts/k3_pmp_diag_check.py b/scripts/k3_pmp_diag_check.py
+new file mode 100644
+index 00000000..7d66ff48
+--- /dev/null
++++ b/scripts/k3_pmp_diag_check.py
+@@ -0,0 +1,102 @@
++#!/usr/bin/env python3
++"""Validate K3 read-only OpenSBI PMP inventory LOG COMPLETENESS only.
++
++A PASS is not PMP partition approval, an IOPMP/DMA check, or attestation.
++K3 Harts that remain HSM STOPPED cannot emit a CSR inventory; do not infer
++an ACK or PMP correctness for them. Hart IDs need not equal Hart indices.
++"""
++import argparse
++import json
++import re
++from pathlib import Path
++
++LINE = re.compile(r'^K3_PMP_DIAG hart=(\d+) (.*)$')
++FIELD = re.compile(r'([a-zA-Z0-9_]+)=([^ ]+)')
++
++
++def inspect(log: str, expected: int = 16) -> dict:
++    records = {}
++    errors = []
++    for lineno, line in enumerate(log.splitlines(), 1):
++        match = LINE.search(line.strip())
++        if not match:
++            continue
++        hart = int(match.group(1))
++        data = dict(FIELD.findall(match.group(2)))
++        if not data:
++            errors.append(f'line {lineno}: unrecognized diagnostic record')
++            continue
++        # Last full inventory per Hart can be used after resume. Do not merge
++        # different boot/resume snapshots with each other.
++        if 'count' in data:
++            if hart in records and not records[hart]['end']:
++                errors.append(f'line {lineno}: incomplete previous snapshot hart {hart}')
++            try:
++                count = int(data['count'], 0)
++                gran = int(data['gran'], 0)
++                smepmp = int(data['smepmp'], 0)
++            except (ValueError, KeyError):
++                errors.append(f'line {lineno}: invalid header')
++                continue
++            if count < 1 or count > 64 or gran > 64 or smepmp not in (0, 1):
++                errors.append(f'line {lineno}: impossible PMP header')
++            records[hart] = {'count': count, 'gran': gran,
++                             'smepmp': smepmp, 'entries': set(),
++                             'end': False, 'mseccfg': False}
++            continue
++        item = records.get(hart)
++        if item is None:
++            errors.append(f'line {lineno}: data before header for hart {hart}')
++            continue
++        if 'end' in data:
++            if data['end'] != '1' or item['end']:
++                errors.append(f'line {lineno}: duplicate/invalid end hart {hart}')
++            item['end'] = True
++        elif 'mseccfg' in data:
++            if item['mseccfg'] or item['end']:
++                errors.append(f'line {lineno}: duplicate/out-of-order mseccfg')
++            item['mseccfg'] = True
++        elif 'idx' in data:
++            try:
++                index = int(data['idx'], 0)
++                if 'error' in data or not all(k in data for k in ('prot', 'base', 'log2len')):
++                    raise ValueError('CSR read error')
++                int(data['prot'], 0)
++                int(data['base'], 0)
++                int(data['log2len'], 0)
++            except ValueError:
++                errors.append(f'line {lineno}: invalid CSR entry hart {hart}')
++                continue
++            if index < 0 or index >= item['count'] or index in item['entries'] or item['end']:
++                errors.append(f'line {lineno}: duplicate/unexpected index hart {hart}')
++            item['entries'].add(index)
++        else:
++            errors.append(f'line {lineno}: unknown record')
++    good = []
++    for hart, item in sorted(records.items()):
++        if (not item['end'] or item['entries'] != set(range(item['count'])) or
++                (item['smepmp'] and not item['mseccfg'])):
++            errors.append(f'incomplete Hart {hart} snapshot: {len(item["entries"])}/{item["count"]} entries')
++        else:
++            good.append(hart)
++    if len(records) != expected:
++        errors.append(f'expected {expected} unique Hart snapshots, got {len(records)}')
++    return {'inventory_complete': not errors, 'NOT_SECURITY_PROOF': True,
++            'expected_harts': expected, 'complete_hartids': good,
++            'observed_hartids': sorted(records), 'errors': errors}
++
++
++def main():
++    ap = argparse.ArgumentParser(description=__doc__)
++    ap.add_argument('serial_log', type=Path)
++    ap.add_argument('--expected-harts', type=int, default=16)
++    args = ap.parse_args()
++    if args.expected_harts < 1 or args.expected_harts > 16:
++        ap.error('expected Hart count must be in 1..16')
++    report = inspect(args.serial_log.read_text(errors='replace'), args.expected_harts)
++    print(json.dumps(report, ensure_ascii=False, indent=2))
++    return 0 if report['inventory_complete'] else 1
++
++
++if __name__ == '__main__':
++    raise SystemExit(main())
+diff --git a/scripts/k3_validate_pmp_policy.py b/scripts/k3_validate_pmp_policy.py
+new file mode 100644
+index 00000000..aa6966af
+--- /dev/null
++++ b/scripts/k3_validate_pmp_policy.py
+@@ -0,0 +1,32 @@
++#!/usr/bin/env python3
++"""Reject contradictory explicit K3 PMP modes before Kconfig normalizes them."""
++import pathlib
++import re
++import sys
++
++MODES = ('CONFIG_K3_PMP_VENDOR', 'CONFIG_K3_PMP_SMEPMP', 'CONFIG_K3_KEYSTONE_SM')
++
++
++def validate(path):
++    contents = pathlib.Path(path).read_text(encoding='utf-8')
++    selected = [key for key in MODES if re.search(r'^\s*' + key + r'\s*=\s*y\s*$', contents, re.M)]
++    if len(selected) > 1:
++        return False, 'conflicting K3 PMP selections: ' + ', '.join(selected)
++    return True, selected[0] if selected else 'vendor default (implicit)'
++
++
++def main():
++    if len(sys.argv) != 2:
++        print('usage: k3_validate_pmp_policy.py <defconfig>', file=sys.stderr)
++        return 2
++    try:
++        ok, message = validate(sys.argv[1])
++    except (OSError, UnicodeError) as exc:
++        print(f'K3 policy validation failed: {exc}', file=sys.stderr)
++        return 2
++    print(f'K3 policy: {message}' if ok else f'K3 policy ERROR: {message}', file=sys.stderr)
++    return 0 if ok else 1
++
++
++if __name__ == '__main__':
++    raise SystemExit(main())
+diff --git a/scripts/k3_verify_smepmp_exclusion.py b/scripts/k3_verify_smepmp_exclusion.py
+new file mode 100755
+index 00000000..a331bd2f
+--- /dev/null
++++ b/scripts/k3_verify_smepmp_exclusion.py
+@@ -0,0 +1,19 @@
++#!/usr/bin/env python3
++"""Fail if Keystone includes Smepmp-only configuration helpers."""
++import pathlib, subprocess, sys, re
++root = pathlib.Path(sys.argv[1]) if len(sys.argv)>1 else pathlib.Path(__file__).resolve().parent.parent
++source = (root / 'lib/sbi/sbi_hart.c').read_text()
++start = source.find('static unsigned int sbi_hart_get_smepmp_flags')
++end = source.find('static int sbi_hart_oldpmp_configure', start)
++if start < 0 or end < 0:
++    sys.exit('FAIL: expected source boundaries missing')
++segment = source[source.rfind('#ifndef CONFIG_K3_KEYSTONE_SM', 0, start):end]
++if not segment.startswith('#ifndef CONFIG_K3_KEYSTONE_SM') or '#endif /* !CONFIG_K3_KEYSTONE_SM */' not in segment:
++    sys.exit('FAIL: Smepmp helpers not guarded for Keystone')
++# Preprocess only to verify that guards eliminate all definitions, without target headers.
++filtered = []
++for line in source.splitlines():
++    if re.match(r'^static (?:unsigned int|void|int) sbi_hart_(?:get_smepmp_flags|smepmp_set|smepmp_configure)\(', line):
++        filtered.append(line)
++assert len(filtered) == 3, filtered
++print('PASS: three vendor Smepmp helpers excluded from Keystone via compile-time guard')
+diff --git a/scripts/test_k3_keystone_policy_audit.py b/scripts/test_k3_keystone_policy_audit.py
+new file mode 100644
+index 00000000..9c2c45fc
+--- /dev/null
++++ b/scripts/test_k3_keystone_policy_audit.py
+@@ -0,0 +1,23 @@
++#!/usr/bin/env python3
++import tempfile
++import shutil
++from pathlib import Path
++from k3_keystone_policy_audit import audit
++
++root=Path(__file__).resolve().parents[1]
++assert not audit(root)[1], 'clean source audit failed'
++with tempfile.TemporaryDirectory() as td:
++    dst=Path(td)
++    for item in ('lib/sbi/sbi_hart.c','lib/sbi/sbi_init.c','platform/generic/Kconfig','platform/generic/spacemit/spacemit_k3.c'):
++        (dst/item).parent.mkdir(parents=True,exist_ok=True)
++        shutil.copy2(root/item,dst/item)
++    f=dst/'lib/sbi/sbi_hart.c'
++    original=f.read_text()
++    # Reintroduce the exact past mistake in Keystone branch.
++    target='\trc = k3_keystone_root_pmp_configure(scratch, pmp_count,'
++    assert target in original
++    f.write_text(original.replace(target,'\tif (sbi_hart_has_extension(scratch, SBI_HART_EXT_SMEPMP))\n\t\treturn SBI_ENOTSUPP;\n'+target,1))
++    assert any('capability-based rejection' in n for n in audit(dst)[1])
++    f.write_text(original.replace('static void sbi_hart_smepmp_set(', 'static int sbi_hart_smepmp_set(',1))
++    assert any('setter remains void' in n for n in audit(dst)[1])
++print('PASS clean baseline + two mutation regression tests')
+diff --git a/tests/k3_keystone_ipi_init_wiring_test.py b/tests/k3_keystone_ipi_init_wiring_test.py
+new file mode 100644
+index 00000000..af3d65cf
+--- /dev/null
++++ b/tests/k3_keystone_ipi_init_wiring_test.py
+@@ -0,0 +1,36 @@
++#!/usr/bin/env python3
++"""Static wiring regression: does not claim real-Hart PMP or IPI completion."""
++from pathlib import Path
++import re
++
++ROOT = Path(__file__).resolve().parents[1]
++init = (ROOT / 'lib/sbi/sbi_init.c').read_text()
++objects = (ROOT / 'platform/generic/objects.mk').read_text()
++platform = (ROOT / 'platform/generic/spacemit/spacemit_k3.c').read_text()
++sm = (ROOT.parent / 'keystone/sm/src/ipi.c').read_text()
++transport = (ROOT.parent / 'keystone/sm/src/k3_pmp_ipi_transport.c').read_text()
++checks = {
++    'Cold boot registers after OpenSBI IPI init': bool(re.search(
++        r'rc = sbi_ipi_init\(scratch, true\);.*?'
++        r'#ifdef CONFIG_K3_KEYSTONE_SM(?:(?!#endif).)*?rc = k3_pmp_sync_initialize\(\);'
++        r'.*?#endif', init, flags=re.S)),
++    'Single cold registration in OpenSBI': init.count('rc = k3_pmp_sync_initialize();') == 1,
++    'Warm IPI init does not reregister': 'k3_pmp_sync_initialize' not in
++       init[init.index('static void __noreturn init_warm_startup'):],
++    'Existing event binds verified local PMP apply': bool(re.search(
++        r'k3_pmp_ipi_transport_bind_apply\(k3_pmp_apply_verified\)', sm)),
++    'Transport uses ordinary returning process handler': bool(re.search(
++        r'\.process\s*=\s*k3_pmp_ipi_event_process', transport)),
++    'Transport checks real mailbox completion': 'k3_pmp_mailbox_check(' in transport,
++    'Diagnostic opt-in requires SM linker input': 'KEYSTONE_K3_SM_LINK_PROBE=<SM link-only object>' in objects,
++    'Diagnostic is not claimed boot-ready':
++        '#if defined(CONFIG_K3_KEYSTONE_SM) && !defined(K3_KEYSTONE_DIAGNOSTIC_LINK)' in platform
++        and 'Runtime S-mode admission' in platform,
++    'Cold pre-S-mode requires verified layout and SM readiness':
++        'k3_pmp_boot_partition_admit(' in init
++        and 'sm_init unavailable' in init and 'sbi_hart_hang();' in init,
++}
++for name, ok in checks.items():
++    print(f'{"PASS" if ok else "FAIL"} {name}')
++assert all(checks.values()), 'K3 integration wiring failed static regression'
++print(f'RESULT: {len(checks)}/{len(checks)} PASS (source-level only)')
+diff --git a/tests/test_k3_pmp_diag_check.py b/tests/test_k3_pmp_diag_check.py
+new file mode 100644
+index 00000000..2fc88c79
+--- /dev/null
++++ b/tests/test_k3_pmp_diag_check.py
+@@ -0,0 +1,43 @@
++import importlib.util
++from pathlib import Path
++import unittest
++
++p = Path(__file__).resolve().parents[1] / 'scripts/k3_pmp_diag_check.py'
++spec = importlib.util.spec_from_file_location('inventory', p)
++inventory = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(inventory)
++
++
++def sample(h, count=2, smepmp=0):
++    lines = [f'K3_PMP_DIAG hart={h} count={count} gran=2 smepmp={smepmp}']
++    if smepmp:
++        lines.append(f'K3_PMP_DIAG hart={h} mseccfg=0x0')
++    for i in range(count):
++        lines.append(f'K3_PMP_DIAG hart={h} idx={i} prot=0x0 base=0x0 log2len=0')
++    lines.append(f'K3_PMP_DIAG hart={h} end=1')
++    return '\n'.join(lines)
++
++
++class InventoryTest(unittest.TestCase):
++    def test_full_16_harts(self):
++        report = inventory.inspect('\n'.join(sample(i, smepmp=(i & 1)) for i in range(16)))
++        self.assertTrue(report['inventory_complete'])
++        self.assertTrue(report['NOT_SECURITY_PROOF'])
++    def test_only_boot_hart_not_complete(self):
++        self.assertFalse(inventory.inspect(sample(0))['inventory_complete'])
++    def test_duplicate_entry_rejected(self):
++        log = sample(0).replace('K3_PMP_DIAG hart=0 end=1',
++                'K3_PMP_DIAG hart=0 idx=0 prot=0x0 base=0x0 log2len=0\nK3_PMP_DIAG hart=0 end=1')
++        self.assertFalse(inventory.inspect(log, 1)['inventory_complete'])
++    def test_resume_last_snapshot(self):
++        self.assertTrue(inventory.inspect(sample(7) + '\n' + sample(7), 1)['inventory_complete'])
++    def test_missing_end(self):
++        self.assertFalse(inventory.inspect(sample(2).replace('K3_PMP_DIAG hart=2 end=1',''), 1)['inventory_complete'])
++    def test_missing_entry(self):
++        self.assertFalse(inventory.inspect(sample(2).replace('K3_PMP_DIAG hart=2 idx=1 prot=0x0 base=0x0 log2len=0',''), 1)['inventory_complete'])
++    def test_read_failure(self):
++        self.assertFalse(inventory.inspect(sample(2).replace('idx=1 prot=0x0 base=0x0 log2len=0','idx=1 error=-1'), 1)['inventory_complete'])
++    def test_mseccfg_unknown(self):
++        self.assertFalse(inventory.inspect(sample(1, smepmp=1).replace('K3_PMP_DIAG hart=1 mseccfg=0x0\n',''), 1)['inventory_complete'])
++
++if __name__ == '__main__': unittest.main()

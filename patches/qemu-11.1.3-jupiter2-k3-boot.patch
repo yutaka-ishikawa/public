@@ -1,0 +1,602 @@
+diff --git a/hw/riscv/jupiter2.c b/hw/riscv/jupiter2.c
+new file mode 100644
+index 0000000..05b2f9e
+--- /dev/null
++++ b/hw/riscv/jupiter2.c
+@@ -0,0 +1,65 @@
++/*
++ * Milk-V Jupiter 2 / SpacemiT K3 research machine (partial model).
++ * SPDX-License-Identifier: GPL-2.0-or-later
++ *
++ * Hardware positions from the supplied running board DTB (2026-11-04).
++ * It is NOT a K3 SoC emulator, not safe for hardware security validation.
++ */
++#include "qemu/osdep.h"
++#include "qemu/units.h"
++#include "hw/riscv/jupiter2.h"
++#include "hw/core/boards.h"
++#include "qemu/module.h"
++
++/* VIRT inherited devices marked EMULATED_PLACEHOLDER are not K3 hardware. */
++const MemMapEntry jupiter2_memmap[] = {
++    [VIRT_DEBUG] =        { 0x0, 0x100 },
++    [VIRT_MROM] =         { 0x1000, 0xf000 },        /* placeholder */
++    [VIRT_TEST] =         { 0x100000, 0x1000 },     /* placeholder */
++    [VIRT_RTC] =          { 0x101000, 0x1000 },     /* placeholder */
++    [VIRT_CLINT] =        { 0xe081c000, 0x4000 },
++    [VIRT_ACLINT_SSWI] =  { 0x2f00000, 0x4000 },   /* placeholder */
++    [VIRT_PLIC] =         { 0xc000000, VIRT_PLIC_SIZE(VIRT_CPUS_MAX * 2) },
++    [VIRT_APLIC_M] =      { 0xe0800000, 0x4000 },  /* unverified M-mode */
++    [VIRT_APLIC_S] =      { 0xe0804000, 0x4000 },
++    [VIRT_UART0] =        { 0xd4017000, 0x100 },
++    [VIRT_VIRTIO] =       { 0x10001000, 0x1000 },  /* placeholder */
++    [VIRT_FW_CFG] =       { 0x10100000, 0x18 },    /* placeholder */
++    [VIRT_IMSIC_M] =      { 0xe0000000, 0x400000 },/* unverified M-mode */
++    [VIRT_IMSIC_S] =      { 0xe0400000, 0x400000 },
++    [VIRT_FLASH] =        { 0x20000000, 0x4000000 },/* placeholder NOT K3 QSPI */
++    [VIRT_DRAM] =         { 0x102000000ULL, 0 },
++    [VIRT_PCIE_MMIO] =    { 0x40000000, 0x40000000 }, /* placeholder */
++    [VIRT_PCIE_PIO] =     { 0x3000000, 0x10000 },
++    [VIRT_PLATFORM_BUS] = { 0x4000000, 0x2000000 },
++    [VIRT_PCIE_ECAM] =    { 0x30000000, 0x10000000 },
++    [VIRT_IOMMU_SYS] =    { 0x3010000, 0x1000 }, /* placeholder */
++};
++
++static void jupiter2_machine_instance_init(Object *obj)
++{
++    RISCVVirtState *s = RISCV_VIRT_MACHINE(obj);
++    s->aia_type = VIRT_AIA_TYPE_APLIC_IMSIC;
++    s->num_sources = JUPITER2_APLIC_SOURCES;
++    s->aia_guests = 63; /* Diagnostic: restore Stage 4 layout */
++}
++
++static void jupiter2_machine_class_init(ObjectClass *oc, const void *data)
++{
++    MachineClass *mc = MACHINE_CLASS(oc);
++    mc->desc = "Milk-V Jupiter 2 K3-derived partial machine (NOT SoC-compatible)";
++    mc->default_cpus = 16;
++    mc->max_cpus = 16;
++}
++
++static const TypeInfo jupiter2_machine_typeinfo = {
++    .name = TYPE_RISCV_JUPITER2_MACHINE,
++    .parent = TYPE_RISCV_VIRT_MACHINE,
++    .class_init = jupiter2_machine_class_init,
++    .instance_init = jupiter2_machine_instance_init,
++};
++static void jupiter2_register_types(void)
++{
++    type_register_static(&jupiter2_machine_typeinfo);
++}
++type_init(jupiter2_register_types)
+diff --git a/hw/riscv/meson.build b/hw/riscv/meson.build
+index 0d82cea..52d0882 100644
+--- a/hw/riscv/meson.build
++++ b/hw/riscv/meson.build
+@@ -5,7 +5,7 @@ riscv_ss.add(files('fdt-common.c'))
+ riscv_ss.add(when: 'CONFIG_RISCV_NUMA', if_true: files('numa.c'))
+ riscv_ss.add(files('riscv_hart.c'))
+ riscv_ss.add(when: 'CONFIG_OPENTITAN', if_true: files('opentitan.c'))
+-riscv_ss.add(when: 'CONFIG_RISCV_VIRT', if_true: files('virt.c'))
++riscv_ss.add(when: 'CONFIG_RISCV_VIRT', if_true: files('virt.c', 'jupiter2.c'))
+ riscv_ss.add(when: 'CONFIG_SHAKTI_C', if_true: files('shakti_c.c'))
+ riscv_ss.add(when: 'CONFIG_SIFIVE_E', if_true: files('sifive_e.c'))
+ riscv_ss.add(when: 'CONFIG_SIFIVE_U', if_true: files('sifive_u.c'))
+diff --git a/hw/riscv/virt.c b/hw/riscv/virt.c
+index 6707979..2f6c292 100644
+--- a/hw/riscv/virt.c
++++ b/hw/riscv/virt.c
+@@ -34,6 +34,7 @@
+ #include "hw/riscv/iommu.h"
+ #include "hw/riscv/riscv-iommu-bits.h"
+ #include "hw/riscv/virt.h"
++#include "hw/riscv/jupiter2.h"
+ #include "hw/riscv/boot.h"
+ #include "hw/riscv/fdt-common.h"
+ #include "hw/riscv/machines-qom.h"
+@@ -426,7 +427,13 @@ static void create_fdt_one_imsic(RISCVVirtState *s, hwaddr base_addr,
+     qemu_fdt_setprop(ms->fdt, imsic_name, "reg", imsic_regs,
+                      socket_count * sizeof(uint32_t) * 4);
+     qemu_fdt_setprop_cell(ms->fdt, imsic_name, "riscv,num-ids",
+-                     VIRT_IRQCHIP_NUM_MSIS);
++                          jupiter2_is_machine(ms) ? JUPITER2_IMSIC_IDS :
++                          VIRT_IRQCHIP_NUM_MSIS);
++    if (jupiter2_is_machine(ms) && !m_mode) {
++        /* Stage 4 compatibility: this is zero when guest support is absent. */
++        qemu_fdt_setprop_cell(ms->fdt, imsic_name, "riscv,num-guest-ids",
++                              s->aia_guests);
++    }
+ 
+     if (imsic_guest_bits) {
+         qemu_fdt_setprop_cell(ms->fdt, imsic_name, "riscv,guest-index-bits",
+@@ -511,14 +518,14 @@ static void create_fdt_one_aplic(RISCVVirtState *s, int socket,
+     qemu_fdt_setprop_sized_cells(ms->fdt, aplic_name, "reg",
+                                  2, aplic_addr, 2, aplic_size);
+     qemu_fdt_setprop_cell(ms->fdt, aplic_name, "riscv,num-sources",
+-                          VIRT_IRQCHIP_NUM_SOURCES);
++                          s->num_sources);
+ 
+     if (aplic_child_phandle) {
+         qemu_fdt_setprop_cell(ms->fdt, aplic_name, "riscv,children",
+                               aplic_child_phandle);
+         qemu_fdt_setprop_cells(ms->fdt, aplic_name, "riscv,delegation",
+                                aplic_child_phandle, 0x1,
+-                               VIRT_IRQCHIP_NUM_SOURCES);
++                               s->num_sources);
+     }
+ 
+     riscv_socket_fdt_write_id(ms, aplic_name, socket);
+@@ -600,6 +607,7 @@ static void create_fdt_sockets(RISCVVirtState *s,
+ 
+     fdt_create_cpu_socket_subnode(ms->fdt,
+         kvm_enabled() ? kvm_riscv_get_timebase_frequency(&s->soc->harts[0]) :
++        jupiter2_is_machine(ms) ? JUPITER2_TIMEBASE_HZ :
+                         RISCV_ACLINT_DEFAULT_TIMEBASE_FREQ);
+ 
+     intc_phandles = g_new0(uint32_t, ms->smp.cpus);
+@@ -815,15 +823,21 @@ static void create_fdt_uart(RISCVVirtState *s,
+                            s->memmap[VIRT_UART0].base);
+     qemu_fdt_add_subnode(ms->fdt, name);
+     qemu_fdt_setprop_string(ms->fdt, name, "compatible", "ns16550a");
++    if (jupiter2_is_machine(ms)) {
++        qemu_fdt_setprop_cell(ms->fdt, name, "reg-shift", 2);
++        qemu_fdt_setprop_cell(ms->fdt, name, "reg-io-width", 4);
++    }
+     qemu_fdt_setprop_sized_cells(ms->fdt, name, "reg",
+                                  2, s->memmap[VIRT_UART0].base,
+                                  2, s->memmap[VIRT_UART0].size);
+     qemu_fdt_setprop_cell(ms->fdt, name, "clock-frequency", 3686400);
+     qemu_fdt_setprop_cell(ms->fdt, name, "interrupt-parent", irq_mmio_phandle);
+     if (s->aia_type == VIRT_AIA_TYPE_NONE) {
+-        qemu_fdt_setprop_cell(ms->fdt, name, "interrupts", UART0_IRQ);
++        qemu_fdt_setprop_cell(ms->fdt, name, "interrupts",
++                              jupiter2_is_machine(ms) ? JUPITER2_UART_IRQ : UART0_IRQ);
+     } else {
+-        qemu_fdt_setprop_cells(ms->fdt, name, "interrupts", UART0_IRQ, 0x4);
++        qemu_fdt_setprop_cells(ms->fdt, name, "interrupts",
++                               jupiter2_is_machine(ms) ? JUPITER2_UART_IRQ : UART0_IRQ, 0x4);
+     }
+ 
+     qemu_fdt_setprop_string(ms->fdt, "/chosen", "stdout-path", name);
+@@ -1308,7 +1322,20 @@ static void virt_machine_init(MachineState *machine)
+     int i, base_hartid, hart_count;
+     int socket_count = riscv_socket_count(machine);
+ 
+-    s->memmap = virt_memmap;
++    s->memmap = jupiter2_is_machine(machine) ? jupiter2_memmap : virt_memmap;
++    if (jupiter2_is_machine(machine) && machine->smp.cpus != 16) {
++        error_report("Jupiter2 partial machine requires exactly 16 harts");
++        exit(1);
++    }
++    if (jupiter2_is_machine(machine) &&
++        machine->ram_size > (0x900000000ULL - JUPITER2_DRAM_BASE)) {
++        error_report("Jupiter2 RAM exceeds recorded physical DRAM range");
++        exit(1);
++    }
++    if (jupiter2_is_machine(machine) && kvm_enabled()) {
++        error_report("Jupiter2 partial model supports TCG only, not KVM");
++        exit(1);
++    }
+ 
+     /* Check socket count limit */
+     if (VIRT_SOCKETS_MAX < socket_count) {
+@@ -1363,6 +1390,7 @@ static void virt_machine_init(MachineState *machine)
+                         base_hartid, hart_count,
+                         RISCV_ACLINT_DEFAULT_MTIMECMP,
+                         RISCV_ACLINT_DEFAULT_MTIME,
++                        jupiter2_is_machine(machine) ? JUPITER2_TIMEBASE_HZ :
+                         RISCV_ACLINT_DEFAULT_TIMEBASE_FREQ, true);
+             } else {
+                 /* Per-socket ACLINT MSWI, MTIMER, and SSWI */
+@@ -1376,6 +1404,7 @@ static void virt_machine_init(MachineState *machine)
+                         base_hartid, hart_count,
+                         RISCV_ACLINT_DEFAULT_MTIMECMP,
+                         RISCV_ACLINT_DEFAULT_MTIME,
++                        jupiter2_is_machine(machine) ? JUPITER2_TIMEBASE_HZ :
+                         RISCV_ACLINT_DEFAULT_TIMEBASE_FREQ, true);
+                 riscv_aclint_swi_create(s->memmap[VIRT_ACLINT_SSWI].base +
+                             i * s->memmap[VIRT_ACLINT_SSWI].size,
+@@ -1390,7 +1419,8 @@ static void virt_machine_init(MachineState *machine)
+                     i * s->memmap[VIRT_CLINT].size + RISCV_ACLINT_SWI_SIZE,
+                     RISCV_ACLINT_DEFAULT_MTIMER_SIZE, base_hartid, hart_count,
+                     RISCV_ACLINT_DEFAULT_MTIMECMP, RISCV_ACLINT_DEFAULT_MTIME,
+-                    RISCV_ACLINT_DEFAULT_TIMEBASE_FREQ, true);
++                    jupiter2_is_machine(machine) ? JUPITER2_TIMEBASE_HZ :
++                        RISCV_ACLINT_DEFAULT_TIMEBASE_FREQ, true);
+         }
+ 
+         /* Per-socket interrupt controller */
+@@ -1407,7 +1437,8 @@ static void virt_machine_init(MachineState *machine)
+                                              &s->memmap[VIRT_IMSIC_M],
+                                              &s->memmap[VIRT_IMSIC_S],
+                                              i, base_hartid, hart_count,
+-                                             VIRT_IRQCHIP_NUM_MSIS,
++                                             jupiter2_is_machine(machine) ?
++                                             JUPITER2_IMSIC_IDS : VIRT_IRQCHIP_NUM_MSIS,
+                                              VIRT_IRQCHIP_NUM_PRIO_BITS);
+         }
+ 
+@@ -1484,8 +1515,10 @@ static void virt_machine_init(MachineState *machine)
+     create_platform_bus(s, mmio_irqchip);
+ 
+     serial_mm_init(system_memory, s->memmap[VIRT_UART0].base,
+-        0, qdev_get_gpio_in(mmio_irqchip, UART0_IRQ), 399193,
+-        serial_hd(0), DEVICE_LITTLE_ENDIAN);
++        jupiter2_is_machine(machine) ? 2 : 0,
++        qdev_get_gpio_in(mmio_irqchip,
++            jupiter2_is_machine(machine) ? JUPITER2_UART_IRQ : UART0_IRQ),
++        399193, serial_hd(0), DEVICE_LITTLE_ENDIAN);
+ 
+     sysbus_create_simple("goldfish_rtc", s->memmap[VIRT_RTC].base,
+         qdev_get_gpio_in(mmio_irqchip, RTC_IRQ));
+@@ -1573,9 +1606,12 @@ static void virt_set_aia_guests(Object *obj, const char *val, Error **errp)
+     RISCVVirtState *s = RISCV_VIRT_MACHINE(obj);
+ 
+     s->aia_guests = atoi(val);
+-    if (s->aia_guests < 0 || s->aia_guests > VIRT_IRQCHIP_MAX_GUESTS) {
++    if (s->aia_guests < 0 ||
++        s->aia_guests > (jupiter2_is_machine(obj) ? 63 :
++                         VIRT_IRQCHIP_MAX_GUESTS)) {
+         error_setg(errp, "Invalid number of AIA IMSIC guests");
+         error_append_hint(errp, "Valid values be between 0 and %d.\n",
++                          jupiter2_is_machine(obj) ? 63 :
+                           VIRT_IRQCHIP_MAX_GUESTS);
+     }
+ }
+diff --git a/include/hw/riscv/jupiter2.h b/include/hw/riscv/jupiter2.h
+new file mode 100644
+index 0000000..5d9919c
+--- /dev/null
++++ b/include/hw/riscv/jupiter2.h
+@@ -0,0 +1,17 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#ifndef HW_RISCV_JUPITER2_H
++#define HW_RISCV_JUPITER2_H
++#include "hw/riscv/virt.h"
++#include "qom/object.h"
++#define TYPE_RISCV_JUPITER2_MACHINE MACHINE_TYPE_NAME("jupiter2")
++#define JUPITER2_TIMEBASE_HZ 24000000
++#define JUPITER2_DRAM_BASE 0x102000000ULL
++#define JUPITER2_UART_IRQ 42
++#define JUPITER2_IMSIC_IDS 511
++#define JUPITER2_APLIC_SOURCES 512
++extern const MemMapEntry jupiter2_memmap[];
++static inline bool jupiter2_is_machine(const void *machine)
++{
++    return object_dynamic_cast(OBJECT(machine), TYPE_RISCV_JUPITER2_MACHINE) != NULL;
++}
++#endif
+diff --git a/target/riscv/cpu.c b/target/riscv/cpu.c
+index b04beee..8106e00 100644
+--- a/target/riscv/cpu.c
++++ b/target/riscv/cpu.c
+@@ -1009,6 +1009,16 @@ static void riscv_cpu_reset_hold(Object *obj, ResetType type)
+     env->mstatus = set_field(env->mstatus, MSTATUS_SBE, cpu->cfg.big_endian);
+     env->mstatus = set_field(env->mstatus, MSTATUS_UBE, cpu->cfg.big_endian);
+     env->mcause = 0;
++    env->k3_tcmcfg = 0;
++    env->k3_mhcr = 0;
++    env->k3_pmacfg0 = 0;
++    env->k3_ml2setup = 0;
++    env->k3_msetup = 0;
++    env->k3_mcacheop = 0;
++    env->k3_perf_ctrl = 0;
++    env->k3_prefetch_ctrl = 0;
++    env->k3_ml2hint = 0;
++    env->k3_mvmd1 = 0;
+     env->miclaim = MIP_SGEIP;
+     env->pc = env->resetvec;
+     env->bins = 0;
+@@ -2854,6 +2864,7 @@ static const Property riscv_cpu_properties[] = {
+     {.name = "mmu", .info = &prop_mmu},
+ #ifndef CONFIG_USER_ONLY
+     {.name = "pmp", .info = &prop_pmp},
++    DEFINE_PROP_BOOL("k3-pmacfg", RISCVCPU, cfg.k3_pmacfg, false),
+     {.name = "num-pmp-regions", .info = &prop_num_pmp_regions},
+     {.name = "pmp-granularity", .info = &prop_pmp_granularity},
+ #endif
+diff --git a/target/riscv/cpu.h b/target/riscv/cpu.h
+index a583f80..b9376aa 100644
+--- a/target/riscv/cpu.h
++++ b/target/riscv/cpu.h
+@@ -478,6 +478,17 @@ struct CPUArchState {
+     /* physical memory protection */
+     pmp_table_t pmp_state;
+     uint64_t mseccfg;
++    /* K3 vendor PMA CSR state, independent for each Hart. */
++    uint64_t k3_tcmcfg; /* Stage 4: CSR 0x5db, state only */
++    uint64_t k3_mhcr;   /* Stage 4: CSR 0x7c1, state only */
++    uint64_t k3_pmacfg0;
++    uint64_t k3_ml2setup;
++    uint64_t k3_msetup;
++    uint64_t k3_mcacheop;
++    uint64_t k3_perf_ctrl;
++    uint64_t k3_prefetch_ctrl;
++    uint64_t k3_ml2hint;
++    uint64_t k3_mvmd1;
+ 
+     /* trigger module */
+     uint16_t mcontext;
+diff --git a/target/riscv/cpu_cfg_fields.h.inc b/target/riscv/cpu_cfg_fields.h.inc
+index 9eb47af..a31e839 100644
+--- a/target/riscv/cpu_cfg_fields.h.inc
++++ b/target/riscv/cpu_cfg_fields.h.inc
+@@ -160,6 +160,8 @@ BOOL_FIELD(ext_xlrbr)
+ BOOL_FIELD(big_endian)
+ BOOL_FIELD(mmu)
+ BOOL_FIELD(pmp)
++/* Opt-in K3 PMACFG0 CSR (0x7de) compatibility model. */
++BOOL_FIELD(k3_pmacfg)
+ BOOL_FIELD(debug)
+ BOOL_FIELD(misa_w)
+ 
+diff --git a/target/riscv/machine.c b/target/riscv/machine.c
+index 14a50f1..ae7c292 100644
+--- a/target/riscv/machine.c
++++ b/target/riscv/machine.c
+@@ -79,6 +79,33 @@ static const VMStateDescription vmstate_pmp = {
+     }
+ };
+ 
++static bool k3_pmacfg_needed(void *opaque)
++{
++    RISCVCPU *cpu = opaque;
++
++    return tcg_enabled() && cpu->cfg.k3_pmacfg;
++}
++
++static const VMStateDescription vmstate_k3_pmacfg = {
++    .name = "cpu/k3-pmacfg",
++    .version_id = 3,
++    .minimum_version_id = 3,
++    .needed = k3_pmacfg_needed,
++    .fields = (const VMStateField[]) {
++        VMSTATE_UINT64(env.k3_tcmcfg, RISCVCPU),
++        VMSTATE_UINT64(env.k3_mhcr, RISCVCPU),
++        VMSTATE_UINT64(env.k3_pmacfg0, RISCVCPU),
++        VMSTATE_UINT64(env.k3_ml2setup, RISCVCPU),
++        VMSTATE_UINT64(env.k3_msetup, RISCVCPU),
++        VMSTATE_UINT64(env.k3_mcacheop, RISCVCPU),
++        VMSTATE_UINT64(env.k3_perf_ctrl, RISCVCPU),
++        VMSTATE_UINT64(env.k3_prefetch_ctrl, RISCVCPU),
++        VMSTATE_UINT64(env.k3_ml2hint, RISCVCPU),
++        VMSTATE_UINT64(env.k3_mvmd1, RISCVCPU),
++        VMSTATE_END_OF_LIST()
++    }
++};
++
+ static bool hyper_needed(void *opaque)
+ {
+     RISCVCPU *cpu = opaque;
+@@ -616,6 +643,7 @@ const VMStateDescription vmstate_riscv_cpu = {
+     },
+     .subsections = (const VMStateDescription * const []) {
+         &vmstate_pmp,
++        &vmstate_k3_pmacfg,
+         &vmstate_hyper,
+         &vmstate_vector,
+         &vmstate_pointermasking,
+diff --git a/target/riscv/tcg/csr.c b/target/riscv/tcg/csr.c
+index b24a344..30fccc7 100644
+--- a/target/riscv/tcg/csr.c
++++ b/target/riscv/tcg/csr.c
+@@ -293,6 +293,190 @@ static RISCVException any(CPURISCVState *env, int csrno)
+     return RISCV_EXCP_NONE;
+ }
+ 
++/*
++ * K3 PMACFG0 (0x7de): opt-in M-mode CSR compatibility register.
++ * Value read/write and CSRRS/CSRRC semantics are modeled. The K3 PMA
++ * memory-type effects are NOT modeled: this is a boot compatibility shim,
++ * and must not be relied on for hardware-equivalent PMA security.
++ */
++#define CSR_K3_TCMCFG   0x5db
++#define CSR_K3_MHCR     0x7c1
++#define CSR_K3_PMACFG0 0x7de
++#define CSR_K3_ML2SETUP 0x7f0
++#define CSR_K3_MSETUP    0x7c0
++#define CSR_K3_MCACHEOP  0x7c2
++#define CSR_K3_PERF_CTRL 0x7d0
++#define CSR_K3_PREF_CTRL 0x7d1
++#define CSR_K3_ML2HINT   0x7f7
++#define CSR_K3_MVMD1     0xbf9
++
++static RISCVException k3_pmacfg0_enabled(CPURISCVState *env, int csrno)
++{
++    return riscv_cpu_cfg(env)->k3_pmacfg ? RISCV_EXCP_NONE :
++           RISCV_EXCP_ILLEGAL_INST;
++}
++
++/* Stage 4 register compatibility. No TCM mapping/cache side effects. */
++static RISCVException k3_stage4_csr_enabled(CPURISCVState *env, int csrno)
++{
++    if (!riscv_cpu_cfg(env)->k3_pmacfg ||
++        (!env->debugger && env->priv != PRV_M)) {
++        return RISCV_EXCP_ILLEGAL_INST;
++    }
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException read_k3_tcmcfg(CPURISCVState *env, int csrno,
++                                    target_ulong *val)
++{
++    *val = env->k3_tcmcfg;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException write_k3_tcmcfg(CPURISCVState *env, int csrno,
++                                     target_ulong val, uintptr_t ra)
++{
++    env->k3_tcmcfg = val;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException read_k3_mhcr(CPURISCVState *env, int csrno,
++                                  target_ulong *val)
++{
++    *val = env->k3_mhcr;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException write_k3_mhcr(CPURISCVState *env, int csrno,
++                                   target_ulong val, uintptr_t ra)
++{
++    env->k3_mhcr = val;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException read_k3_pmacfg0(CPURISCVState *env, int csrno,
++                                      target_ulong *val)
++{
++    *val = env->k3_pmacfg0;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException write_k3_pmacfg0(CPURISCVState *env, int csrno,
++                                       target_ulong val, uintptr_t ra)
++{
++    env->k3_pmacfg0 = val;
++    return RISCV_EXCP_NONE;
++}
++
++/*
++ * K3 ML2SETUP (0x7f0): boot-compatibility storage only.
++ * This does NOT emulate hardware L2-cache setup or its side effects.
++ * Gated by the same opt-in K3 vendor CSR compatibility CPU property.
++ */
++static RISCVException read_k3_ml2setup(CPURISCVState *env, int csrno,
++                                       target_ulong *val)
++{
++    *val = env->k3_ml2setup;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException write_k3_ml2setup(CPURISCVState *env, int csrno,
++                                        target_ulong val, uintptr_t ra)
++{
++    env->k3_ml2setup = val;
++    return RISCV_EXCP_NONE;
++}
++
++/*
++ * K3 vendor boot/cache CSRs: per-hart read/write compatibility only.
++ * No D-cache enable/disable, flush, snoop, prefetch, PMA, or instruction
++ * fusion behavior is emulated. Not hardware security equivalence.
++ * Entries are opt-in, to avoid affecting unrelated CPU models sharing IDs.
++ */
++static RISCVException read_k3_msetup(CPURISCVState *env, int csrno,
++                                   target_ulong *val)
++{
++    *val = env->k3_msetup;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException write_k3_msetup(CPURISCVState *env, int csrno,
++                                    target_ulong val, uintptr_t ra)
++{
++    env->k3_msetup = val;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException read_k3_mcacheop(CPURISCVState *env, int csrno,
++                                   target_ulong *val)
++{
++    *val = env->k3_mcacheop;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException write_k3_mcacheop(CPURISCVState *env, int csrno,
++                                    target_ulong val, uintptr_t ra)
++{
++    env->k3_mcacheop = val;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException read_k3_perf_ctrl(CPURISCVState *env, int csrno,
++                                   target_ulong *val)
++{
++    *val = env->k3_perf_ctrl;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException write_k3_perf_ctrl(CPURISCVState *env, int csrno,
++                                    target_ulong val, uintptr_t ra)
++{
++    env->k3_perf_ctrl = val;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException read_k3_prefetch_ctrl(CPURISCVState *env, int csrno,
++                                   target_ulong *val)
++{
++    *val = env->k3_prefetch_ctrl;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException write_k3_prefetch_ctrl(CPURISCVState *env, int csrno,
++                                    target_ulong val, uintptr_t ra)
++{
++    env->k3_prefetch_ctrl = val;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException read_k3_ml2hint(CPURISCVState *env, int csrno,
++                                   target_ulong *val)
++{
++    *val = env->k3_ml2hint;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException write_k3_ml2hint(CPURISCVState *env, int csrno,
++                                    target_ulong val, uintptr_t ra)
++{
++    env->k3_ml2hint = val;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException read_k3_mvmd1(CPURISCVState *env, int csrno,
++                                   target_ulong *val)
++{
++    *val = env->k3_mvmd1;
++    return RISCV_EXCP_NONE;
++}
++
++static RISCVException write_k3_mvmd1(CPURISCVState *env, int csrno,
++                                    target_ulong val, uintptr_t ra)
++{
++    env->k3_mvmd1 = val;
++    return RISCV_EXCP_NONE;
++}
++
+ static RISCVException any32(CPURISCVState *env, int csrno)
+ {
+     if (riscv_cpu_mxl(env) != MXL_RV32) {
+@@ -6030,6 +6214,28 @@ riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
+     [CSR_MINSTRETH] = { "minstreth", any32, read_hpmcounterh,
+                         write_mhpmcounterh                   },
+ 
++    /* K3 vendor PMA register (enabled only with -cpu ...,k3-pmacfg=true). */
++    [CSR_K3_TCMCFG] = { "k3_tcmcfg", k3_stage4_csr_enabled,
++                         read_k3_tcmcfg, write_k3_tcmcfg },
++    [CSR_K3_MHCR] = { "k3_mhcr", k3_stage4_csr_enabled,
++                       read_k3_mhcr, write_k3_mhcr },
++    [CSR_K3_PMACFG0] = { "k3_pmacfg0", k3_pmacfg0_enabled,
++                         read_k3_pmacfg0, write_k3_pmacfg0 },
++    [CSR_K3_ML2SETUP] = { "k3_ml2setup", k3_pmacfg0_enabled,
++                          read_k3_ml2setup, write_k3_ml2setup },
++    [CSR_K3_MSETUP] = { "k3_msetup", k3_pmacfg0_enabled,
++                         read_k3_msetup, write_k3_msetup },
++    [CSR_K3_MCACHEOP] = { "k3_mcacheop", k3_pmacfg0_enabled,
++                         read_k3_mcacheop, write_k3_mcacheop },
++    [CSR_K3_PERF_CTRL] = { "k3_perf_ctrl", k3_pmacfg0_enabled,
++                         read_k3_perf_ctrl, write_k3_perf_ctrl },
++    [CSR_K3_PREF_CTRL] = { "k3_prefetch_ctrl", k3_pmacfg0_enabled,
++                         read_k3_prefetch_ctrl, write_k3_prefetch_ctrl },
++    [CSR_K3_ML2HINT] = { "k3_ml2hint", k3_pmacfg0_enabled,
++                         read_k3_ml2hint, write_k3_ml2hint },
++    [CSR_K3_MVMD1] = { "k3_mvmd1", k3_pmacfg0_enabled,
++                         read_k3_mvmd1, write_k3_mvmd1 },
++
+     /* Machine Information Registers */
+     [CSR_MVENDORID] = { "mvendorid", any,   read_mvendorid },
+     [CSR_MARCHID]   = { "marchid",   any,   read_marchid   },
