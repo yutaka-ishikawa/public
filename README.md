@@ -1,37 +1,57 @@
-# Milk-V Jupiter 2 (SpacemiT K3) integration
+# Milk-V Jupiter 2 / SpacemiT K3 integrated source tree
 
-## Saved patched source trees (2026-11-07)
+The `main` branch contains four source directories: `qemu/`, `opensbi/`, `keystone/`, `linux-k3/`. Original patches are kept under `patches/`; `patches/linux-k3-config.patch` records the Linux Kconfig modifications. No Linux patch remains in repository root.
 
-Three patched source-code snapshots have been pushed successfully and independently verified on GitHub:
+## All-in-one build and installation
 
-- [QEMU 11.1.3](https://github.com/yutaka-ishikawa/public/tree/sources/qemu-k3) — upstream `qemu/qemu` tag `v11.1.3`, file `hw/riscv/jupiter2.c` verified.
-- [K3 OpenSBI](https://github.com/yutaka-ishikawa/public/tree/sources/opensbi-k3) — upstream `spacemit-com/opensbi` at `ad6091fd16c4d4a445168f6a479e1b8aadb4931c`; `platform/generic/configs/k3_keystone_audit_defconfig` verified.
-- [Keystone SM](https://github.com/yutaka-ishikawa/public/tree/sources/keystone-k3) — upstream `keystone-enclave/keystone` at `b8c2385355b2afb5b94a4e5dc503936f1502b972`; `sm/tools/k3_rv64_compile_audit.py` verified.
+Install prerequisites on Ubuntu 24.04 or equivalent: `build-essential`, `ninja-build`, `meson`, `pkg-config`, `libglib2.0-dev`, `libpixman-1-dev`, `libfdt-dev`, `libslirp-dev`, `zlib1g-dev`, `libcapstone-dev`, `clang`, `lld`, `llvm`, `binutils`, `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves`, `python3`.
 
-The patches themselves are retained on `main` under `patches/` along with GitHub Actions and build scripts. The OpenSBI patch's trailing whitespace was normalized at application time; original patch files remain unchanged.
-
-**Important:** These are *source snapshots*, not complete upstream Git histories. Original upstream SHAs are recorded in the corresponding GitHub Actions run artifacts. GitHub's Actions token rejected pushing upstream `.github/workflows` under its original path, so the source workflow files are retained under `upstream-github-workflows/` in the affected snapshots.
-
-## Actions
-
-- [Publish OpenSBI and Keystone snapshots — passed](https://github.com/yutaka-ishikawa/public/actions/runs/42330102326)
-- [Publish QEMU snapshot — passed](https://github.com/yutaka-ishikawa/public/actions/runs/42330183299)
-- [Build workflow](https://github.com/yutaka-ishikawa/public/blob/main/.github/workflows/k3-build.yml) — separate diagnostic build, **not yet verified successful**.
-
-**Do not flash firmware from this experimental port until hardware PMP/IOPMP and firmware safety tests are completed.**
-
-## K3 Linux 6.18 source and kernel build
-
-- [Patched K3 Linux source](linux-k3/) — vendor `spacemit-com/linux-6.18`, branch `k3-br-v1.0.y`, SHA `7d17e358c660f1046eb1f27f26eea33955813afd`.
-- [Linux build script](scripts/build-linux-k3.sh) — builds `Image dtbs modules` with the requested VirtIO, generic PCI host, networking, and 9P options.
-- [Linux kernel build workflow](.github/workflows/build-linux-k3.yml) — Ubuntu 24.04 RISC-V cross-build with artifacts for kernel Image, DTBs, modules, and effective Kconfig.
-
-Run locally at repository root (after installing `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves`):
+From repository root:
 
 ```bash
-JOBS=15 bash scripts/build-linux-k3.sh
+bash scripts/build-install-k3.sh
+# Alternative destination and parallelism:
+bash scripts/build-install-k3.sh --prefix /opt/jupiter2-k3 --jobs 15
+# Individual builds:
+bash scripts/build-install-k3.sh --only qemu
+bash scripts/build-install-k3.sh --only firmware
+bash scripts/build-install-k3.sh --only linux
 ```
 
-Outputs are under `linux-k3/build-k3/`. This generates a kernel `Image`, not a bootable disk/rootfs image. On GitHub Actions, built artifacts are downloadable from the workflow run once the job completes successfully.
+Default installation directory is the repository root; generated files are separate from the source files:
 
-Linux vendor source has been stored with requested config changes in `arch/riscv/configs/k3_bianbu_defconfig`; no additional Linux source patch file was provided for this step.
+```text
+bin/qemu-system-riscv64
+firmware/k3/fw_dynamic.bin
+firmware/k3/fw_dynamic.elf
+firmware/k3/sm-combined.o
+boot/k3/Image
+boot/k3/dtbs/
+boot/k3/config
+lib/modules/
+share/k3/build-manifest.txt
+```
+
+Build intermediates go into `.build-k3/`. QEMU's install target may also install runtime support files in `share/`. No rootfs image is built.
+
+## QEMU boot (from supplied example)
+
+Provide an existing **raw Bianbu rootfs image** explicitly or put it in `rootfs/bianbu-rootfs.img`. Normal boot does **not** pause at reset:
+
+```bash
+bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img
+# GDB: wait on loopback port 1234, boot after gdb 'continue'
+bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img --gdb
+# Interactive QEMU monitor multiplexed with serial (Ctrl-A C)
+bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img --console
+# Optional TCP QEMU monitor on loopback 4444
+bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img --monitor
+# Use another installation location:
+bash scripts/run-k3.sh --prefix /opt/jupiter2-k3 --rootfs /path/to/bianbu-rootfs.img
+```
+
+The boot configuration uses `-M jupiter2`, `rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16`, 16 Harts, 2 GiB RAM, virtio block/network, 9P host share, and serial Linux console. The rootfs image is **not** distributed in this repository. Port forwarding and mount commands may require guest adjustments.
+
+## Verification status
+
+Saving patched source trees and the Linux import succeeded. **Successful full QEMU + Keystone SM + OpenSBI + Linux compilation and an actual Linux boot have not been established by this setup.** The firmware build scripts perform a diagnostic SM compile/link and must not be treated as evidence of secure enclave functionality or hardware PMP/IOPMP safety. Inspect build logs and fail closed on build errors before using generated images.
