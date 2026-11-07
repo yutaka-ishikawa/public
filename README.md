@@ -75,7 +75,7 @@ shutdown -h now                       # sync, remount root read-only, power off
 # Alternatively: poweroff, reboot, or shutdown -r now
 ```
 
-The shutdown helper supports only immediate shutdown (`now` or `0`), and cancels if the root filesystem cannot be remounted read-only. This behavior is intended for the default diagnostic `init=/bin/bash` boot. QEMU exposes the repository by default; choose another host directory with `bash run-k3.sh --hostfs /path/to/share`.
+The shutdown helper supports only immediate shutdown (`now` or `0`), and cancels if the root filesystem cannot be remounted read-only. This behavior is intended for the default diagnostic `init=/bin/bash` boot. QEMU exposes the repository by default; choose another host directory with `bash scripts/run-k3.sh --hostfs /path/to/share`.
 
 If an existing image lacks the helper files or `insmod`, update it without rebuilding. On the host, from the repository root:
 
@@ -101,7 +101,7 @@ For a fresh image, retain the existing image and build into a new destination:
 ```bash
 bash scripts/build-install-keystone.sh \
   --base-prefix "$PWD/install/keystone" --prefix "$PWD/install/keystone-v2"
-bash run-k3.sh --prefix "$PWD/install/keystone-v2"
+bash scripts/run-k3.sh --prefix "$PWD/install/keystone-v2"
 ```
 
 ### Eyrie link errors about stack canaries
@@ -115,7 +115,7 @@ Stop the guest first, then rebuild into the installation directory you actually 
 ```bash
 git pull
 bash scripts/build-install-k3.sh --only firmware --prefix "$PWD/install/keystone"
-bash run-k3.sh --image keystone
+bash scripts/run-k3.sh --image keystone
 ```
 
 For another installation (for example `install/keystone-v2`), use that same directory for both the build's and launcher's `--prefix`. No rootfs replacement or kernel rebuild is needed for the SM trap-return/ABI fixes.
@@ -133,7 +133,7 @@ This fix is in the example packages, **not just the firmware**. To update an exi
 ```bash
 git pull
 bash scripts/build-install-keystone.sh --only sdk
-bash run-k3.sh
+bash scripts/run-k3.sh
 ```
 
 In the restarted guest, use the repository host share and replace both packages:
@@ -163,7 +163,7 @@ An RCU stall is Linux's later report that a CPU stopped making progress; it does
 ```bash
 KEYSTONE_SM_TRACE=1 bash scripts/build-install-k3.sh --only firmware \
   --prefix "$PWD/install/keystone"
-bash run-k3.sh
+bash scripts/run-k3.sh
 ```
 
 Stop the old guest before rebuilding and use the actual installation path for both commands if it differs. At boot, confirm the `[SM-TRACE] ... boot trace enabled; built ...` marker, then run `run-keystone-hello` in the guest. Capture the boot marker and all `[SM-TRACE]` lines through the stall. They distinguish SBI entry, CREATE argument copying, PMP broadcast/ACK, shared-memory cleanup, hashing, and RUN context switching. An entry with `a=2001` is CREATE and `a=2003` is RUN; `sbi.return` records status and `sbi.switch-return` records the selected return PC. These markers contain no memory contents or key material.
@@ -173,26 +173,26 @@ No SBI entry after a confirmed trace-enabled boot points to an earlier user/kern
 ## QEMU startup: Keystone is the default
 
 ```bash
-bash run-k3.sh                         # install/keystone/
-bash run-k3.sh --image keystone
-bash run-k3.sh --image bianbu           # install/bianbu/
+bash scripts/run-k3.sh                         # install/keystone/
+bash scripts/run-k3.sh --image keystone
+bash scripts/run-k3.sh --image bianbu           # install/bianbu/
 # A custom version installation directory:
-bash run-k3.sh --image bianbu --prefix /path/to/bianbu
+bash scripts/run-k3.sh --image bianbu --prefix /path/to/bianbu
 # Previously installed root-level Bianbu artifacts:
-bash run-k3.sh --image bianbu --prefix "$PWD"
+bash scripts/run-k3.sh --image bianbu --prefix "$PWD"
 ```
 
 `--image` selects the default boot-file set; it does not rebuild anything. Both profiles use `jupiter2`, the K3 CPU configuration, 16 harts and 2 GiB RAM. Each selects its own QEMU, `firmware/k3/fw_dynamic.bin`, `boot/k3/Image`, and rootfs from the version installation directory. Individual files can be overridden:
 
 ```bash
-bash run-k3.sh --image keystone \
+bash scripts/run-k3.sh --image keystone \
   --qemu /path/to/qemu-system-riscv64 \
   --bios /path/to/fw_dynamic.bin \
   --kernel /path/to/Image \
   --rootfs /path/to/keystone-rootfs.img
 ```
 
-`bash scripts/run-k3.sh` is equivalent. `--gdb` pauses at reset on loopback port 1234; `--console` enables the serial/monitor multiplexer; `--monitor` opens a loopback monitor on port 4444. `--smp`, `--memory`, `--hostfs` and `--append` remain available. The default command line uses `init=/bin/bash`, giving a diagnostic guest shell rather than starting the distribution init system.
+`--gdb` pauses at reset on loopback port 1234; `--console` enables the serial/monitor multiplexer; `--monitor` opens a loopback monitor on port 4444. `--smp`, `--memory`, `--hostfs` and `--append` remain available. The default command line uses `init=/bin/bash`, giving a diagnostic guest shell rather than starting the distribution init system.
 
 In the Keystone guest shell:
 

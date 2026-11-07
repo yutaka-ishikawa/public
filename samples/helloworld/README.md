@@ -81,7 +81,7 @@ make -C samples/helloworld \
 動作確認済みのKeystone版QEMU環境を使います。開発用ホストのリポジトリルートで起動します。
 
 ```bash
-bash run-k3.sh
+bash scripts/run-k3.sh
 ```
 
 起動後のゲストLinuxのシェルで、ホスト共有をマウントしてドライバをロードします。

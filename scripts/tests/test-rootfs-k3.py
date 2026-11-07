@@ -25,7 +25,7 @@ class RootfsTests(unittest.TestCase):
 
     def run_guest(self, *args, image="bianbu"):
         return subprocess.run(
-            ["bash", str(ROOT / "run-k3.sh"), "--prefix", str(self.prefix),
+            ["bash", str(ROOT / "scripts/run-k3.sh"), "--prefix", str(self.prefix),
              *(["--image", image] if image else []), *args],
             text=True, capture_output=True,
         )

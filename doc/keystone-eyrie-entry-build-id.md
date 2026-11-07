@@ -209,7 +209,7 @@ CIにもランタイム入口の配置テストを追加している。
 ```bash
 git pull
 bash scripts/build-install-keystone.sh --only sdk
-bash run-k3.sh
+bash scripts/run-k3.sh
 ```
 
 起動したゲスト側で、共有ディレクトリ経由で両パッケージを更新する。

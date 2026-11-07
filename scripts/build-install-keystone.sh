@@ -130,5 +130,5 @@ bash "$ROOT/scripts/build-rootfs-keystone.sh" "$PREFIX/rootfs/keystone-rootfs.im
 mkdir -p "$PREFIX/share/keystone"
 printf 'profile=keystone-k3\nkernelrelease=%s\nsdk=%s\n' "$RELEASE" "$SDK" > "$PREFIX/share/keystone/build-manifest.txt"
 echo "Installed K3 Keystone stack at $PREFIX"
-echo 'Boot with bash run-k3.sh; in the guest run /usr/bin/run-keystone-hello.'
+echo 'Boot with bash scripts/run-k3.sh; in the guest run /usr/bin/run-keystone-hello.'
 echo 'This packages the stack; it does not certify enclave, attestation or DMA isolation behavior.'

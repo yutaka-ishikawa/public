@@ -33,7 +33,6 @@ on:
       - 'keystone/sdk/src/app/CMakeLists.txt'
       - 'keystone/examples/hello-native/CMakeLists.txt'
       - 'keystone/sdk/macros.cmake'
-      - 'run-k3.sh'
       - 'scripts/run-k3.sh'
       - 'scripts/clean-k3.sh'
       - '.github/workflows/validate-k3-scripts.yml'
@@ -57,7 +56,6 @@ jobs:
           for helper in scripts/guest/*; do bash -n "$helper"; done
           bash -n scripts/build-rootfs-keystone.sh
           bash -n scripts/install-build-deps.sh
-          bash -n run-k3.sh
           bash -n scripts/run-k3.sh
           bash -n scripts/build-linux-k3.sh
           bash -n scripts/build_keystone_sm.sh

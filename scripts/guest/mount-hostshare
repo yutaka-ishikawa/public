@@ -11,7 +11,7 @@ if "$bb" mountpoint -q "$target"; then
 fi
 # run-k3.sh exposes --hostfs with the fixed 9P mount tag hostshare.
 if ! "$bb" mount -t 9p -o trans=virtio,version=9p2000.L hostshare "$target"; then
- echo 'Host share mount failed. Launch QEMU with run-k3.sh --hostfs /path/to/share and a kernel with built-in 9P/Virtio support.' >&2
+ echo 'Host share mount failed. Launch QEMU with bash scripts/run-k3.sh --hostfs /path/to/share and a kernel with built-in 9P/Virtio support.' >&2
  exit 1
 fi
 echo "Host filesystem mounted at $target"
