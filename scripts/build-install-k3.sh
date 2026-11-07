@@ -27,6 +27,8 @@ case "$COMPONENT" in all|qemu|firmware|linux) :;; *) echo "Unknown component: $C
 mkdir -p "$PREFIX" "$BUILD_DIR"
 PREFIX="$(cd "$PREFIX" && pwd -P)"
 BUILD_DIR="$(cd "$BUILD_DIR" && pwd -P)"
+# Mark the generated build directory for safe targeted cleanup.
+printf "k3-build-dir-v1\\n" > "$BUILD_DIR/.k3-build-root"
 mkdir -p "$PREFIX/share/k3"
 MANIFEST="$PREFIX/share/k3/build-manifest.txt"
 {
