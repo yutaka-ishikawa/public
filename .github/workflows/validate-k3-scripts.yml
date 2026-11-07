@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'scripts/build-install-k3.sh'
+      - 'scripts/build-rootfs-k3.sh'
+      - 'scripts/tests/test-rootfs-k3.py'
+      - 'run-k3.sh'
       - 'scripts/run-k3.sh'
       - 'scripts/clean-k3.sh'
       - '.github/workflows/validate-k3-scripts.yml'
@@ -21,10 +24,14 @@ jobs:
           set -Eeuo pipefail
           bash -n scripts/clean-k3.sh
           bash -n scripts/build-install-k3.sh
+          bash -n scripts/build-rootfs-k3.sh
+          bash -n run-k3.sh
           bash -n scripts/run-k3.sh
           bash -n scripts/build-linux-k3.sh
           bash -n scripts/build_keystone_sm.sh
           bash -n scripts/build_opensbi_link.sh
+      - name: Verify rootfs selection and data preservation
+        run: python3 scripts/tests/test-rootfs-k3.py
       - name: Verify usage and source layout
         shell: bash
         run: |

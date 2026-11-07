@@ -5,28 +5,38 @@ PREFIX="$ROOT"
 BUILD_DIR="$ROOT/.build-k3"
 JOBS="${JOBS:-$(nproc)}"
 COMPONENT=all
+ROOTFS_ARCHIVE=""
+ROOTFS_SHA256=""
 usage() {
 cat <<'HELP'
-Usage: bash scripts/build-install-k3.sh [--prefix DIR] [--build-dir DIR] [--jobs N] [--only qemu|firmware|linux]
+Usage: bash scripts/build-install-k3.sh [--prefix DIR] [--build-dir DIR] [--jobs N] [--only qemu|firmware|linux|rootfs] [--rootfs-archive FILE] [--rootfs-sha256 HASH]
 Build from repository's patched qemu/, opensbi/, keystone/, and linux-k3/ sources.
 Default installation prefix is repository root. Outputs: bin/, firmware/k3/, boot/k3/, lib/modules/.
+Full builds also create rootfs/bianbu-rootfs.img (8 GiB ext4, Bianbu 26.04).
+Existing images are preserved. --only rootfs prepares just the guest image.
+--rootfs-archive FILE uses a local Bianbu tar.gz instead of downloading it.
+--rootfs-sha256 HASH verifies the archive against a separately obtained SHA256.
 HELP
 }
 while (($#)); do
  case "$1" in
-  --prefix|--build-dir|--jobs|--only)
+  --prefix|--build-dir|--jobs|--only|--rootfs-archive|--rootfs-sha256)
     (($#>=2)) || { usage >&2; exit 2; }
-    case "$1" in --prefix) PREFIX=$2;; --build-dir) BUILD_DIR=$2;; --jobs) JOBS=$2;; --only) COMPONENT=$2;; esac
+    case "$1" in --prefix) PREFIX=$2;; --build-dir) BUILD_DIR=$2;; --jobs) JOBS=$2;; --only) COMPONENT=$2;; --rootfs-archive) ROOTFS_ARCHIVE=$2;; --rootfs-sha256) ROOTFS_SHA256=$2;; esac
     shift 2;;
   -h|--help) usage; exit 0;;
   *) echo "Unknown argument: $1" >&2; usage >&2; exit 2;;
  esac
 done
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid --jobs: $JOBS" >&2; exit 2; }
-case "$COMPONENT" in all|qemu|firmware|linux) :;; *) echo "Unknown component: $COMPONENT" >&2; exit 2;; esac
+case "$COMPONENT" in all|qemu|firmware|linux|rootfs) :;; *) echo "Unknown component: $COMPONENT" >&2; exit 2;; esac
 mkdir -p "$PREFIX" "$BUILD_DIR"
 PREFIX="$(cd "$PREFIX" && pwd -P)"
 BUILD_DIR="$(cd "$BUILD_DIR" && pwd -P)"
+# Prepare guest storage first so missing tools fail before expensive builds.
+if [[ "$COMPONENT" == all || "$COMPONENT" == rootfs ]]; then
+ bash "$ROOT/scripts/build-rootfs-k3.sh" "$PREFIX/rootfs/bianbu-rootfs.img" "$BUILD_DIR/rootfs" "$ROOTFS_ARCHIVE" "$ROOTFS_SHA256"
+fi
 # Mark the generated build directory for safe targeted cleanup.
 printf "k3-build-dir-v1\n" > "$BUILD_DIR/.k3-build-root"
 mkdir -p "$PREFIX/share/k3"

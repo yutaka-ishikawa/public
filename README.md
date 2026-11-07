@@ -4,7 +4,7 @@ The `main` branch contains four source directories: `qemu/`, `opensbi/`, `keysto
 
 ## All-in-one build and installation
 
-Install prerequisites on Ubuntu 24.04 or equivalent: `build-essential`, `ninja-build`, `meson`, `pkg-config`, `libglib2.0-dev`, `libpixman-1-dev`, `libfdt-dev`, `libslirp-dev`, `zlib1g-dev`, `libcapstone-dev`, `clang`, `lld`, `llvm`, `binutils`, `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves`, `python3`.
+Install prerequisites on Ubuntu 24.04 or equivalent: `build-essential`, `ninja-build`, `meson`, `pkg-config`, `libglib2.0-dev`, `libpixman-1-dev`, `libfdt-dev`, `libslirp-dev`, `zlib1g-dev`, `libcapstone-dev`, `clang`, `lld`, `llvm`, `binutils`, `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves`, `python3`, `curl`, `e2fsprogs`. Rootfs creation requires `mke2fs` with libarchive tarball support (e2fsprogs 1.47.2 or newer; the Ubuntu 24.04 default is too old).
 
 From repository root:
 
@@ -16,6 +16,7 @@ bash scripts/build-install-k3.sh --prefix /opt/jupiter2-k3 --jobs 15
 bash scripts/build-install-k3.sh --only qemu
 bash scripts/build-install-k3.sh --only firmware
 bash scripts/build-install-k3.sh --only linux
+bash scripts/build-install-k3.sh --only rootfs
 ```
 
 Default installation directory is the repository root; generated files are separate from the source files:
@@ -30,15 +31,30 @@ boot/k3/dtbs/
 boot/k3/config
 lib/modules/
 share/k3/build-manifest.txt
+rootfs/bianbu-rootfs.img
 ```
 
-Build intermediates go into `.build-k3/`. QEMU's install target may also install runtime support files in `share/`. No rootfs image is built.
+Build intermediates go into `.build-k3/`. QEMU's install target may also install runtime support files in `share/`. A full build first creates `rootfs/bianbu-rootfs.img`: an **8 GiB sparse ext4 filesystem** labeled `bianbu-root`, populated from [Bianbu 26.04 base for RISC-V](https://archive.spacemit.com/bianbu-base/bianbu-base-26.04-base-riscv64.tar.gz). The archive is cached under `.build-k3/rootfs/`. The script uses `mke2fs -d` tarball support to preserve numeric owners, permissions, links and device nodes without sudo, loop devices or a mounted staging filesystem. Existing nonempty images are retained unchanged, including guest modifications.
+
+To create just the image, or use an archive downloaded separately:
+
+```bash
+bash scripts/build-install-k3.sh --only rootfs
+bash scripts/build-install-k3.sh --only rootfs \
+  --rootfs-archive /path/to/bianbu-base-26.04-base-riscv64.tar.gz
+# Optional: --rootfs-sha256 HASH, obtained independently from the distributor
+```
+
+Downloads use HTTPS with certificate verification. No distributor checksum is bundled; the script prints the downloaded archive's SHA-256, and `--rootfs-sha256` checks an independently supplied value. The download requires network access to `archive.spacemit.com`. A failed download, checksum check or image build does not publish a partial image.
+
 
 ## QEMU boot (from supplied example)
 
-Provide an existing **raw Bianbu rootfs image** explicitly or put it in `rootfs/bianbu-rootfs.img`. Normal boot does **not** pause at reset:
+After a full build, run `bash run-k3.sh` (or `bash scripts/run-k3.sh`) with no arguments to use `rootfs/bianbu-rootfs.img`. Normal boot does **not** pause at reset. The default `init=/bin/bash` opens a diagnostic Bash shell; it does not start the distribution's normal init system. To use a different raw filesystem image, pass `--rootfs`. A partitioned disk image requires a matching `--append` root device:
 
 ```bash
+bash scripts/run-k3.sh
+# Alternative raw filesystem image:
 bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img
 # GDB: wait on loopback port 1234, boot after gdb 'continue'
 bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img --gdb
@@ -50,7 +66,7 @@ bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img --monitor
 bash scripts/run-k3.sh --prefix /opt/jupiter2-k3 --rootfs /path/to/bianbu-rootfs.img
 ```
 
-The boot configuration uses `-M jupiter2`, `rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16`, 16 Harts, 2 GiB RAM, virtio block/network, 9P host share, and serial Linux console. The rootfs image is **not** distributed in this repository. Port forwarding and mount commands may require guest adjustments.
+The boot configuration uses `-M jupiter2`, `rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16`, 16 Harts, 2 GiB RAM, virtio block/network, 9P host share, and serial Linux console. Bianbu images are **not** distributed in this repository. The default rootfs is generated locally from the Bianbu base archive. Port forwarding and mount commands may require guest adjustments.
 
 ## Verification status
 
