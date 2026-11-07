@@ -31,6 +31,8 @@ jobs:
           test -s linux-k3/arch/riscv/configs/k3_bianbu_defconfig
           cat linux-k3/K3_SOURCE_PROVENANCE.md
           printf 'Source checkout commit: %s\n' "$GITHUB_SHA"
+      - name: Record cross compiler version
+        run: riscv64-linux-gnu-gcc --version | head -n 1
       - name: Build kernel Image DTBs and modules
         env:
           JOBS: '4'
