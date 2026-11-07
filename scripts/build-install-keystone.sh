@@ -124,6 +124,8 @@ install -D -m 0644 "$DRIVER/keystone-driver.ko" "$GUEST/usr/lib/modules/$RELEASE
 for name in hello hello-native; do
  install -D -m 0755 "$BUILD_DIR/examples/$name/$name.ke" "$GUEST/usr/share/keystone/examples/$name.ke"
 done
+bash "$ROOT/scripts/build-keystone-guest-tools.sh" "$BUILD_DIR/guest-tools/busybox" "$BUILD_DIR/guest-tools/build" "$JOBS"
+install -D -m 0755 "$BUILD_DIR/guest-tools/busybox" "$GUEST/usr/libexec/keystone/busybox"
 mkdir -p "$GUEST/usr/bin"
 cat > "$GUEST/usr/bin/run-keystone-hello" <<'GUEST_SCRIPT'
 #!/bin/sh
@@ -132,7 +134,12 @@ export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 mountpoint -q /proc || mount -t proc proc /proc
 mountpoint -q /sys || mount -t sysfs sysfs /sys
 if [ ! -e /dev/keystone_enclave ]; then
- insmod "/usr/lib/modules/$(uname -r)/extra/keystone-driver.ko"
+ module="/usr/lib/modules/$(uname -r)/extra/keystone-driver.ko"
+ if command -v insmod >/dev/null 2>&1; then
+  insmod "$module"
+ else
+  /usr/libexec/keystone/busybox insmod "$module"
+ fi
 fi
 exec /usr/share/keystone/examples/hello.ke "$@"
 GUEST_SCRIPT

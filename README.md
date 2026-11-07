@@ -61,6 +61,33 @@ Other options include `--prefix DIR`, `--build-dir DIR`, `--rootfs-archive FILE`
 bash scripts/build-install-keystone.sh --only sdk
 ```
 
+### Existing images reporting `insmod: not found`
+
+For an already-running guest, a full image rebuild is unnecessary. On the host, from the repository root:
+
+```bash
+git pull
+bash scripts/build-keystone-guest-tools.sh
+```
+
+In the guest, when using the launcher's default repository host share:
+
+```bash
+mkdir -p /mnt/host
+mount -t 9p -o trans=virtio,version=9p2000.L hostshare /mnt/host
+/mnt/host/.build-keystone/guest-tools/busybox insmod \
+  "/usr/lib/modules/$(uname -r)/extra/keystone-driver.ko"
+/usr/bin/run-keystone-hello
+```
+
+For a fresh image with the loader included, keep the existing image and build into a new destination:
+
+```bash
+bash scripts/build-install-keystone.sh \
+  --base-prefix "$PWD/install/keystone" --prefix "$PWD/install/keystone-v2"
+bash run-k3.sh --prefix "$PWD/install/keystone-v2"
+```
+
 ### Eyrie link errors about stack canaries
 
 If an older checkout fails to link Eyrie with undefined `__stack_chk_guard` or `__stack_chk_fail`, update with `git pull` and rerun the same Keystone build command. Eyrie, its freestanding SDK app/edge libraries, and the native enclave example explicitly disable compiler-generated stack protection because they have no libc/canary provider. Host runners retain the toolchain's normal protection settings. The build refreshes generated Eyrie sources and rebuilds affected objects; deleting the existing guest images is unnecessary.
@@ -97,7 +124,7 @@ In the Keystone guest shell:
 /usr/share/keystone/examples/hello-native.ke
 ```
 
-The helper mounts `/proc` and `/sys`, loads the driver matching `uname -r`, then runs `hello.ke`. Packaging an image or loading a module does not establish that SM enclave creation succeeds. Current K3 code separates basic PMP-only execution from unavailable secure key/entropy services; attestation and sealing must not be inferred to work from a hello test.
+The helper mounts `/proc` and `/sys`, loads the driver matching `uname -r`, then runs `hello.ke`. Since the base rootfs may lack `insmod`, new Keystone images include a statically linked RISC-V BusyBox with `insmod` and `lsmod` at `/usr/libexec/keystone/busybox`. The helper uses it when the system command is unavailable. The build downloads BusyBox 1.36.1 from a pinned, SHA-256-verified archive on `codeload.github.com`; sources remain in the guest-tools build directory. Packaging an image or loading a module does not establish that SM enclave creation succeeds. Current K3 code separates basic PMP-only execution from unavailable secure key/entropy services; attestation and sealing must not be inferred to work from a hello test.
 
 ## Verification status
 
