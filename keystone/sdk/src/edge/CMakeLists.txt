@@ -19,6 +19,8 @@ include_directories(${INCLUDE_DIRS})
 add_definitions(${DEFINES})
 
 add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
+# These archives are linked into freestanding Eyrie/native enclave binaries.
+target_compile_options(${PROJECT_NAME} PRIVATE -fno-stack-protector)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${out_dir}/lib)
 install(DIRECTORY ${INCLUDE_DIRS} DESTINATION ${out_dir}/include)

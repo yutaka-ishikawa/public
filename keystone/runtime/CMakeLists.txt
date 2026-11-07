@@ -56,7 +56,9 @@ include_directories(include)
 
 # medany creates PIC w/o a GOT. loader-binary (and thus libs) inherently needs PIC
 # because it's in physical addressing; currently doesn't work with Global Offset Table
-add_compile_options(-Wall -Werror -fno-builtin -static -mcmodel=medany -std=c11 -g)
+# Eyrie and its loader run without libc or a stack-canary provider.
+# Distro compilers may enable stack protection by default.
+add_compile_options(-Wall -Werror -fno-builtin -fno-stack-protector -static -mcmodel=medany -std=c11 -g)
 
 # Generate all the library targets
 add_subdirectory(call)

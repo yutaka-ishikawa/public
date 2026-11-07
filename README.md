@@ -61,6 +61,10 @@ Other options include `--prefix DIR`, `--build-dir DIR`, `--rootfs-archive FILE`
 bash scripts/build-install-keystone.sh --only sdk
 ```
 
+### Eyrie link errors about stack canaries
+
+If an older checkout fails to link Eyrie with undefined `__stack_chk_guard` or `__stack_chk_fail`, update with `git pull` and rerun the same Keystone build command. Eyrie, its freestanding SDK app/edge libraries, and the native enclave example explicitly disable compiler-generated stack protection because they have no libc/canary provider. Host runners retain the toolchain's normal protection settings. The build refreshes generated Eyrie sources and rebuilds affected objects; deleting the existing guest images is unnecessary.
+
 ## QEMU startup: Keystone is the default
 
 ```bash

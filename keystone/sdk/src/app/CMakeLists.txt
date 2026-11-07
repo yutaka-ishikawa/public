@@ -18,6 +18,8 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LDFLAGS}")
 include_directories(${INCLUDE_DIRS})
 
 add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
+# These archives are linked into freestanding Eyrie/native enclave binaries.
+target_compile_options(${PROJECT_NAME} PRIVATE -fno-stack-protector)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEFINE_SYMBOL "")
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${out_dir}/lib)

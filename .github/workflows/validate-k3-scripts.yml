@@ -12,6 +12,10 @@ on:
       - 'scripts/tests/test-rootfs-k3.py'
       - 'scripts/tests/test-build-rootfs-k3.py'
       - 'keystone/runtime/sys/entry.S'
+      - 'keystone/runtime/CMakeLists.txt'
+      - 'keystone/sdk/src/edge/CMakeLists.txt'
+      - 'keystone/sdk/src/app/CMakeLists.txt'
+      - 'keystone/examples/hello-native/CMakeLists.txt'
       - 'keystone/sdk/macros.cmake'
       - 'run-k3.sh'
       - 'scripts/run-k3.sh'
@@ -47,6 +51,14 @@ jobs:
         run: python3 scripts/tests/test-build-rootfs-k3.py
       - name: Verify rootfs selection and data preservation
         run: python3 scripts/tests/test-rootfs-k3.py
+      - name: Install SDK test tools
+        run: |
+          sudo apt-get install -y cmake makeself g++-riscv64-linux-gnu
+      - name: Build examples with distro-style stack protection enabled
+        env:
+          CFLAGS: -fstack-protector-all
+          CXXFLAGS: -fstack-protector-all
+        run: bash scripts/build-install-keystone.sh --only sdk --jobs 2
       - name: Verify usage and source layout
         shell: bash
         run: |
