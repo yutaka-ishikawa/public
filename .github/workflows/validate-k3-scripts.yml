@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'verifications/**'
       - 'samples/**'
       - 'scripts/build-install-k3.sh'
       - 'scripts/build-rootfs-k3.sh'
@@ -72,6 +73,8 @@ jobs:
           python3 scripts/tests/test-keystone-system-reset.py
           python3 scripts/tests/test-keystone-sm-port.py
           python3 scripts/tests/test-keystone-timer-policy.py
+      - name: Verify SBI 2001 through 2004 source paths
+        run: bash verifications/run-all.sh
       - name: Verify image creation and Keystone overlay
         run: python3 scripts/tests/test-build-rootfs-k3.py
       - name: Verify guest helper installation and shutdown control

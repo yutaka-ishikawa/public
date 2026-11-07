@@ -1,0 +1,13 @@
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/test
+PASS 01 destroy FRESH: DESTROYING callback, zero private pages, retain UTM, release resources
+PASS 02 double destroy rejected
+PASS 03 STOPPED enclave destroyable
+PASS 04 RUNNING rejected without freeing resources
+OBSERVED 05 current state predicate also accepts DESTROYING and ALLOCATED (documented finding) [not an acceptance PASS]
+PASS 06 out-of-range IDs rejected
+PASS 07 enclave context rejected
+PASS 08 unready adapter rejected
+PASS 09 100 create/destroy cycles reuse EID and mocked PMP regions
+OBSERVED 10 current implementation ignores PMP unset error (documented finding) [not an acceptance PASS]
+OBSERVED 11 64-bit EID truncates to 32-bit and aliases valid enclave (documented finding) [not an acceptance PASS]
+SUMMARY SBI 2002: 11 groups completed, 3 known findings reproduced (hardware mocked)

@@ -1,0 +1,7 @@
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/test
+PASS 01 unassigned 2004 returns 100100 with PC+4 and zero a1
+PASS 02 2004 does not run/resume/destroy existing enclave
+PASS 03 host-range check precedes unsupported-ID handling
+PASS 04 readiness gate precedes unsupported-ID handling
+PASS 05 unused argument does not cause memory access or allocation
+SUMMARY SBI 2004: 5 groups completed, 0 known findings reproduced (unassigned ID)

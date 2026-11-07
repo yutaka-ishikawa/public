@@ -8,6 +8,8 @@ The `main` branch contains `qemu/`, `opensbi/`, `keystone/`, and `linux-k3/`. Or
 
 未移植機能の一覧と実装順序は、[K3 Keystone移植計画](doc/keystone-porting-plan.md)を参照してください。
 
+SBI 2001–2004のソース検証・テスト・結果は、[verifications/README.md](verifications/README.md)にまとめています。
+
 ## Host dependencies
 
 On Ubuntu 24.04 or an equivalent APT-based distribution:
