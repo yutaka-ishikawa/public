@@ -4,7 +4,17 @@ The `main` branch contains four source directories: `qemu/`, `opensbi/`, `keysto
 
 ## All-in-one build and installation
 
-Install prerequisites on Ubuntu 24.04 or equivalent: `build-essential`, `ninja-build`, `meson`, `pkg-config`, `libglib2.0-dev`, `libpixman-1-dev`, `libfdt-dev`, `libslirp-dev`, `zlib1g-dev`, `libcapstone-dev`, `clang`, `lld`, `llvm`, `binutils`, `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves`, `python3`, `curl`, `e2fsprogs`, `fakeroot`. Older `mke2fs` builds, including Ubuntu 24.04, use directory input under fakeroot; no e2fsprogs upgrade is required.
+Install prerequisites on Ubuntu 24.04 or an equivalent APT-based distribution, from the repository root:
+
+```bash
+sudo bash scripts/install-build-deps.sh
+```
+
+This script runs `apt-get update` and installs the host build tools, QEMU development libraries, **Clang/LLD/LLVM**, the RISC-V GCC/binutils cross toolchain, kernel build dependencies, and `e2fsprogs`/`fakeroot` for rootfs creation. It can be rerun to install missing packages or update installed dependencies. It does not build the project. Run subsequent build commands as your normal user.
+
+Installed packages: `git`, `build-essential`, `ninja-build`, `meson`, `pkg-config`, `python3`, `python3-venv`, `curl`, `libglib2.0-dev`, `libpixman-1-dev`, `libfdt-dev`, `libslirp-dev`, `zlib1g-dev`, `libcapstone-dev`, `clang`, `lld`, `llvm`, `binutils`, `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves`, `device-tree-compiler`, `e2fsprogs`, `fakeroot`.
+
+Older `mke2fs` builds, including Ubuntu 24.04, use directory input under fakeroot; no e2fsprogs upgrade is required.
 
 From repository root:
 
