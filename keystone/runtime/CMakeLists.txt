@@ -58,7 +58,10 @@ include_directories(include)
 # because it's in physical addressing; currently doesn't work with Global Offset Table
 # Eyrie and its loader run without libc or a stack-canary provider.
 # Distro compilers may enable stack protection by default.
-add_compile_options(-Wall -Werror -fno-builtin -fno-stack-protector -static -mcmodel=medany -std=c11 -g)
+# The raw loader is relocated to arbitrary physical EPM memory without an ELF
+# relocator. Distro PIE defaults would turn address loads into absolute GOT
+# entries, which cannot be used at that new base (and are not in loader.bin).
+add_compile_options(-Wall -Werror -fno-builtin -fno-stack-protector -fno-pie -fno-pic -static -mcmodel=medany -std=c11 -g)
 
 # Generate all the library targets
 add_subdirectory(call)

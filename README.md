@@ -120,6 +120,32 @@ For another installation (for example `install/keystone-v2`), use that same dire
 
 With `CONFIG_K3_KEYSTONE_SM`, firmware deliberately uses the machine-timer path required by the current SM. It clears Sstc access and removes `sstc` from both device-tree ISA encodings, so Linux and SBI SET_TIMER agree on that policy. This is a compatibility policy, not full Sstc context virtualization. Firmware builds without Keystone enabled keep their existing timer behavior.
 
+### RUN reaches the enclave entry but the raw loader fails
+
+Distro PIE defaults previously caused the raw loader's first `la sp, _estack` to read an absolute address from a GOT. `loader.bin` contains only `.text`, so that GOT was absent; zero-filled EPM padding supplied a zero stack pointer. Relocating that image to `0x10f400000` reproduced a fault at `0x10f40000c` with SP `0xffffffffffffffc8`, before `load_runtime` could run.
+
+The loader now uses local PC-relative address loads, disables PIE/PIC and linker relaxation for this freestanding path, includes small data/BSS in the raw image, and enforces a 16-byte-aligned stack. A linker assertion rejects any GOT in the raw loader. The Eyrie build always checks its generated build tree, so source fixes reach packages even after an earlier successful build.
+
+This fix is in the example packages, **not just the firmware**. To update an existing guest, first stop the stuck QEMU instance. On the host:
+
+```bash
+git pull
+bash scripts/build-install-keystone.sh --only sdk
+bash run-k3.sh
+```
+
+In the restarted guest, use the repository host share and replace both packages:
+
+```bash
+mount-hostshare
+cp /mnt/host/.build-keystone/examples/hello/hello.ke /usr/share/keystone/examples/hello.ke
+cp /mnt/host/.build-keystone/examples/hello-native/hello-native.ke /usr/share/keystone/examples/hello-native.ke
+chmod +x /usr/share/keystone/examples/*.ke
+run-keystone-hello
+```
+
+For a custom `--build-dir` or `--hostfs`, adjust the shared package paths. A fresh `build-install-keystone.sh` image includes the rebuilt packages automatically. No kernel or rootfs rebuild is needed for this package update. The entry regression tests execute the actual raw loader prefix at a relocated address under QEMU user mode and stop before privileged loader code; they do not replace a full guest enclave test.
+
 ### Locate a CREATE/RUN hang before changing SM behavior
 
 An RCU stall is Linux's later report that a CPU stopped making progress; it does not identify the timer as the cause of a stuck `run-keystone-hello`. Enable opt-in firmware progress markers to locate the last completed stage:

@@ -25,6 +25,9 @@ on:
       - 'scripts/tests/test-build-rootfs-k3.py'
       - 'keystone/runtime/sys/entry.S'
       - 'keystone/runtime/CMakeLists.txt'
+      - 'keystone/runtime/loader-binary/**'
+      - 'scripts/tests/test-keystone-loader-entry.py'
+      - 'scripts/tests/keystone-loader-entry-check.c'
       - 'keystone/sdk/src/edge/CMakeLists.txt'
       - 'keystone/sdk/src/app/CMakeLists.txt'
       - 'keystone/examples/hello-native/CMakeLists.txt'
@@ -77,9 +80,11 @@ jobs:
           sudo apt-get install -y cmake makeself g++-riscv64-linux-gnu qemu-user
       - name: Build examples with distro-style stack protection enabled
         env:
-          CFLAGS: -fstack-protector-all
-          CXXFLAGS: -fstack-protector-all
+          CFLAGS: -fstack-protector-all -fPIE
+          CXXFLAGS: -fstack-protector-all -fPIE
         run: bash scripts/build-install-keystone.sh --only sdk --jobs 2
+      - name: Execute relocated enclave loader entry and reject unsupported GOT
+        run: python3 scripts/tests/test-keystone-loader-entry.py
       - name: Build and exercise static guest module loader
         run: |
           set -euo pipefail

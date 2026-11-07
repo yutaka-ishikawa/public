@@ -4,7 +4,8 @@ set(LOADER_LINK_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/loader.lds)
 
 add_executable(loader ${LOADER_SOURCES})
 target_link_libraries(loader rt_call ld_mm rt_util rt_loader gcc)
-target_link_options(loader PRIVATE -static -nostdlib -T ${LOADER_LINK_SCRIPT})
+# The SM supplies no global pointer, so link-time GP relaxation is invalid too.
+target_link_options(loader PRIVATE -static -nostdlib -no-pie -Wl,--no-relax -T ${LOADER_LINK_SCRIPT})
 
 add_custom_target(loader.bin ALL
         DEPENDS loader

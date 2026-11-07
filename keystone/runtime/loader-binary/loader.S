@@ -14,10 +14,10 @@ _start:
   // a7: untrusted_size
 
   // use designated stack
-  la sp, _estack
+  lla sp, _estack
 
   // save all args to stack 
-  addi sp, sp, -(REGBYTES*7)
+  addi sp, sp, -(REGBYTES*8)
   STORE a1, 0(sp)
   STORE a2, 1*REGBYTES(sp)
   STORE a3, 2*REGBYTES(sp)
@@ -39,7 +39,7 @@ _start:
   // construct new satp
   // below assembly and fences work on CVA6, for satp specifically.
   // FIXME: declutter if possible according to more testing
-  la a0, root_page_table_storage  
+  lla a0, root_page_table_storage
   li a1, RISCV_PAGE_BITS
   li a2, SATP_MODE
   srl a0, a0, a1
