@@ -6,6 +6,7 @@ on:
     paths:
       - 'scripts/build-install-k3.sh'
       - 'scripts/run-k3.sh'
+      - 'scripts/clean-k3.sh'
       - '.github/workflows/validate-k3-scripts.yml'
 permissions:
   contents: read
@@ -18,6 +19,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          bash -n scripts/clean-k3.sh
           bash -n scripts/build-install-k3.sh
           bash -n scripts/run-k3.sh
           bash -n scripts/build-linux-k3.sh
@@ -29,7 +31,28 @@ jobs:
           set -Eeuo pipefail
           bash scripts/build-install-k3.sh --help
           bash scripts/run-k3.sh --help
+          bash scripts/clean-k3.sh --help
           for path in qemu/configure opensbi/Makefile keystone/sm/tools/k3_rv64_compile_audit.py linux-k3/Makefile patches/linux-k3-config.patch; do
             test -s "$path" || { echo "Missing $path"; exit 1; }
           done
           test ! -e linux-k3-config.patch
+      - name: Verify cleaning is selective and preserves non-build files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
+          mkdir -p "$TMP/k3-build/qemu" "$TMP/k3-build/firmware" "$TMP/k3-build/linux"
+          printf 'k3-build-dir-v1\\n' > "$TMP/k3-build/.k3-build-root"
+          touch "$TMP/k3-build/qemu/file" "$TMP/k3-build/firmware/file" "$TMP/k3-build/linux/file"
+          bash scripts/clean-k3.sh --build-dir "$TMP/k3-build" --only qemu --dry-run
+          test -e "$TMP/k3-build/qemu/file"
+          bash scripts/clean-k3.sh --build-dir "$TMP/k3-build" --only qemu
+          test ! -e "$TMP/k3-build/qemu"
+          test -e "$TMP/k3-build/firmware/file"
+          test -e "$TMP/k3-build/linux/file"
+          bash scripts/clean-k3.sh --build-dir "$TMP/k3-build"
+          test ! -e "$TMP/k3-build/firmware"
+          test ! -e "$TMP/k3-build/linux"
+          mkdir -p "$TMP/unmarked/qemu"
+          if bash scripts/clean-k3.sh --build-dir "$TMP/unmarked"; then echo 'Unsafe clean was accepted' >&2; exit 1; fi
