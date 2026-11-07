@@ -1,25 +1,34 @@
-# K3 OpenSBI / Keystone / QEMU (Milk-V Jupiter 2)
+# K3 OpenSBI / Keystone / QEMU — Milk-V Jupiter 2
 
-Diagnostic GitHub Actions build environment for SpacemiT K3, QEMU 11.1.3 and Keystone Secure Monitor.
+Public integration repository for three **separately forked** upstream source trees, pinned to the K3 port revisions.
 
-## Status
+## Current status (2026-11-07)
 
-The workflow and four build/check scripts have been uploaded. **Three cumulative patch files are still missing**, so the workflow is intentionally fail-fast and not yet runnable to completion. No successful build or functional verification is claimed.
+- GitHub Actions workflow: installed; tests QEMU and OpenSBI+Keystone independently.
+- Forked and patched source branches: **not yet verified / not yet created by this automation**.
+- **No confirmed successful GitHub Actions builds.**
+- No actual enclave execution or PMP/IOPMP security verification is claimed.
 
-## Required files
+## Fork upstream sources, apply patches, and push branches
 
-Upload the following three files from `K3_GitHub_Actions_20261107.zip` into the repository with the exact paths:
+On a machine with `git` and GitHub CLI (`gh`) installed, download and extract `K3_GitHub_Actions_20261107.zip` and run:
 
-- `patches/qemu-11.1.3-jupiter2-k3-boot.patch`
-- `patches/opensbi-k3-keystone-cumulative.patch`
-- `patches/keystone-k3-cumulative.patch`
+```bash
+gh auth login
+git clone https://github.com/yutaka-ishikawa/public.git k3-integration
+cd k3-integration
+PATCH_ROOT=/absolute/path/to/K3_GitHub_Actions_20261107 \
+  bash scripts/fork_patch_push.sh
+```
 
-Then open **Actions → K3 OpenSBI Keystone QEMU diagnostic build → Run workflow**.
+The script creates or verifies real GitHub forks, checks pristine versions, applies each provided patch exactly once, and commits to branch `k3-patched-20261107`. Fork sources:
 
-## Source revisions
+| Fork target | Upstream | Pinned base |
+| --- | --- | --- |
+| `yutaka-ishikawa/qemu` | `qemu/qemu` (official GitHub mirror) | `v11.1.3` |
+| `yutaka-ishikawa/opensbi` | `spacemit-com/opensbi` | `ad6091fd16c4d4a445168f6a479e1b8aadb4931c` |
+| `yutaka-ishikawa/keystone` | `keystone-enclave/keystone` | `b8c2385355b2afb5b94a4e5dc503936f1502b972` |
 
-- QEMU: `v11.1.3`
-- SpacemiT OpenSBI: `ad6091fd16c4d4a445168f6a479e1b8aadb4931c`
-- Keystone: `b8c2385355b2afb5b94a4e5dc503936f1502b972`
+After all three pushes, navigate to **Actions > K3 fork build validation > Run workflow**. GitHub Actions checks patched QEMU compilation and the Jupiter2 machine, Keystone SM compilation and K3 OpenSBI firmware link. Linux runtime testing needs a compatible kernel and rootfs and is **not** part of this workflow.
 
-The build creates diagnostic artifacts if all stages succeed, but firmware link success alone does **not** establish enclave operation, PMP/IOPMP safety, or hardware compatibility. Do not flash an unvalidated firmware image to the Milk-V Jupiter 2.
+**Do not flash diagnostic firmware to real hardware** without independent platform safety review. 
