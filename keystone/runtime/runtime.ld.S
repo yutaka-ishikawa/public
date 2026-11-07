@@ -1,13 +1,14 @@
 #include "mm/vm_defs.h"
 
 OUTPUT_ARCH( "riscv" )
+ENTRY(_start)
 
 SECTIONS
 {
   . = 0xffffffffc0000000;
   PROVIDE(rt_base = .);
   .text : {
-    *(.text._start)
+    KEEP(*(.text._start))
     *(.text.encl_trap_handler)
     *(.text)
   }
@@ -26,4 +27,9 @@ SECTIONS
   }
 
   _end = .;
+
+  /* The loader enters RUNTIME_VA_START, not the ELF entry field. Some
+   * toolchains place orphan build-id notes before .text at this address. */
+  /DISCARD/ : { *(.note.gnu.build-id) }
+  ASSERT(_start == rt_base, "Eyrie entry must equal RUNTIME_VA_START")
 }

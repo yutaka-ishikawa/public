@@ -146,6 +146,12 @@ run-keystone-hello
 
 For a custom `--build-dir` or `--hostfs`, adjust the shared package paths. A fresh `build-install-keystone.sh` image includes the rebuilt packages automatically. No kernel or rootfs rebuild is needed for this package update. The entry regression tests execute the actual raw loader prefix at a relocated address under QEMU user mode and stop before privileged loader code; they do not replace a full guest enclave test.
 
+### Illegal instruction at the Eyrie virtual entry
+
+An observed `mepc=0xffffffffc0000000`, `mcause=2`, `mtval=4` was accompanied by the words `00000004 00000014 00000003 00554e47` at the entry. These are a GNU build-id note header, not runtime instructions. The loader enters a fixed virtual address; an orphan `.note.gnu.build-id` placed there by the linker made it execute metadata instead of `_start`.
+
+The runtime now explicitly places its dedicated `_start` section first, discards the build-id note, declares the ELF entry, and asserts that `_start` equals the fixed runtime base. Update the SDK and copy both rebuilt example packages into the guest using the commands above. This change does not require rebuilding OpenSBI or replacing the rootfs. The runtime entry tests link with build-id generation enabled and inspect the executable PT_LOAD bytes of both example ELFs; complete enclave execution still requires a guest test.
+
 ### Locate a CREATE/RUN hang before changing SM behavior
 
 An RCU stall is Linux's later report that a CPU stopped making progress; it does not identify the timer as the cause of a stuck `run-keystone-hello`. Enable opt-in firmware progress markers to locate the last completed stage:

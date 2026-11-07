@@ -85,6 +85,8 @@ jobs:
         run: bash scripts/build-install-keystone.sh --only sdk --jobs 2
       - name: Execute relocated enclave loader entry and reject unsupported GOT
         run: python3 scripts/tests/test-keystone-loader-entry.py
+      - name: Verify Eyrie entry layout with build-id generation
+        run: python3 scripts/tests/test-keystone-runtime-entry.py
       - name: Build and exercise static guest module loader
         run: |
           set -euo pipefail

@@ -107,6 +107,8 @@
   addi sp, sp, ENCL_CONTEXT_SIZE
 .endm
 
+.section .text._start,"ax",@progbits
+.global _start
 _start:
   /* set up runtime stack */
   la sp, kernel_stack_end
@@ -128,6 +130,7 @@ _start:
   li a0, 0 // passed as rtld_fini to entry point/ __libc_start_main
   sret
 
+.text
 .align 6
 encl_trap_handler:
   .global encl_trap_handler
