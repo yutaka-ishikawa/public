@@ -23,9 +23,10 @@ class RootfsTests(unittest.TestCase):
         qemu.chmod(0o755)
         (self.prefix / "rootfs").mkdir()
 
-    def run_guest(self, *args):
+    def run_guest(self, *args, image="bianbu"):
         return subprocess.run(
-            ["bash", str(ROOT / "run-k3.sh"), "--prefix", str(self.prefix), *args],
+            ["bash", str(ROOT / "run-k3.sh"), "--prefix", str(self.prefix),
+             *(["--image", image] if image else []), *args],
             text=True, capture_output=True,
         )
 
@@ -34,7 +35,7 @@ class RootfsTests(unittest.TestCase):
         minimal.write_bytes(b"minimal")
         result = self.run_guest()
         self.assertEqual(result.returncode, 3, result.stderr)
-        self.assertIn("Missing Bianbu rootfs", result.stderr)
+        self.assertIn("Missing bianbu rootfs", result.stderr)
         bianbu = self.prefix / "rootfs/bianbu-rootfs.img"
         bianbu.write_bytes(b"bianbu")
         result = self.run_guest()
@@ -47,12 +48,33 @@ class RootfsTests(unittest.TestCase):
     def test_missing_and_empty_images_fail(self):
         result = self.run_guest()
         self.assertEqual(result.returncode, 3)
-        self.assertIn("--only rootfs", result.stderr)
+        self.assertIn("build-install-k3.sh", result.stderr)
         (self.prefix / "rootfs/bianbu-rootfs.img").touch()
         (self.prefix / "rootfs/k3-minimal-rootfs.img").write_bytes(b"minimal")
         result = self.run_guest()
         self.assertEqual(result.returncode, 3)
         self.assertIn("bianbu-rootfs.img", result.stderr)
+
+    def test_keystone_is_default_and_overrides_are_forwarded(self):
+        rootfs = self.prefix / "rootfs/keystone-rootfs.img"
+        rootfs.write_bytes(b"keystone")
+        result = self.run_guest(image=None)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("jupiter2", result.stdout)
+        self.assertIn("fw_dynamic.bin", result.stdout)
+        self.assertIn("virtio-blk-pci,drive=hd0", result.stdout)
+        self.assertIn("keystone-rootfs.img", result.stdout)
+        self.assertIn("init=/bin/bash", result.stdout)
+        custom = self.prefix / "custom Image"
+        custom.write_bytes(b"custom")
+        result = self.run_guest("--kernel", str(custom), "--smp", "2", "--append", "custom args", image="keystone")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(str(custom), result.stdout)
+        self.assertIn("custom args", result.stdout)
+        self.assertIn("-smp\n2\n", result.stdout)
+
+    def test_invalid_profile_is_rejected(self):
+        self.assertEqual(self.run_guest(image="invalid").returncode, 2)
 
     def test_existing_guest_data_is_preserved(self):
         for name in ("bianbu-rootfs.img",):

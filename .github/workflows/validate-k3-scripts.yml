@@ -6,7 +6,13 @@ on:
     paths:
       - 'scripts/build-install-k3.sh'
       - 'scripts/build-rootfs-k3.sh'
+      - 'scripts/build-install-keystone.sh'
+      - 'scripts/build-rootfs-keystone.sh'
+      - 'scripts/install-build-deps.sh'
       - 'scripts/tests/test-rootfs-k3.py'
+      - 'scripts/tests/test-build-rootfs-k3.py'
+      - 'keystone/runtime/sys/entry.S'
+      - 'keystone/sdk/macros.cmake'
       - 'run-k3.sh'
       - 'scripts/run-k3.sh'
       - 'scripts/clean-k3.sh'
@@ -25,11 +31,20 @@ jobs:
           bash -n scripts/clean-k3.sh
           bash -n scripts/build-install-k3.sh
           bash -n scripts/build-rootfs-k3.sh
+          bash -n scripts/build-install-keystone.sh
+          bash -n scripts/build-rootfs-keystone.sh
+          bash -n scripts/install-build-deps.sh
           bash -n run-k3.sh
           bash -n scripts/run-k3.sh
           bash -n scripts/build-linux-k3.sh
           bash -n scripts/build_keystone_sm.sh
           bash -n scripts/build_opensbi_link.sh
+      - name: Install image test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y e2fsprogs fakeroot
+      - name: Verify image creation and Keystone overlay
+        run: python3 scripts/tests/test-build-rootfs-k3.py
       - name: Verify rootfs selection and data preservation
         run: python3 scripts/tests/test-rootfs-k3.py
       - name: Verify usage and source layout
@@ -37,6 +52,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           bash scripts/build-install-k3.sh --help
+          bash scripts/build-install-keystone.sh --help
           bash scripts/run-k3.sh --help
           bash scripts/clean-k3.sh --help
           for path in qemu/configure opensbi/Makefile keystone/sm/tools/k3_rv64_compile_audit.py linux-k3/Makefile patches/linux-k3-config.patch; do

@@ -1,82 +1,99 @@
 # Milk-V Jupiter 2 / SpacemiT K3 integrated source tree
 
-The `main` branch contains four source directories: `qemu/`, `opensbi/`, `keystone/`, `linux-k3/`. Original patches are kept under `patches/`; `patches/linux-k3-config.patch` records the Linux Kconfig modifications. No Linux patch remains in repository root.
+The `main` branch contains `qemu/`, `opensbi/`, `keystone/`, and `linux-k3/`. Original patches are under `patches/`.
 
-## All-in-one build and installation
+## Host dependencies
 
-Install prerequisites on Ubuntu 24.04 or an equivalent APT-based distribution, from the repository root:
+On Ubuntu 24.04 or an equivalent APT-based distribution:
 
 ```bash
 sudo bash scripts/install-build-deps.sh
 ```
 
-This script runs `apt-get update` and installs the host build tools, QEMU development libraries, **Clang/LLD/LLVM**, the RISC-V GCC/binutils cross toolchain, kernel build dependencies, and `e2fsprogs`/`fakeroot` for rootfs creation. It can be rerun to install missing packages or update installed dependencies. It does not build the project. Run subsequent build commands as your normal user.
+This installs the QEMU/kernel build dependencies, Clang/LLD/LLVM, RISC-V GCC/G++, cross libc development files, CMake, makeself, e2fsprogs and fakeroot. Run the builds below as your normal user. Older mke2fs versions use directory input under fakeroot; no e2fsprogs upgrade is required.
 
-Installed packages: `git`, `build-essential`, `ninja-build`, `meson`, `pkg-config`, `python3`, `python3-venv`, `curl`, `libglib2.0-dev`, `libpixman-1-dev`, `libfdt-dev`, `libslirp-dev`, `zlib1g-dev`, `libcapstone-dev`, `clang`, `lld`, `llvm`, `binutils`, `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves`, `device-tree-compiler`, `e2fsprogs`, `fakeroot`.
+## Separate Bianbu and Keystone installations
 
-Older `mke2fs` builds, including Ubuntu 24.04, use directory input under fakeroot; no e2fsprogs upgrade is required.
+Both versions use the **same K3 QEMU machine, Keystone-capable OpenSBI and K3 Linux sources**. The Keystone version adds the matching Linux driver and basic SDK/Eyrie examples to a separate Bianbu-based rootfs. It does not switch to upstream Keystone's QEMU `virt` platform.
 
-From repository root:
+| Version | Build script | Default installation | Guest filesystem |
+| --- | --- | --- | --- |
+| Bianbu | `scripts/build-install-k3.sh` | `install/bianbu/` | `rootfs/bianbu-rootfs.img` |
+| Keystone | `scripts/build-install-keystone.sh` | `install/keystone/` | `rootfs/keystone-rootfs.img` |
+
+### Bianbu
+
+The existing image builder remains available:
 
 ```bash
 bash scripts/build-install-k3.sh
-# Alternative destination and parallelism:
-bash scripts/build-install-k3.sh --prefix /opt/jupiter2-k3 --jobs 15
-# Individual builds:
-bash scripts/build-install-k3.sh --only qemu
-bash scripts/build-install-k3.sh --only firmware
-bash scripts/build-install-k3.sh --only linux
+# Just create the 8 GiB Bianbu filesystem:
 bash scripts/build-install-k3.sh --only rootfs
-```
-
-Default installation directory is the repository root; generated files are separate from the source files:
-
-```text
-bin/qemu-system-riscv64
-firmware/k3/fw_dynamic.bin
-firmware/k3/fw_dynamic.elf
-firmware/k3/sm-combined.o
-boot/k3/Image
-boot/k3/dtbs/
-boot/k3/config
-lib/modules/
-share/k3/build-manifest.txt
-rootfs/bianbu-rootfs.img
-```
-
-Build intermediates go into `.build-k3/`. QEMU's install target may also install runtime support files in `share/`. A full build first creates `rootfs/bianbu-rootfs.img`: an **8 GiB sparse ext4 filesystem** labeled `bianbu-root`, populated from [Bianbu 26.04 base for RISC-V](https://archive.spacemit.com/bianbu-base/bianbu-base-26.04-base-riscv64.tar.gz). The archive is cached under `.build-k3/rootfs/`. The script uses `mke2fs -d` tarball support when available. Older builds automatically fall back to extraction and directory input in one fakeroot session, preserving numeric owners, permissions, links and device nodes without sudo, loop devices or a mounted staging filesystem. The directory fallback preserves Unix permission bits; extended ACLs and file capabilities are not restored. Install `fakeroot` before building on Ubuntu 24.04 (`sudo apt-get install fakeroot`). Existing nonempty images are retained unchanged, including guest modifications.
-
-To create just the image, or use an archive downloaded separately:
-
-```bash
-bash scripts/build-install-k3.sh --only rootfs
-bash scripts/build-install-k3.sh --only rootfs \
+# A local archive or alternative installation directory:
+bash scripts/build-install-k3.sh --prefix /path/to/bianbu --jobs 5 \
   --rootfs-archive /path/to/bianbu-base-26.04-base-riscv64.tar.gz
-# Optional: --rootfs-sha256 HASH, obtained independently from the distributor
 ```
 
-Downloads use HTTPS with certificate verification. No distributor checksum is bundled; the script prints the downloaded archive's SHA-256, and `--rootfs-sha256` checks an independently supplied value. The download requires network access to `archive.spacemit.com`. A failed download, checksum check or image build does not publish a partial image.
+`--only qemu`, `--only firmware`, and `--only linux` are also available. Build intermediates remain in `.build-k3/`; installed files now go to `install/bianbu/`, rather than the repository root. Previously installed root-level files are left untouched.
 
+`rootfs/bianbu-rootfs.img` is an 8 GiB sparse ext4 filesystem, labeled `bianbu-root`, populated from [Bianbu 26.04 base for RISC-V](https://archive.spacemit.com/bianbu-base/bianbu-base-26.04-base-riscv64.tar.gz). Existing nonempty images are retained. Downloads use HTTPS with certificate verification; `--rootfs-sha256 HASH` checks an independently obtained checksum. No distributor checksum is bundled. Older mke2fs builds use extraction and directory input under fakeroot, retaining numeric owners, permission bits, links and device nodes; extended ACLs and file capabilities are not restored by that fallback.
 
-## QEMU boot (from supplied example)
-
-After a full build, run `bash run-k3.sh` (or `bash scripts/run-k3.sh`) with no arguments to use `rootfs/bianbu-rootfs.img`. Normal boot does **not** pause at reset. The default `init=/bin/bash` opens a diagnostic Bash shell; it does not start the distribution's normal init system. To use a different raw filesystem image, pass `--rootfs`. A partitioned disk image requires a matching `--append` root device:
+### Keystone
 
 ```bash
-bash scripts/run-k3.sh
-# Alternative raw filesystem image:
-bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img
-# GDB: wait on loopback port 1234, boot after gdb 'continue'
-bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img --gdb
-# Interactive QEMU monitor multiplexed with serial (Ctrl-A C)
-bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img --console
-# Optional TCP QEMU monitor on loopback 4444
-bash scripts/run-k3.sh --rootfs /path/to/bianbu-rootfs.img --monitor
-# Use another installation location:
-bash scripts/run-k3.sh --prefix /opt/jupiter2-k3 --rootfs /path/to/bianbu-rootfs.img
+bash scripts/build-install-keystone.sh --jobs 5
 ```
 
-The boot configuration uses `-M jupiter2`, `rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16`, 16 Harts, 2 GiB RAM, virtio block/network, 9P host share, and serial Linux console. Bianbu images are **not** distributed in this repository. The default rootfs is generated locally from the Bianbu base archive. Port forwarding and mount commands may require guest adjustments.
+This builds the SDK, Eyrie and `hello.ke`/`hello-native.ke` using the distro RISC-V toolchain. It reuses K3 QEMU/firmware/kernel artifacts from `install/bianbu/` when present, and builds missing components using the existing K3 scripts. It builds `keystone-driver.ko` against the **same kernel build output** as the installed Image and creates a separate rootfs using `scripts/build-rootfs-keystone.sh`. The Bianbu guest filesystem is not modified.
+
+Keystone build outputs live in `.build-keystone/`; the shared K3 build output remains `.build-k3/`. The rootfs overlay is populated without loop mounts or sudo and every imported file's content is verified. A pre-existing Keystone image is never overwritten: choose a new `--prefix` for a fresh installation. Generated SDK tool aliases and CMake compatibility flags avoid changing the system toolchain.
+
+If Bianbu was previously installed at the repository root, reuse it explicitly:
+
+```bash
+bash scripts/build-install-keystone.sh --base-prefix "$PWD" \
+  --k3-build-dir "$PWD/.build-k3" --jobs 5
+```
+
+Other options include `--prefix DIR`, `--build-dir DIR`, `--rootfs-archive FILE`, `--rootfs-sha256 HASH`. The directory passed to `--k3-build-dir` must contain `linux/` with the matching Image and Module.symvers. For SDK/example development without creating a guest image:
+
+```bash
+bash scripts/build-install-keystone.sh --only sdk
+```
+
+## QEMU startup: Keystone is the default
+
+```bash
+bash run-k3.sh                         # install/keystone/
+bash run-k3.sh --image keystone
+bash run-k3.sh --image bianbu           # install/bianbu/
+# A custom version installation directory:
+bash run-k3.sh --image bianbu --prefix /path/to/bianbu
+# Previously installed root-level Bianbu artifacts:
+bash run-k3.sh --image bianbu --prefix "$PWD"
+```
+
+`--image` selects the default boot-file set; it does not rebuild anything. Both profiles use `jupiter2`, the K3 CPU configuration, 16 harts and 2 GiB RAM. Each selects its own QEMU, `firmware/k3/fw_dynamic.bin`, `boot/k3/Image`, and rootfs from the version installation directory. Individual files can be overridden:
+
+```bash
+bash run-k3.sh --image keystone \
+  --qemu /path/to/qemu-system-riscv64 \
+  --bios /path/to/fw_dynamic.bin \
+  --kernel /path/to/Image \
+  --rootfs /path/to/keystone-rootfs.img
+```
+
+`bash scripts/run-k3.sh` is equivalent. `--gdb` pauses at reset on loopback port 1234; `--console` enables the serial/monitor multiplexer; `--monitor` opens a loopback monitor on port 4444. `--smp`, `--memory`, `--hostfs` and `--append` remain available. The default command line uses `init=/bin/bash`, giving a diagnostic guest shell rather than starting the distribution init system.
+
+In the Keystone guest shell:
+
+```bash
+/usr/bin/run-keystone-hello
+# After the driver has been loaded:
+/usr/share/keystone/examples/hello-native.ke
+```
+
+The helper mounts `/proc` and `/sys`, loads the driver matching `uname -r`, then runs `hello.ke`. Packaging an image or loading a module does not establish that SM enclave creation succeeds. Current K3 code separates basic PMP-only execution from unavailable secure key/entropy services; attestation and sealing must not be inferred to work from a hello test.
 
 ## Verification status
 

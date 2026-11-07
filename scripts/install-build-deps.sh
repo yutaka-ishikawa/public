@@ -16,7 +16,8 @@ if ((EUID != 0)); then
 fi
 command -v apt-get >/dev/null || { echo 'This script requires an APT-based distribution.' >&2; exit 1; }
 packages=(
- git build-essential ninja-build meson pkg-config
+ git build-essential ninja-build meson pkg-config cmake makeself
+ g++-riscv64-linux-gnu libc6-dev-riscv64-cross
  python3 python3-venv curl
  libglib2.0-dev libpixman-1-dev libfdt-dev libslirp-dev
  zlib1g-dev libcapstone-dev

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-PREFIX="$ROOT"
+PREFIX="$ROOT/install/bianbu"
 BUILD_DIR="$ROOT/.build-k3"
 JOBS="${JOBS:-$(nproc)}"
 COMPONENT=all
@@ -11,7 +11,7 @@ usage() {
 cat <<'HELP'
 Usage: bash scripts/build-install-k3.sh [--prefix DIR] [--build-dir DIR] [--jobs N] [--only qemu|firmware|linux|rootfs] [--rootfs-archive FILE] [--rootfs-sha256 HASH]
 Build from repository's patched qemu/, opensbi/, keystone/, and linux-k3/ sources.
-Default installation prefix is repository root. Outputs: bin/, firmware/k3/, boot/k3/, lib/modules/.
+Default installation prefix is install/bianbu. Outputs: bin/, firmware/k3/, boot/k3/, lib/modules/.
 Full builds also create rootfs/bianbu-rootfs.img (8 GiB ext4, Bianbu 26.04).
 Existing images are preserved. --only rootfs prepares just the guest image.
 --rootfs-archive FILE uses a local Bianbu tar.gz instead of downloading it.

@@ -6,3 +6,7 @@
 /lib/modules/
 /share/k3/
 /rootfs/
+
+# Separate Bianbu and Keystone installations and Buildroot outputs
+/install/
+/.build-keystone/

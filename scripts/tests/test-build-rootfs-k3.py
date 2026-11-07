@@ -101,6 +101,33 @@ class BuildRootfsTests(unittest.TestCase):
         self.assertIn("Type: character special", self.debug("stat /dev/null"))
         self.assertFalse(list((self.work / "build").glob("stage.*")))
 
+    def test_keystone_overlay_is_separate_and_preserves_executable_mode(self):
+        overlay = self.work / "overlay"
+        example = overlay / "usr/share/keystone/examples/hello.ke"
+        example.parent.mkdir(parents=True)
+        example.write_bytes(b"example package fixture")
+        example.chmod(0o755)
+        module = overlay / "usr/lib/modules/test/extra/keystone-driver.ko"
+        module.parent.mkdir(parents=True)
+        module.write_bytes(b"driver fixture")
+        bianbu = self.work / "bianbu-existing.img"
+        bianbu.write_bytes(b"existing guest modifications")
+        result = subprocess.run(["bash", str(ROOT / "scripts/build-rootfs-keystone.sh"),
+                                 str(self.image), str(self.work / "keystone-build"),
+                                 str(overlay), str(self.archive)], text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.debug("cat /usr/share/keystone/examples/hello.ke"), "example package fixture")
+        self.assertIn("Mode:  0755", self.debug("stat /usr/share/keystone/examples/hello.ke"))
+        self.assertEqual(self.debug("cat /usr/lib/modules/test/extra/keystone-driver.ko"), "driver fixture")
+        self.assertIn("keystone-root", self.debug("stats"))
+        self.assertEqual(bianbu.read_bytes(), b"existing guest modifications")
+        before = self.image.stat().st_mtime_ns
+        result = subprocess.run(["bash", str(ROOT / "scripts/build-rootfs-keystone.sh"),
+                                 str(self.image), str(self.work / "keystone-build"),
+                                 str(overlay), str(self.archive)], text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.image.stat().st_mtime_ns, before)
+
     def test_bad_checksum_never_publishes_image(self):
         result = self.build("0" * 64)
         self.assertNotEqual(result.returncode, 0)
