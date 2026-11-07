@@ -10,6 +10,7 @@
 
 #include <sbi/riscv_asm.h>
 #include <sbi/sbi_bitops.h>
+#include <sbi/sbi_console.h>
 #include <sbi/sbi_domain.h>
 #include <sbi/sbi_hart.h>
 #include <sbi/sbi_hsm.h>
@@ -68,6 +69,23 @@ void __noreturn sbi_system_reset(u32 reset_type, u32 reset_reason)
 	struct sbi_domain *dom = sbi_domain_thishart_ptr();
 	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
 
+#ifdef CONFIG_K3_KEYSTONE_SM
+	/* Fixed-online Keystone harts must not pass through HSM STOP, even
+	 * during reset: a concurrent PMP broadcast may still need their ACKs.
+	 * The reset device terminates/resets the whole machine directly. */
+	if (dom->system_reset_allowed) {
+		const struct sbi_system_reset_device *dev =
+			sbi_system_reset_get_device(reset_type, reset_reason);
+		if (dev)
+			dev->system_reset(reset_type, reset_reason);
+	}
+
+	/* A missing/returning reset device cannot justify entering sbi_exit:
+	 * HSM is still STARTED, not STOP_PENDING. Never resume the caller. */
+	(void)scratch;
+	sbi_printf("Keystone system reset failed: no completed platform reset\n");
+	sbi_hart_hang();
+#else
 	/* Send HALT IPI to every hart other than the current hart */
 	sbi_ipi_send_halt(0, -1UL);
 
@@ -84,6 +102,7 @@ void __noreturn sbi_system_reset(u32 reset_type, u32 reset_reason)
 
 	/* If platform specific reset did not work then do sbi_exit() */
 	sbi_exit(scratch);
+#endif
 }
 
 static const struct sbi_system_suspend_device *suspend_dev = NULL;

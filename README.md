@@ -77,6 +77,9 @@ shutdown -h now                       # sync, remount root read-only, power off
 
 The shutdown helper supports only immediate shutdown (`now` or `0`), and cancels if the root filesystem cannot be remounted read-only. This behavior is intended for the default diagnostic `init=/bin/bash` boot. QEMU exposes the repository by default; choose another host directory with `bash scripts/run-k3.sh --hostfs /path/to/share`.
 
+If shutdown stops at `sbi_hsm_exit: ERR: The hart is in invalid state [0]`, update the firmware as described in [Keystone system reset fix](doc/keystone-system-reset.md). This fixes the fixed-online HSM/reset mismatch and enables QEMU syscon poweroff/reboot; it does not require rebuilding the guest image.
+
+
 If an existing image lacks the helper files or `insmod`, update it without rebuilding. On the host, from the repository root:
 
 ```bash

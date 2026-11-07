@@ -550,7 +550,7 @@ $(build_dir)/%.dep: $(src_dir)/%.carray $(KCONFIG_AUTOHEADER)
 	$(call compile_gen_dep,$@,.c,$< $(KCONFIG_AUTOHEADER))
 	$(call compile_gen_dep,$@,.o,$(@:.dep=.c))
 
-$(build_dir)/%.carray.c: $(src_dir)/%.carray $(src_dir)/scripts/carray.sh
+$(build_dir)/%.carray.c: $(src_dir)/%.carray $(src_dir)/scripts/carray.sh $(KCONFIG_AUTOHEADER)
 	$(call compile_carray,$@,$<)
 
 $(build_dir)/%.dep: $(src_dir)/%.c $(KCONFIG_AUTOHEADER)
@@ -578,7 +578,7 @@ $(platform_build_dir)/%.dep: $(platform_src_dir)/%.carray $(KCONFIG_AUTOHEADER)
 	$(call compile_gen_dep,$@,.c,$< $(KCONFIG_AUTOHEADER))
 	$(call compile_gen_dep,$@,.o,$(@:.dep=.c))
 
-$(platform_build_dir)/%.carray.c: $(platform_src_dir)/%.carray $(src_dir)/scripts/carray.sh
+$(platform_build_dir)/%.carray.c: $(platform_src_dir)/%.carray $(src_dir)/scripts/carray.sh $(KCONFIG_AUTOHEADER)
 	$(call compile_carray,$@,$<)
 
 $(platform_build_dir)/%.dep: $(platform_src_dir)/%.c $(KCONFIG_AUTOHEADER)
@@ -622,7 +622,7 @@ $(platform_build_dir)/%.dep: $(src_dir)/%.carray $(KCONFIG_AUTOHEADER)
 	$(call compile_gen_dep,$@,.c,$< $(KCONFIG_AUTOHEADER))
 	$(call compile_gen_dep,$@,.o,$(@:.dep=.c))
 
-$(platform_build_dir)/%.carray.c: $(src_dir)/%.carray $(src_dir)/scripts/carray.sh
+$(platform_build_dir)/%.carray.c: $(src_dir)/%.carray $(src_dir)/scripts/carray.sh $(KCONFIG_AUTOHEADER)
 	$(call compile_carray,$@,$<)
 
 $(platform_build_dir)/%.dep: $(src_dir)/%.c $(KCONFIG_AUTOHEADER)

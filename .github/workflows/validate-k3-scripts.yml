@@ -12,6 +12,9 @@ on:
       - 'scripts/install-keystone-guest-tools.sh'
       - 'scripts/guest/**'
       - 'scripts/tests/test-keystone-guest-tools.py'
+      - 'scripts/tests/test-keystone-system-reset.py'
+      - 'opensbi/lib/sbi/sbi_system.c'
+      - 'opensbi/platform/generic/configs/k3_keystone_audit_defconfig'
       - 'scripts/tests/test-keystone-sm-port.py'
       - 'scripts/tests/test-keystone-timer-policy.py'
       - 'keystone/sm/src/**'
@@ -66,6 +69,7 @@ jobs:
           sudo apt-get install -y e2fsprogs fakeroot libfdt-dev
       - name: Verify Keystone SM trap and timer contracts
         run: |
+          python3 scripts/tests/test-keystone-system-reset.py
           python3 scripts/tests/test-keystone-sm-port.py
           python3 scripts/tests/test-keystone-timer-policy.py
       - name: Verify image creation and Keystone overlay
