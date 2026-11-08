@@ -121,3 +121,24 @@ unavailable版の初期化は確認済みです。これは3002/3003をenclave�
 この作業環境には完全な対応Linux/rootfsがないため、上記ゲストsuiteの統合実行は未確認です。
 hardware provider、実機boot/DMA隔離、部分的capability故障注入、全hart競合の網羅、
 別root/SM imageへの自動rotation試験は未実装または未検証です。
+
+## __stack_chk_guard / __stack_chk_failでlinkできない場合
+
+[KSB-025](../../doc/keystone-bug-report.md) の修正を取得してください。
+Linux用verifier archiveをnative eappへ流用していたbuild設定を修正し、
+`libkeystone-verifier-eapp.a` を別に生成するようにしました。
+最終linkだけに-fno-stack-protectorを付けても、旧archive内の参照は消えません。
+ホスト用verifier/runnerの保護設定は維持します。
+
+```bash
+git pull
+make build JOBS=4
+# QEMUを正常終了してから
+make install
+python3 verifications/crypto/run-qemu.py --all
+```
+
+最小更新なら `make crypto` と `make install-crypto install-eyrie` です。
+ただし前回buildが検証moduleを作る前に停止した場合は、対応kernelで
+`make -C verifications guest kernel-modules` も完了させてください。
+eappの機械語が変わるので、crypto metadataも再生成・installする必要があります。

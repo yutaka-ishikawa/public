@@ -321,3 +321,10 @@ KSB-002/003/004/006/023をコード修正、KSB-005はK3の新経路のみ修正
 Linux/enclaveからの新SBI試験と新コードの全suite回帰は未実行です。
 [実装記録](keystone-sbi-3002-3003-implementation.md) と
 [専用verification手順](../verifications/crypto/README.md) を参照してください。
+
+## Native eapp用verifier archiveの分離
+
+今回追加したcrypto verificationがhosted verifier archiveを流用していたため、
+ユーザー環境で__stack_chk_guard/__stack_chk_failが未解決になりました（KSB-025）。
+C暗号部分だけのnative archiveを別buildし、ホスト側の保護設定を維持するよう修正しました。
+強制stack protector設定でのbuildとarchive/ELF参照検査を確認しています。

@@ -95,3 +95,11 @@ buildはstageへ出力、installは配置だけを行う。`make crypto` / `make
 ユーザーから受領した過去の全PASSを新しいコードのPASSへ流用しない。
 実機provider、authenticated boot、DMA/IOPMP、SM image/root rotation自動試験や
 片側capability故障注入は完了対象として報告しない。
+
+## Native verifierのlink修正（KSB-025）
+
+ユーザーのGCC 13環境で、hosted libkeystone-verifier.a内のstack protector参照が
+nostdlib eappで未解決になりました。最終linkのフラグだけではarchive内の設定を変更できません。
+C暗号部分をnative設定で別archive libkeystone-verifier-eapp.aへbuildするよう修正しました。
+hosted verifierとLinux runnerは元のarchiveと保護設定を維持します。
+強制stack protector設定でbuildと未解決参照検査を確認しました。ゲスト統合PASSではありません。

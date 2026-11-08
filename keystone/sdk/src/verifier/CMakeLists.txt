@@ -26,3 +26,19 @@ add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES} ${COMMON_SOURCE_FILES})
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${out_dir}/lib)
 install(DIRECTORY ${INCLUDE_DIRS} DESTINATION ${out_dir}/include)
+
+# Native enclaves have no hosted libc stack-canary runtime. Compile the pure C
+# primitives separately; preserve normal flags for Linux verifier/runner code.
+set(EAPP_CRYPTO_SOURCES
+    ed25519/fe.c
+    ed25519/ge.c
+    ed25519/keypair.c
+    ed25519/sc.c
+    ed25519/sign.c
+    ed25519/verify.c
+    ${CMAKE_SOURCE_DIR}/src/common/sha3.c
+)
+add_library(keystone-verifier-eapp STATIC ${EAPP_CRYPTO_SOURCES})
+target_compile_options(keystone-verifier-eapp PRIVATE
+    -ffreestanding -fno-builtin -fno-stack-protector)
+install(TARGETS keystone-verifier-eapp DESTINATION ${out_dir}/lib)

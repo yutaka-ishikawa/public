@@ -50,6 +50,7 @@
 | KSB-022 | config変更でcarrayドライバ表が更新されない | OpenSBI build統合 | 修正済 |
 | KSB-023 | report未使用data末尾の未初期化 | SM取込コード | 修正済 |
 | KSB-024 | HKDF最大出力で8 bit loop counterがwrap | SM暗号ライブラリ | 修正済 |
+| KSB-025 | hosted verifierをnative eappへリンクしてcanary参照が未解決 | 今回のverification統合 | 修正済 |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
 KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
@@ -310,6 +311,28 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
 - 修正：loop変数をintとし、HMACへ渡す1 byte counterを別にした。
 - 検証：全SMのcompile/link、通常の32/128-byte KDFを使う実QEMU初期化を確認。
   最大16320-byte KDFの実行試験は未実施。3003のAPIは任意のKDF出力長を公開しない。
+
+## KSB-025: hosted verifier archiveのnative eappへの流用
+
+- 登録日：2026-11-09。状態：修正済（本更新）。
+- 対象：SDK verifier CMakeとverifications/crypto/Makefile。今回の3002/3003統合で導入。
+- 症状：ユーザー環境のGCC 13でcrypto eappのlink時に__stack_chk_guard/__stack_chk_failが未解決。
+- 原因：通常Linux用libkeystone-verifier.aをnostdlib eappへリンクした。
+  archive内のverify/sha3/ge/fe等にはstack protector参照があり、最終linkの
+  -fno-stack-protectorではコンパイル済みobjectの参照を除去できない。
+- 根拠：ユーザー添付linkログ。上流Keystoneの不具合とは帰属しない。
+- 対応：hosted verifierは維持し、C暗号primitiveだけをnative設定で別archiveへbuildする。
+  強制stack-protector設定で再buildし、archiveの参照と最終nostdlib linkを検査する。
+- 修正：libkeystone-verifier-eapp.aを新設し、C暗号primitiveを
+  -ffreestanding/-fno-builtin/-fno-stack-protectorでコンパイル。
+  crypto eappだけが新archiveを使い、Linux runnerは従来archiveを使う。
+  SDK build時に新archiveのcanary/C++ runtime依存を検査する。
+- 検証：強制-fstack-protector-strong設定でもSDKとcryptoパッケージをbuildできた。
+  hosted archiveにcanary参照が残ること、新archiveと最終eappには残らないことを確認。
+  同じeappを旧archiveへlinkすると未解決が再現し、新archiveへ差し替えると成功する対照確認も実施。
+  QEMU試験より前のbuild問題であり、実行時PASSとは別に扱う。
+- 再実行：make cryptoでSDK・eapp・既知値を更新し、install-crypto/install-eyrie後にQEMU試験。
+  本件の修正commitはこの報告項目とbuild設定の変更履歴を参照。
 
 ## 要確認事項・対象外との境界
 

@@ -6,7 +6,7 @@ RUNTIME_DIR := $(CURDIR)/build/runtime-src
 RUNTIME_SRC := $(shell find $(ROOT)/keystone/runtime -type f ! -path "*/.git/*")
 CROSS_COMPILE ?= riscv64-linux-gnu-
 OUT := build
-EAPP_LIBS := $(SDK_DIR)/lib/libkeystone-eapp.a $(SDK_DIR)/lib/libkeystone-verifier.a
+EAPP_LIBS := $(SDK_DIR)/lib/libkeystone-eapp.a $(SDK_DIR)/lib/libkeystone-verifier-eapp.a
 HOST_LIBS := $(SDK_DIR)/lib/libkeystone-host.a $(SDK_DIR)/lib/libkeystone-edge.a $(SDK_DIR)/lib/libkeystone-verifier.a
 .PHONY: guest clean
 # Both FIDs run in the same runtime/eapp measurement.
