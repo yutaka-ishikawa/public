@@ -13,3 +13,8 @@
 TOR読み戻し検証の修正後のファームウェアビルド記録は
 `tor-firmware-build.log`、対応する入力・生成物ハッシュは`tor-firmware.json`。
 これも実ゲストの256 MiB試験のPASSを示すものではない。
+
+EyrieのCMA非整列対応後のパッケージビルド・整合性検査・入口検査は
+`eyrie-map-package-build.log`、`eyrie-map-package-check.log`、`eyrie-entry-check.log`。
+入力と生成物のハッシュは`eyrie-map-build.json`。入口検査を含め、これらも
+修正版の実OpenSBI/SM統合試験がPASSしたことを示す記録ではない。

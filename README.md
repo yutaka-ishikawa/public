@@ -249,3 +249,6 @@ Keystoneの大容量EPM（256 MiB）には、修正版ドライバと起動時�
 
 For module/network commands, updating an existing image and `depmod` usage, see
 [Keystone guest commands](doc/keystone-guest-commands.md).
+
+Eyrie・raw loader・SDK・ドライバ・SMの変更履歴と現在の確認範囲は
+[Keystone側の累積修正記録](doc/keystone-cumulative-changes.md)を参照。

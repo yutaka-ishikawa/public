@@ -117,3 +117,6 @@ CIもビルド検査のみで、システムゲストの試験結果を代用し
 
 256 MiB版のCREATEが100003で失敗した場合は
 [TOR PMPの原因とファームウェア修正](../doc/keystone-tor-pmp.md)を参照。
+
+Eyrieの物理マップ修正を含む更新履歴と実ゲストでの到達段階は
+[累積修正記録](../doc/keystone-cumulative-changes.md)を参照。

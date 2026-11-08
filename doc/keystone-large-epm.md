@@ -85,3 +85,7 @@ EDGE_VERIFY_PACKAGE=build/guest-256/edgecall.ke bash run-guest.sh --data-only
 CMA確保後に `PMP global set unavailable or incomplete` / 100003となる場合、
 旧SMのTOR読み戻し検証が未対応。[原因と修正](keystone-tor-pmp.md)に従い
 ファームウェアを更新してQEMUを起動し直す。
+
+TOR修正後に `mm/mm.c` の整列assertで終了する場合は、
+[Eyrie側のCMA対応と累積修正](keystone-cumulative-changes.md)を参照し、
+Eyrie/loaderを再ビルドして試験パッケージを更新する。

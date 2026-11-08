@@ -256,64 +256,79 @@ __map_with_reserved_page_table_32(uintptr_t dram_base,
 
 }
 
-void
-__map_with_reserved_page_table_64(uintptr_t dram_base,
-                               uintptr_t dram_size,
-                               uintptr_t ptr,
-                               pte* l2_pt,
-                               pte* l3_pt)
+/* Map one Sv39 L1 window. CMA only guarantees page alignment, so a
+ * physical range need not be aligned for 2 MiB leaves. Use those leaves
+ * only where both addresses and the remaining size permit them.
+ */
+void __map_with_reserved_page_table_64(uintptr_t dram_base, uintptr_t dram_size,
+				       uintptr_t ptr, pte *l2_pt, pte *l3_pt)
 {
-  uintptr_t offset = 0;
-  uintptr_t leaf_level = 3;
-  pte* leaf_pt = l3_pt;
-  /* use megapage if l3_pt is null */
-  if (!l3_pt) {
-    leaf_level = 2;
-    leaf_pt = l2_pt;
-  }
-  assert(dram_size <= RISCV_GET_LVL_PGSIZE(leaf_level - 1));
-  assert(IS_ALIGNED(dram_base, RISCV_GET_LVL_PGSIZE_BITS(leaf_level)));
-  assert(IS_ALIGNED(ptr, RISCV_GET_LVL_PGSIZE_BITS(leaf_level - 1)));
+    uintptr_t offset;
+    uintptr_t physical;
+    uintptr_t virtual_addr;
+    uintptr_t table_pa;
+    uintptr_t page;
+    size_t i;
+    pte *table;
+    bool reserved_used;
+    int permissions;
 
-  /* set root page table entry */
-  root_page_table[RISCV_GET_PT_INDEX(ptr, 1)] =
-    ptd_create(ppn(kernel_va_to_pa(l2_pt)));
+    assert(l2_pt && l3_pt);
+    assert(dram_size && dram_size <= RISCV_GET_LVL_PGSIZE(1));
+    assert(dram_base + dram_size >= dram_base);
+    assert(IS_ALIGNED(dram_base, RISCV_PAGE_BITS));
+    assert(IS_ALIGNED(dram_size, RISCV_PAGE_BITS));
+    assert(IS_ALIGNED(ptr, RISCV_GET_LVL_PGSIZE_BITS(1)));
 
-  /* set L2 if it's not leaf */
-  if (leaf_pt != l2_pt) {
-    l2_pt[RISCV_GET_PT_INDEX(ptr, 2)] =
-      ptd_create(ppn(kernel_va_to_pa(l3_pt)));
-  }
-
-  /* set leaf level */
-  for (offset = 0;
-       offset < dram_size;
-       offset += RISCV_GET_LVL_PGSIZE(leaf_level))
-  {
-    leaf_pt[RISCV_GET_PT_INDEX(ptr + offset, leaf_level)] =
-      pte_create(ppn(dram_base + offset),
-          PTE_R | PTE_W | PTE_X | PTE_A | PTE_D);
-  }
-
+    root_page_table[RISCV_GET_PT_INDEX(ptr, 1)] =
+	ptd_create(ppn(kernel_va_to_pa(l2_pt)));
+    permissions = PTE_R | PTE_W | PTE_X | PTE_A | PTE_D;
+    offset = 0;
+    reserved_used = false;
+    while (offset < dram_size) {
+	physical = dram_base + offset;
+	virtual_addr = ptr + offset;
+	if (IS_ALIGNED(physical, RISCV_GET_LVL_PGSIZE_BITS(2)) &&
+	    IS_ALIGNED(virtual_addr, RISCV_GET_LVL_PGSIZE_BITS(2)) &&
+	    dram_size - offset >= RISCV_GET_LVL_PGSIZE(2)) {
+	    l2_pt[RISCV_GET_PT_INDEX(virtual_addr, 2)] =
+		pte_create(ppn(physical), permissions);
+	    offset += RISCV_GET_LVL_PGSIZE(2);
+	    continue;
+	}
+	if (!reserved_used) {
+	    table = l3_pt;
+	    table_pa = kernel_va_to_pa(table);
+	    reserved_used = true;
+	} else {
+	    page = spa_get_zero();
+	    assert(page);
+	    table = (pte *)page;
+	    /* Allocated pages use the load/direct map, whereas static
+	     * reserved tables belong to the runtime's kernel mapping.
+	     * Both conversions are identity mappings in the raw loader.
+	     */
+	    table_pa = __pa(page);
+	}
+	l2_pt[RISCV_GET_PT_INDEX(virtual_addr, 2)] = ptd_create(ppn(table_pa));
+	for (i = 0; i < BIT(RISCV_PT_INDEX_BITS) && offset < dram_size; i++) {
+	    table[RISCV_GET_PT_INDEX(ptr + offset, 3)] =
+		pte_create(ppn(dram_base + offset), permissions);
+	    offset += RISCV_PAGE_SIZE;
+	}
+    }
 }
 
-void
-map_with_reserved_page_table(uintptr_t dram_base,
-                             uintptr_t dram_size,
-                             uintptr_t ptr,
-                             pte* l2_pt,
-                             pte* l3_pt)
+void map_with_reserved_page_table(uintptr_t dram_base, uintptr_t dram_size,
+				  uintptr_t ptr, pte *l2_pt, pte *l3_pt)
 {
-  #if __riscv_xlen == 64
-  if (dram_size > RISCV_GET_LVL_PGSIZE(2))
-    __map_with_reserved_page_table_64(dram_base, dram_size, ptr, l2_pt, 0);
-  else
+#if __riscv_xlen == 64
     __map_with_reserved_page_table_64(dram_base, dram_size, ptr, l2_pt, l3_pt);
-  #elif __riscv_xlen == 32
-  if (dram_size > RISCV_GET_LVL_PGSIZE(1))
-    __map_with_reserved_page_table_32(dram_base, dram_size, ptr, 0);
-  else
-    __map_with_reserved_page_table_32(dram_base, dram_size, ptr, l2_pt);
-  #endif
+#elif __riscv_xlen == 32
+    if (dram_size > RISCV_GET_LVL_PGSIZE(1)) {
+	__map_with_reserved_page_table_32(dram_base, dram_size, ptr, 0);
+    } else {
+	__map_with_reserved_page_table_32(dram_base, dram_size, ptr, l2_pt);
+    }
+#endif
 }
-
