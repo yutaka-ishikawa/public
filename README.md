@@ -76,12 +76,19 @@ bash scripts/build-install-keystone.sh --only sdk
 New Keystone images contain `/usr/bin/run-keystone-hello`, `/usr/bin/mount-hostshare`, `shutdown`, `poweroff` and `reboot`, plus `insmod`, `rmmod`, `lsmod`, `modprobe`, `depmod`, `modinfo`, `ip`, `ping`, `ping6`, `ifconfig`, `route`, `netstat` and `hostname`. Static BusyBox provides the module-loading, mount and power-control operations without requiring kmod or a running init daemon. From the guest:
 
 ```bash
+mkdir -p /proc /sys
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
 mount-hostshare                       # mount hostshare at /mnt/host
 mount-hostshare /mnt/project          # alternative guest mount point
 /usr/bin/run-keystone-hello
 shutdown -h now                       # sync, remount root read-only, power off
 # Alternatively: poweroff, reboot, or shutdown -r now
 ```
+
+With the default `init=/bin/bash`, mount `/proc` and `/sys` after each boot.
+If `lsmod` reports that `/proc/modules` is missing, mount procfs as above;
+see [guest command troubleshooting](doc/keystone-guest-commands.md).
 
 The shutdown helper supports only immediate shutdown (`now` or `0`), and cancels if the root filesystem cannot be remounted read-only. This behavior is intended for the default diagnostic `init=/bin/bash` boot. QEMU exposes the repository by default; choose another host directory with `bash scripts/run-k3.sh --hostfs /path/to/share`.
 

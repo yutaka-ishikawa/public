@@ -41,8 +41,9 @@ mount-hostshare
 bash /mnt/host/scripts/install-keystone-guest-tools.sh
 hash -r
 
-mkdir -p /proc
+mkdir -p /proc /sys
 mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
 
 command -v insmod rmmod lsmod modprobe depmod modinfo ip
 lsmod
@@ -60,6 +61,38 @@ mkdir -p /mnt/host
 mount -t 9p -o trans=virtio,version=9p2000.L hostshare /mnt/host
 bash /mnt/host/scripts/install-keystone-guest-tools.sh
 ```
+
+## lsmodで `/proc/modules` が見つからない場合
+
+```text
+lsmod: can't open '/proc/modules': No such file or directory
+```
+
+既定の `init=/bin/bash` は通常のinitによる初期化を通らないため、
+procfsやsysfsが未マウントのままになる。コマンドを追加した後でも、
+`lsmod` が読む `/proc/modules` はprocfsをマウントするまで現れない。
+QEMUゲスト内で次を実行する。
+
+```bash
+mkdir -p /proc /sys
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
+lsmod
+ip addr
+```
+
+`mountpoint` がなければ、同梱BusyBoxを使う。
+
+```bash
+BB=/usr/libexec/keystone/busybox
+$BB mkdir -p /proc /sys
+$BB mountpoint -q /proc || $BB mount -t proc proc /proc
+$BB mountpoint -q /sys || $BB mount -t sysfs sysfs /sys
+```
+
+マウント状態はゲストの再起動後には引き継がれない。
+`init=/bin/bash` で起動するたびに、コマンドを使う前に確認する。
+`/proc/modules` はカーネルが提供する仮想ファイルなので、手動で作成しない。
 
 ## 新規イメージ
 
