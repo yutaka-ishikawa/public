@@ -1,0 +1,9 @@
+make -f guest/guest.mk kernel-object
+make[1]: Entering directory '/workspace/public/verifications/edgecall'
+make -C /workspace/public/linux-k3 O=/workspace/public/.build-k3/linux ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- M=/workspace/public/verifications/edgecall/kernel edgecall_pmp_probe.o
+make[2]: Entering directory '/workspace/public/linux-k3'
+make[3]: Entering directory '/workspace/public/verifications/edgecall/kernel'
+  CC [M]  edgecall_pmp_probe.o
+make[3]: Leaving directory '/workspace/public/verifications/edgecall/kernel'
+make[2]: Leaving directory '/workspace/public/linux-k3'
+make[1]: Leaving directory '/workspace/public/verifications/edgecall'

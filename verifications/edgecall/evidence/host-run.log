@@ -1,0 +1,16 @@
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/test
+PASS EDGE 01 11 sizes: binary data with NUL bytes, copied arguments, transformed return, canaries
+PASS EDGE 02 maximum shared payload fits exactly
+PASS EDGE 03 one byte too many rejected before STOP/host dispatch
+PASS EDGE 04 forged return offset/length and host error do not copy to private output
+PASS EDGE 05 short return copies only available bytes; long return is capped at caller length
+PASS EDGE 06 OCALL without a return buffer
+PASS EDGE 07 failed STOP does not dispatch or report success
+PASS EDGE 08 SDK refuses private pointers as shared argument/return ranges
+PASS EDGE 09 host argument decoder rejects end/overflow/cross-end/private-address offsets
+PASS EDGE 10 shared pointer/offset round trip
+SUMMARY EDGE DATA: 10 groups passed (SBI/user-copy mocked; not a PMP access test)
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/sm-test
+PASS 01 OCALL STOP returns EDGE_CALL_HOST and revokes EPM before host context
+PASS 02 RESUME preserves host-written shared return data and restores enclave mapping
+SUMMARY EDGE SM: 2 groups passed, 0 findings (PMP API mocked)

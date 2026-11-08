@@ -98,6 +98,10 @@ jobs:
           make -C samples/helloworld -j2
           make -C samples/helloworld check
           qemu-riscv64 samples/helloworld/build/hello | grep -Fx 'hello, world!'
+      - name: Build edgecall guest verification package
+        run: |
+          make -C verifications/edgecall guest
+          bash verifications/edgecall/build/guest/edgecall.ke --check
       - name: Build and exercise static guest module loader
         run: |
           set -euo pipefail

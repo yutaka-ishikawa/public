@@ -1,4 +1,4 @@
-# Keystone SBI 2001–2004のソース検証
+# Keystone SBI・edgecallの検証
 
 初回検証：`c6598a7bc`。修正後の検証対象：`cc885e6ad`。検証日：2026-11-08（日本時間）。
 
@@ -101,3 +101,9 @@ Cソースは、承認されたK&Rスタイル（1段4文字、タブ幅8。1段
 整形後の48グループの再検証記録は[style-check/](style-check/README.md)を参照してください。過去の`baseline/`と`after-fix/`は整形前の証拠として保持しています。
 
 `for`・`if`・`else`は本文が1文でも必ず波括弧で囲みます。他のループ本文も同様とし、本文は改行して記載します。`.clang-format`の`InsertBraces: true`にも反映しています。
+
+## edgecallとprivateメモリの専用試験
+
+[edgecall/](edgecall/README.md)に、データ往復・offset/長さ・privateポインタ拒否の10グループと、OCALLのSTOP/RESUMEの2グループを追加しました。`run-all.sh`は既存48グループと合わせてホスト試験60グループを実行します。
+
+同ディレクトリには、KeystoneゲストでEPMの物理ページへのLinux側の参照が拒否されることを確認するアプリ・runner・カーネルprobeもあります。こちらはクロスビルド／オブジェクトコンパイルまで確認済みで、実PMPの試験実行は未確認です。ホスト試験のPASSと区別してください。
