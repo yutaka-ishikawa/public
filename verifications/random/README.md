@@ -100,3 +100,26 @@ python3 verifications/random/run-qemu-matrix.py
 
 暗号乱数の統計的品質、実機TRNG/PRNGのseed・reseed、安全な所有権、DMA隔離は検証対象外です。
 詳細と実施済み／未実施の区別は [実装記録](../../doc/keystone-sbi-3001-implementation.md) を参照してください。
+
+## FAIL時の確認
+
+matrixは各FAILについて理由、ログパス、最後の20行を表示します。
+ゲストの終了コード、SMの方式/status、AT_RANDOM完了も判定します。
+ログ判定はLF/CRLF/CRCRLFに対応します。rootプロンプトはroot@形式とbash-/sh-形式に対応します。
+
+全ケースを繰り返す前に、counterだけで確認してください。
+
+```bash
+python3 verifications/random/run-qemu-matrix.py --case counter
+cat verifications/random/results/manifest.json
+tail -n 80 verifications/random/results/counter.log
+```
+
+起動・マウント・ドライバ・eapp・結果判定のどこで失敗したかは、これらの実ログで切り分けます。
+FAILだけではSMの実装不具合とは断定できません。
+`Timed out ... guest root prompt` はプロンプト検出まで、
+`... guest test after command submission` はコマンド投入後のタイムアウトです。
+`guest setup/test exited ...` は共有マウントまたは試験コマンドの非0終了、
+`SM reports ... expected ...` はfirmware方式/statusの不一致を表します。
+出力判定の単体チェックは `python3 scripts/tests/test-rng-matrix-output.py` で実行できますが、
+これはログパーサーだけの試験であり、QEMU/SM統合試験の代用にはしません。

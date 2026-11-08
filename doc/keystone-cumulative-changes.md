@@ -261,3 +261,12 @@ QEMU、OpenSBI/SM、Eyrie、Keystone、verifications等の個別ターゲット�
 最終PREFIXが作られないことを確認し、一時PREFIXへのfirmware・SDK/runtime・sampleの
 installも確認しました。全体のLinux/ゲスト統合実行とは区別しています。
 仕様と依存関係は [make操作方法](make-build-install.md) を参照してください。
+
+## 乱数matrixのFAIL診断表示
+
+FAILだけを表示していた処理を変更し、失敗理由・ログパス・serialログ末尾を端末に
+表示するようにしました。ゲストの終了コード、SMのbackend/status、AT_RANDOM完了を
+結果に記録し、タイムアウトはプロンプト待ちとコマンド投入後を区別します。
+CRCRLFとbash-/sh-形式のプロンプトにも対応しました。
+ログ判定の5件の単体試験は確認済みです。報告された全FAILの停止原因は、
+実際のゲストログを確認するまで未特定です。
