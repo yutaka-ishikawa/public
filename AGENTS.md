@@ -1,0 +1,22 @@
+# Coding style
+
+The user has requested K&R style for all future C/C++ work in this repository.
+Follow the root `.clang-format` and the approved verification example:
+
+- Use tabs for indentation, with a tab width of 8.
+- Put the opening brace of a function definition on the next line.
+- Put opening braces for `if`, `else`, `for`, `while`, and `switch` on the same line.
+- Put each statement on its own line and use spaces around operators and after commas.
+- Declare local variables at the beginning of their block. When moving a declaration,
+  keep any initializer with side effects at its original execution point.
+- Separate logical test cases with blank lines and wrap long lines near 80 columns.
+- Keep modern function prototypes (for example, `int main(void)`); K&R refers to
+  layout, not obsolete argument declarations.
+
+Apply this style to newly written or modified C/C++ code. Do not reformat unrelated
+vendor code as part of another task. Python, shell, and Makefiles should retain their
+language-appropriate indentation; embedded C definitions should follow the C style.
+
+Verification tests extract production function bodies verbatim. Do not reformat those
+extracted bodies or overwrite historical evidence under `baseline/` or `after-fix/`.
+Run `bash verifications/run-all.sh` after changing verification C sources.

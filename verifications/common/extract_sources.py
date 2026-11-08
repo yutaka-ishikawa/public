@@ -54,7 +54,11 @@ typedef uint32_t u32;
 typedef uint64_t u64;
 #define __packed __attribute__((packed))
 ''')
-    (out / 'include/sbi/riscv_atomic.h').write_text('#pragma once\ntypedef struct { long value; } atomic_t;\n')
+    (out / 'include/sbi/riscv_atomic.h').write_text('''#pragma once
+typedef struct {
+\tlong value;
+} atomic_t;
+''')
     selected = {
         'keystone/sm/src/thread.c': [
             'void swap_prev_smode_csrs(', 'void swap_prev_mstatus(', 'void swap_prev_state(',
