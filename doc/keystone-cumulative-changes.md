@@ -288,3 +288,12 @@ Keystone SMの既存HKDF-SHA3-512とSHA3版Ed25519系署名を再利用する計
 OpenSBIのdispatcher・trap対応アクセス・domain判定等を優先して活用し、
 鍵provider、EPM/PA検査、Eyrieの入出力処理、実QEMUでの専用verificationを段階実装します。
 この変更では3003の有効化は行っていません。[詳細計画](keystone-sbi-3003-plan.md) を参照。
+
+## SBI 3002/3003の同時実装計画
+
+3002の既存Keystone report生成・SDK verifierとOpenSBIの再利用可能性を調査し、
+共通の鍵provider、SM measurement、device→SM証明書、EPM/PAコピー、workspace、
+runtime/verifier入力検査を先行する計画を作成しました。
+3002のVA/PA不整合、検査前の入力コピー、report 1352 bytesに対する2048 bytesコピーも
+修正対象に含めています。3003の個別計画も共通先行の順序へ更新しました。
+[同時実装計画](keystone-sbi-3002-3003-joint-plan.md) を参照。この変更は文書のみです。

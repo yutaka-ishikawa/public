@@ -269,3 +269,6 @@ SBI 3001の3方式（Zkr/Jupiter2 WTM/counter）のビルドとQEMU検証は
 
 SBI 3003（sealing key取得）の調査結果、OpenSBIの再利用判断、実装順とQEMU検証計画は
 [実装計画](doc/keystone-sbi-3003-plan.md) を参照してください。
+
+SBI 3002/3003の同時実装と共通基盤の先行順は
+[共通実装計画](doc/keystone-sbi-3002-3003-joint-plan.md) を参照してください。

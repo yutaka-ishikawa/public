@@ -4,6 +4,15 @@
 Keystone SMと、同梱OpenSBI 1.6系K3改造版です。ユーザーから既存verificationsの
 全PASSを受領した状態を出発点とします。本変更では計画を作成し、3003の有効化は行いません。
 
+## 同時実装に伴う更新
+
+3002との同時実装は [共通先行計画](keystone-sbi-3002-3003-joint-plan.md) に従う。
+本書の機能要件・ABIは維持し、着手順は共通計画C0～C4を先行してからA1/S1へ進む。
+qemu-devでは固定するのはdevice rootで、SM identityはSM measurementに結び付ける。
+同じimageの再起動では再現し、SM image変更時にはsealing keyも変わるpolicyとする。
+本書の「3003だけを有効化」は当初の単独実装方針であり、現在は両SBIを独立capabilityで
+管理しつつ、共通profileで同時に実装・検証する方針へ更新する。
+
 ## 1. 結論と優先順位
 
 1. 同梱OpenSBIにsealingサービスがあるか確認したが、該当するAPI・実装は見つからなかった。
@@ -13,7 +22,7 @@ Keystone SMと、同梱OpenSBI 1.6系K3改造版です。ユーザーから既�
    再利用する。Keystone固有のenclave識別・measurement・EPM所有権はSMで管理する。
 4. 最初に明示的なQEMU開発用鍵providerで実経路を完成させる。
    Jupiter2の実機秘密鍵providerは同じインターフェイスの別実装として接続する。
-5. 3003だけを有効化し、3002（attestation）は自動で有効にしない。
+5. 3002/3003は共通基盤の後に接続し、準備状態は個別capabilityで判定する。
 
 これは同梱ツリーを調査した結果であり、将来版・他ベンダーのOpenSBI全体に
 同種実装が存在しないという主張ではない。実装着手時に利用するツリーで再検索する。
@@ -124,13 +133,13 @@ Keystoneの既存copy_to_sm/copy_from_smも、名前やコメントだけでEPM�
 | provider | 初期実装方針 |
 | --- | --- |
 | unavailable（既定） | 3003はNOT_IMPLEMENTED。CREATE/RUNと3001は動作を継続 |
-| qemu-dev（明示指定） | build領域に保存する開発用seedから、既存Keystone keypair生成で整合する秘密鍵・公開鍵を生成。再buildで無断再生成しない |
+| qemu-dev（明示指定） | 保存された開発device rootとSM measurementからSM identityを導出し、既存keypair生成で鍵を作る。device rootを無断再生成しない |
 | hardware（将来の接続先） | 実機の認証済み起動・保護された鍵供給からSM identityを得る。同じAPIを実装。未接続時は失敗を返す |
 
 提案APIはchecked initialize/get状態であり、具体的な関数名は実装時に既存provider APIへ寄せる。
 公開鍵は公開可能、秘密鍵はSM内だけで保持する。providerの失敗は3003で返す。
 
-QEMU開発用seedはgitに含めず、権限0600・buildディレクトリ配下で管理する。
+QEMU開発用device root seedはgitに含めず、権限0600・buildディレクトリ配下で管理する。
 既存のdev-embedded-key経路を再利用・整備する。組み込んだ開発秘密鍵はfirmwareから取り出せるため、
 `provider=qemu-dev` と表示し、Jupiter2実機用の秘密鍵・attestationの証明とは扱わない。
 DTや9p共有へ秘密鍵を載せる渡し方は採用しない。
@@ -142,8 +151,8 @@ DTや9p共有へ秘密鍵を載せる渡し方は採用しない。
 
 3003の署名は「そのSM公開鍵で検証できる」という意味であり、device endorsementや
 SM証明書チェーンを3002なしに提供するものではない。
-SM更新時に同じsealing identityを保つか変更するかはprovider policyとして明示し、
-初期のqemu-dev固定identityを実機のmeasurement連動policyへ暗黙に引き継がない。
+同時実装ではSM measurement変更時にSM identityとsealing keyを変更するpolicyとする。
+同じdevice root・同じSM imageの再起動では再現する。実機providerの移行・鍵rotationも明示する。
 
 ## 5. SM/Eyrieで行う移植作業
 
@@ -214,7 +223,7 @@ root `make opensbi`、`make eyrie`、`make verifications` と対応installター
 | Linux hostから3003 | PROHIBITED、a1=0 |
 | qemu-dev known-answer | 独立計算のHKDF-SHA3-512期待値と一致、Keystone互換署名のverify成功 |
 | 署名またはkeyを1 bit変更 | verify失敗 |
-| 同じqemu-dev鍵でQEMU再起動 | 同じmeasurement/identifierなら同じkey |
+| 同じdevice root・SM imageでQEMU再起動 | 同じenclave measurement/identifierなら同じkey |
 | 開発鍵を明示変更して再build | keyが変化、旧データが同じkeyで復元できるとは扱わない |
 | providerなし/初期化失敗 | NOT_IMPLEMENTEDまたは明示error。ゼロ鍵やcounter由来鍵で成功させない |
 | 連続要求・複数hart | 作業領域混線なし、boundedな復帰、既存timing/lifecycleと共存 |
