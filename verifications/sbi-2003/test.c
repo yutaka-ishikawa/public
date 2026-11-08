@@ -31,8 +31,9 @@ int main(void) {
   reset_fixture();id=create_fixture();local_pmp_fail=fail;csrs[satp]=0x9876;csrs[mideleg]=0xffff;
   r=invoke(2003,id);normal_return(r,SBI_ERR_SM_ENCLAVE_PMP_FAILURE);verify_host_unchanged(id);
   assert(r.ra==0xabc && r.sp==0x123400 && r.mstatus==0x1880);
+  r=invoke(2003,id);assert(!r.a0 && enclaves[id].state==RUNNING && enclave_context);
  }
- CASE("EPM/UTM permission failure rolls back PMP, state, thread and untouched host context");
+ CASE("EPM/UTM failure restores host/PMP/state and permits a successful RUN retry");
  reset_fixture();id=create_fixture();r=invoke(2003,(1UL<<32)|id);normal_return(r,SBI_ERR_SM_ENCLAVE_INVALID_ID);
  assert(enclaves[id].state==FRESH && vector_calls==0);CASE("64-bit EID cannot alias a valid enclave");
  reset_fixture();id=create_fixture();osm_fail_call=1;csrs[satp]=0x9876;csrs[mideleg]=0xffff;

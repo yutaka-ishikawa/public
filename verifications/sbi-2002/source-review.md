@@ -1,68 +1,68 @@
-# SBI 2002 DESTROY：ソースコード検証
+# SBI 2002 DESTROY：修正後のソース検証
 
-対象：Keystone extension `0x08424b45`、function ID 2002。模擬境界は[共通README](../README.md)を参照。
+修正対象：`cc885e6ad`。修正前の記録は[旧検証](source-review-before-fix.md)、実行結果は[results.md](results.md)。
 
-## 呼び出し経路とABI
+## 修正した動作
+
+### D1：破棄を受け付ける状態を限定
+
+`state <= STOPPED`を廃止し、FRESHまたはSTOPPEDだけを受け付ける。状態確認とDESTROYINGへの変更は同じ`encl_lock`内で行う。
+
+DESTROYING、ALLOCATED、RUNNING、INVALIDは拒否する。先行する破棄処理がlockを離してplatform callbackや消去を行っている間も、後続の破棄要求はDESTROYINGを見て拒否される。
+
+単一スレッドのテストではplatform callbackから同じEIDのDESTROYを再入させ、内側の呼び出しが拒否され、callbackと資源解放が1回だけになることを確認した。実hart同士の同時実行テストではない。
+
+### D2：全private領域のPMP解除成功後に解放
+
+破棄は次の段階に分けた。
 
 ```text
-SDK Enclave::destroy / driver release
- → __keystone_destroy_enclave
- → driver sbi_sm_destroy_enclave
- → OpenSBI dispatcher / Keystone adapter
- → SM sbi_sm_destroy_enclave
- → destroy_enclave
+FRESH/STOPPEDをlock内でDESTROYINGに変更
+ → platform cleanup
+ → 各private領域を消去してglobal PMP解除を確認
+ → 全private領域のPMP descriptorを解放
+ → UTM descriptorを解放
+ → metadataを初期化してEIDをINVALIDへ
 ```
 
-入力a0はSMのEID。通常の復帰はa0=status、a1=0、mepc=呼び出し位置+4。
+`pmp_unset_global()`が失敗した場合は`PMP_FAILURE=100003`を返す。PMP descriptor、UTM、EIDを解放せず、状態はDESTROYINGのまま保持する。後の領域の解除が失敗した場合も、先に解除できた領域のdescriptorをまだ解放していない。
 
-## 実装の確認
+descriptor解放自体の戻り値も確認し、失敗なら成功を返さずEIDを保持する。解放段階で途中失敗した場合、先に解放済みのdescriptorは戻さないが、全private領域の消去・global解除は既に成功している。metadataはDESTROYINGのままで、再入・RUN/RESUMEへ使われない。
 
-1. adapterはSM準備状態と、enclave内からホスト機能を呼んでいないことを検査する。
-2. SM helperが`unsigned long`のEIDを`unsigned int`へ変換する。
-3. `ENCLAVE_EXISTS(eid) && state <= STOPPED`をlock内で評価し、受け付けた場合は`DESTROYING`へ変更する。
-4. lock解放後、platform destroy hookを実行する。
-5. INVALIDとUTM以外の領域を0クリアし、global PMP解除・PMP領域解放を行う。
-6. UTMは共有メモリなのでここでは0クリアせず、PMP領域を解放する。
-7. params、SATP、thread数、region typeを初期化してEIDを`INVALID`へ戻す。
+Linux driverの`__keystone_destroy_enclave()`はSBIエラー時にページ解放へ進まないため、エラーの返却はdriver側のメモリ再利用抑止にもつながる。このdriver経路はソースで確認したもので、今回のホストテストには組み込んでいない。
 
-## 確認できた正常・異常系
+保持した資源を自動的に再試行するAPIは今回追加していない。通常の破棄で領域が残る変更ではなく、PMP状態を確認できなかった異常時の扱いである。解消にはファームウェアの再初期化を伴う再起動等が必要となる。実PMP同期側では失敗によりSM全体が未準備となる場合もある。
 
-- FRESHとSTOPPEDからのDESTROY。
-- EPM内容の実ゼロクリア、UTM内容の保持、metadata・模擬PMP領域の解放。
-- RUNNING、未確保・範囲外EID、二重DESTROYの拒否。
-- enclave context、SM未準備の拒否。
-- CREATE→DESTROYの100回繰り返しで模擬資源が残らず再利用できる。
+### D3：型変換前にEID全体を検査
 
-## 再現した要修正・仕様確認事項
+`sbi_sm_destroy_enclave(unsigned long eid)`で`eid >= ENCL_MAX`なら`INVALID_ID=100001`を返し、その後で32ビット型へ変換する。
 
-### D1：DESTROYINGを再び受け付ける状態条件
+`(1UL << 32) | valid_eid`、`UINT_MAX`、`ULONG_MAX`は拒否され、有効なenclaveを別名で破棄できない。範囲内だが未確保のEIDは、本体の状態検査でNOT_DESTROYABLEとなる。
 
-enumは`DESTROYING=0, ALLOCATED=1, FRESH=2, STOPPED=3, RUNNING=4`。`state <= STOPPED`はFRESH/STOPPEDだけでなくDESTROYINGとALLOCATEDも受け付ける。
+## 再検証した15グループ
 
-テストではCREATE後のstateをそれぞれDESTROYING、ALLOCATEDにして、実関数が成功を返すことを確認した。特にDESTROYINGについて、既存処理はlockを解放してから消去・解放するため、別hartが同じEIDを再度破棄処理へ進める余地がある。
+| 範囲 | 確認内容 |
+| --- | --- |
+| 正常破棄 | FRESH、STOPPED、EPM消去、UTM保持、metadata初期化。 |
+| 状態 | RUNNING、DESTROYING、ALLOCATED、二重破棄の拒否。 |
+| EID | 境界以上、32ビット超過、最大値を拒否。 |
+| 呼び出し条件 | enclave contextとSM未準備を拒否。 |
+| 再利用 | CREATE/DESTROYを100回繰り返し、模擬領域を再利用。 |
+| 解除失敗 | 最初または後続private領域で失敗しても全descriptorとEIDを保持。 |
+| 再入 | callback中の同一EID破棄を拒否し、二重解放しない。 |
+| 解放失敗 | private/UTM descriptorの解放エラーを成功扱いしない。 |
 
-**状態条件の不備は再現済みだが、実hartでの同時実行・二重解放そのものは未実行。** 今後は受け付ける状態を列挙し、破棄処理の単一実行を試験する必要がある。
+5件の初回指摘のうち2002に対応する3件は、修正後の期待動作を確認するPASSへ変更した。
 
-### D2：PMP解除失敗を無視して成功する
+## 境界と残る範囲
 
-実`pmp_unset_global()`は、無効領域、HSM遷移競合、IPI同期失敗等でエラーを返し得る。DESTROYはその戻り値を検査せず、領域解放とEID解放へ進み、成功を返す。
+状態管理・消去・エラー処理の実Cコードを実行しているが、PMP API、IPI、lockの同時性、platform実処理は模擬している。実機・QEMUでの全hart解除や、物理メモリの再利用までは今回確認していない。
 
-mockで解除APIが失敗を返すようにし、成功復帰・模擬領域の解放を再現した。実際のPMP状態がどう残るかは、このテストでは判断できない。
+CREATE失敗時のrollback等、2001の[残る確認事項](../sbi-2001/source-review.md)は別対象であり、本修正で解消したとはしていない。
 
-### D3：64ビットEIDの上位ビットが捨てられる
+## 対象ソース
 
-`(1UL << 32) | valid_eid`を入力すると、helper内の32ビット変換により`valid_eid`のDESTROYとして実行される。上位ビットを含む無効IDとしては拒否されない。
-
-通常のdriverが発行するEIDは小さいため、通常利用で必ず問題が出るという意味ではない。SBI入力を32ビットEIDとして厳密に検査するか、上位ビットを無視する仕様とするかの明確化が必要。
-
-11グループ中、上記3グループは`OBSERVED`として記録し、正常性のPASSには数えない。
-
-## 参照ソース
-
-- [SM helperの型変換](../../keystone/sm/src/sm-sbi.c)
-- [state enum](../../keystone/sm/src/enclave.h)
 - [DESTROY本体](../../keystone/sm/src/enclave.c)
-- [PMP戻り値](../../keystone/sm/src/pmp.c)
-- [OpenSBI adapter](../../keystone/sm/src/sm-sbi-opensbi.c)
-- [driverの破棄経路](../../keystone/linux-keystone-driver/keystone-ioctl.c)
-- [テストプログラム](test.c)
+- [SM helperのEID検査](../../keystone/sm/src/sm-sbi.c)
+- [driverのエラー時処理](../../keystone/linux-keystone-driver/keystone-ioctl.c)
+- [テスト](test.c)

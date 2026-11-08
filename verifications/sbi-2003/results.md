@@ -1,27 +1,29 @@
-# SBI 2003：検証結果
+# SBI 2003：修正後の検証結果
 
-検証日：2026-11-08（日本時間）。製品コードの基準版：`c6598a7bc`。
+検証日：2026-11-08（日本時間）。製品コードの修正版：`cc885e6ad`。
 
-## 結果
+## 再検証結果
 
-- 実行したグループ：8
-- 正常・異常系の期待を確認した`PASS`：6
-- 要修正・仕様確認動作を再現した`OBSERVED`：2
-- assert失敗・sanitizer検出：なし
-- 実行スクリプト：exit 0（記録された観測との一致を示すもので、未修正事項の解消ではありません）
+- 実行：16グループ、すべてPASS。
+- 未修正動作の再現を表すOBSERVED：0。
+- assert失敗、AddressSanitizer／UndefinedBehaviorSanitizer検出：なし。
+- 実行スクリプト：exit 0。
 
-初回RUNの状態・起動引数・Cレベルのcontext交換・PC補正を確認しました。ただしlocal PMPエラー未反映とEID上位ビットの切り捨てを再現しており、RUN全体を正常と判定していません。
+初回の2件を修正し、共通切替経路も含む16グループすべてがPASSしました。PMP設定失敗時のrollbackと再試行、復旧不能時の停止、RESUME/STOP/EXITの回帰を確認しました。
 
-[ソース検証の詳細](source-review.md)に各条件と残る課題を記載しています。
+詳細は[ソース検証](source-review.md)と[修正全体の説明](../../doc/keystone-sbi-2002-2003-fixes.md)を参照してください。
 
-## 保存した証拠
+## 修正後の証拠
 
-- [実行ログ](baseline/run.log)
-- [実行環境とコマンド](baseline/environment.txt)
-- [入力ソースのSHA-256と実関数一覧](baseline/source-manifest.json)
-- [テストコード](test.c)
-- [Makefile](Makefile)
-- [実行スクリプト](run-tests.sh)
+- [実行ログ](after-fix/run.log)
+- [実行環境・コマンド](after-fix/environment.txt)
+- [製品ソースのSHA-256と実関数一覧](after-fix/source-manifest.json)
+- [使用したテストコード等のSHA-256](after-fix/test-manifest.json)
+- [テストコード](test.c)、[Makefile](Makefile)、[実行スクリプト](run-tests.sh)
+
+## 初回の記録
+
+初回（製品コード`c6598a7bc`）の[ログ](baseline/run.log)、[環境](baseline/environment.txt)、[ソースハッシュ](baseline/source-manifest.json)は`baseline/`に保持しています。初回のOBSERVEDは過去の不具合再現であり、現在の結果ではありません。
 
 ## 再実行
 
@@ -29,8 +31,8 @@
 bash verifications/sbi-2003/run-tests.sh
 ```
 
-現在のソースから関数を再抽出し、`build/run.log`と`build/source-manifest.json`を作ります。`baseline/`は掲載時点の記録なので自動で上書きしません。
+現在のソースから再生成して`build/run.log`等に出力します。保存した`baseline/`と`after-fix/`は自動では上書きしません。
 
-## 未実行の範囲
+## 範囲
 
-QEMUゲスト・実機でのS-mode ecall/mret、Linux driverとの統合、実PMP CSR、IPI、MPRVコピー、同時実行は今回のテストに含まれていません。共通の模擬境界は[README](../README.md)を参照してください。
+実C関数を64ビットLinuxホスト上で実行しました。PMP・CSR・IPI等は模擬境界です。QEMUゲストや実機でのCPU命令としてのecall/mret、Linux driverとの統合、全hartの実動作は未検証です。[共通README](../README.md)に境界を記載しています。
