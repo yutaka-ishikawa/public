@@ -1,5 +1,14 @@
 # Keystone SBI・edgecallの検証
 
+## この試験の意味と限界
+
+主な検査対象はKeystone/OpenSBIの実装です。テストが製品ソースの実C関数を呼び、入力に対する状態変化や戻り値を検査します。verifications自身のコードだけを検査するものではありません。
+
+ただし、PMP設定API・CSR・IPI等は代替処理です。PASSは「用意した条件でCロジックが期待どおり動いた」という結果で、実CPU上の移植全体の正しさを示しません。期待値や代替処理の誤りをこの試験だけで排除することもできません。**同じ単体試験をゲスト内で実行しても、実PMP等の統合試験には変わりません。**
+
+[検証範囲の説明とQEMUゲストでの実行手順](../doc/keystone-verification-methods.md)を参照してください。
+
+
 初回検証：`c6598a7bc`。修正後の検証対象：`cc885e6ad`。検証日：2026-11-08（日本時間）。
 
 | function ID | 対象 | ソース検証 | 実行結果 |
@@ -27,6 +36,7 @@ bash verifications/sbi-2001/run-tests.sh
 bash verifications/sbi-2002/run-tests.sh
 bash verifications/sbi-2003/run-tests.sh
 bash verifications/sbi-2004/run-tests.sh
+bash verifications/sbi-2005/run-tests.sh
 ```
 
 Makefileからの実行も可能です。

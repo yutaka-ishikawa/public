@@ -156,3 +156,5 @@ rmmod edgecall_pmp_probe
 ```
 
 Keystone driver自体をアンロードする必要はない。
+
+ホスト単体試験とゲスト統合試験の違い、ファームウェア更新からの一連の手順は[検証方法](../../doc/keystone-verification-methods.md)にもまとめています。

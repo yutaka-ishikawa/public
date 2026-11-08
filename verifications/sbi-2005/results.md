@@ -31,3 +31,7 @@ bash verifications/run-all.sh
 - [テストコード](test.c)
 
 再実行すると現在のソースから関数を抽出して`build/`へ出力する。保存した`baseline/`は上書きしない。
+
+## QEMUゲストで確認する場合
+
+上記17グループはCロジックの単体試験であり、実ecall/mretの試験ではありません。[QEMUゲストでの実行手順](../../doc/keystone-verification-methods.md)に従い、edgecallのguest runnerで実際のSTOP/RESUME経路を確認してください。このguest試験は17グループ全部や実タイマー中断の網羅ではありません。

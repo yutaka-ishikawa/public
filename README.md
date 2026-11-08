@@ -10,6 +10,8 @@ The `main` branch contains `qemu/`, `opensbi/`, `keystone/`, and `linux-k3/`. Or
 
 SBI 2001–2004のソース検証・テスト・結果は、[verifications/README.md](verifications/README.md)にまとめています。
 
+検証の意味と実際のQEMUゲストでのテスト方法は、[検証範囲とQEMU実行手順](doc/keystone-verification-methods.md)を参照してください。
+
 ## Host dependencies
 
 On Ubuntu 24.04 or an equivalent APT-based distribution:
