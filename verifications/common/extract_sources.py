@@ -64,8 +64,10 @@ typedef uint64_t u64;
             'static unsigned long encl_alloc_eid(', 'static unsigned long encl_free_eid(',
             'int get_enclave_region_index(', 'unsigned long copy_enclave_create_args(',
             'static int is_create_args_valid(', 'unsigned long create_enclave(',
-            'unsigned long destroy_enclave(', 'static inline void context_switch_to_enclave(',
-            'unsigned long run_enclave('],
+            'unsigned long destroy_enclave(', 'static inline unsigned long context_switch_to_enclave(',
+            'static inline void context_switch_to_host(',
+            'unsigned long run_enclave(', 'unsigned long resume_enclave(',
+            'unsigned long stop_enclave(', 'unsigned long exit_enclave('],
         'keystone/sm/src/sm-sbi.c': [
             'unsigned long sbi_sm_create_enclave(', 'unsigned long sbi_sm_destroy_enclave(',
             'unsigned long sbi_sm_run_enclave(', 'unsigned long sbi_sm_resume_enclave(',

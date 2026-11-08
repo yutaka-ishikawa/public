@@ -37,6 +37,8 @@ unsigned long sbi_sm_create_enclave(unsigned long* eid, uintptr_t create_args)
 
 unsigned long sbi_sm_destroy_enclave(unsigned long eid)
 {
+  if (eid >= ENCL_MAX)
+    return SBI_ERR_SM_ENCLAVE_INVALID_ID;
   unsigned long ret;
   ret = destroy_enclave((unsigned int)eid);
   return ret;
@@ -44,6 +46,8 @@ unsigned long sbi_sm_destroy_enclave(unsigned long eid)
 
 unsigned long sbi_sm_run_enclave(struct sbi_trap_regs *regs, unsigned long eid)
 {
+  if (eid >= ENCL_MAX)
+    return SBI_ERR_SM_ENCLAVE_INVALID_ID;
   unsigned long rc = run_enclave(regs, (unsigned int) eid);
   if (rc == SBI_ERR_SM_ENCLAVE_SUCCESS) {
     regs->a0 = rc;
@@ -55,6 +59,8 @@ unsigned long sbi_sm_run_enclave(struct sbi_trap_regs *regs, unsigned long eid)
 
 unsigned long sbi_sm_resume_enclave(struct sbi_trap_regs *regs, unsigned long eid)
 {
+  if (eid >= ENCL_MAX)
+    return SBI_ERR_SM_ENCLAVE_INVALID_ID;
   unsigned long ret;
   ret = resume_enclave(regs, (unsigned int) eid);
   if (ret == SBI_ERR_SM_ENCLAVE_SUCCESS) {

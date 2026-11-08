@@ -45,6 +45,7 @@ class SmPortTests(unittest.TestCase):
 #include "sm_err.h"
 #define SM_TRACE_VALUES(...) ((void)0)
 #define KEYSTONE_K3_PMP_N_REG 16
+#define ENCL_MAX 16
 #define STOP_TIMER_INTERRUPT 0
 #define SBI_ENOTSUPP (-2)
 #define sbi_printf(...) ((void)0)

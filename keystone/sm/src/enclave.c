@@ -45,10 +45,22 @@ extern byte dev_public_key[PUBLIC_KEY_SIZE];
  *
  * Expects that eid has already been valided, and it is OK to run this enclave
 */
-static inline void context_switch_to_enclave(struct sbi_trap_regs* regs,
+static inline unsigned long context_switch_to_enclave(struct sbi_trap_regs* regs,
                                                 enclave_id eid,
                                                 int load_parameters){
   SM_TRACE_STAGE("RUN switch begin");
+  /* Prepare permissions before changing the host trap frame or CSRs. A
+   * failed local update can then return to that unchanged host context. */
+  if (k3_keystone_pmp_assert_active())
+    sbi_hart_hang();
+  if (osm_pmp_set(PMP_NO_PERM))
+    goto restore_host_pmp;
+  for (int memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
+    if (enclaves[eid].regions[memid].type != REGION_INVALID &&
+        pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_ALL_PERM))
+      goto restore_host_pmp;
+  }
+
   /* save host context */
   swap_prev_state(&enclaves[eid].threads[0], regs, 1);
   swap_prev_mepc(&enclaves[eid].threads[0], regs, regs->mepc);
@@ -82,23 +94,23 @@ static inline void context_switch_to_enclave(struct sbi_trap_regs* regs,
 
   switch_vector_enclave();
 
-  /* K3 ADR-001: local PMP writes must never imply INACTIVE protection.
-   * A concurrent HSM admission is not allowed to race this switch. */
-  if (k3_keystone_pmp_assert_active())
-    sbi_hart_hang();
-  // set PMP
-  osm_pmp_set(PMP_NO_PERM);
-  int memid;
-  for(memid=0; memid < ENCLAVE_REGIONS_MAX; memid++) {
-    if(enclaves[eid].regions[memid].type != REGION_INVALID) {
-      pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_ALL_PERM);
-    }
-  }
-
   // Setup any platform specific defenses
   platform_switch_to_enclave(&(enclaves[eid]));
   cpu_enter_enclave_context(eid);
   SM_TRACE_STAGE("RUN switch end");
+  return SBI_ERR_SM_ENCLAVE_SUCCESS;
+
+restore_host_pmp:
+  /* Revoke every enclave mapping, including ones already applied, before
+   * restoring the OS mapping. Unknown permissions must never reach S-mode. */
+  for (int memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
+    if (enclaves[eid].regions[memid].type != REGION_INVALID &&
+        pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_NO_PERM))
+      sbi_hart_hang();
+  }
+  if (osm_pmp_set(PMP_ALL_PERM))
+    sbi_hart_hang();
+  return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
 }
 
 static inline void context_switch_to_host(struct sbi_trap_regs *regs,
@@ -113,10 +125,12 @@ static inline void context_switch_to_host(struct sbi_trap_regs *regs,
   int memid;
   for(memid=0; memid < ENCLAVE_REGIONS_MAX; memid++) {
     if(enclaves[eid].regions[memid].type != REGION_INVALID) {
-      pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_NO_PERM);
+      if (pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_NO_PERM))
+        sbi_hart_hang();
     }
   }
-  osm_pmp_set(PMP_ALL_PERM);
+  if (osm_pmp_set(PMP_ALL_PERM))
+    sbi_hart_hang();
 
   uintptr_t interrupts = MIP_SSIP | MIP_STIP | MIP_SEIP;
   csr_write(mideleg, interrupts);
@@ -497,15 +511,15 @@ error:
 /*
  * Fully destroys an enclave
  * Deallocates EID, clears epm, etc
- * Fails only if the enclave isn't running.
+ * Only a fully created, non-running enclave may be destroyed.
  */
 unsigned long destroy_enclave(enclave_id eid)
 {
   int destroyable;
 
   spin_lock(&encl_lock);
-  destroyable = (ENCLAVE_EXISTS(eid)
-                 && enclaves[eid].state <= STOPPED);
+  destroyable = (ENCLAVE_EXISTS(eid) &&
+                (enclaves[eid].state == FRESH || enclaves[eid].state == STOPPED));
   /* update the enclave state first so that
    * no SM can run the enclave any longer */
   if(destroyable)
@@ -536,15 +550,27 @@ unsigned long destroy_enclave(enclave_id eid)
     size = (size_t) pmp_region_get_size(rid);
     sbi_memset((void*) base, 0, size);
 
-    //1.b free pmp region
-    pmp_unset_global(rid);
-    pmp_region_free_atomic(rid);
+    //1.b globally unset the region; free descriptors only after all succeed
+    if (pmp_unset_global(rid))
+      /* Keep DESTROYING and all allocations quarantined. In particular,
+       * the driver must not receive success and recycle these pages. */
+      return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
+  }
+
+  /* All private regions are cleared and globally unset. Only now release
+   * their descriptors. A failed unset above must not free even earlier ones. */
+  for (i = 0; i < ENCLAVE_REGIONS_MAX; i++) {
+    if (enclaves[eid].regions[i].type == REGION_INVALID ||
+        enclaves[eid].regions[i].type == REGION_UTM)
+      continue;
+    if (pmp_region_free_atomic(enclaves[eid].regions[i].pmp_rid))
+      return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
   }
 
   // 2. free pmp region for UTM
   rid = get_enclave_region_index(eid, REGION_UTM);
-  if(rid != -1)
-    pmp_region_free_atomic(enclaves[eid].regions[rid].pmp_rid);
+  if(rid != -1 && pmp_region_free_atomic(enclaves[eid].regions[rid].pmp_rid))
+    return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
 
   enclaves[eid].encl_satp = 0;
   enclaves[eid].n_thread = 0;
@@ -577,9 +603,14 @@ unsigned long run_enclave(struct sbi_trap_regs *regs, enclave_id eid)
   }
 
   // Enclave is OK to run, context switch to it
-  context_switch_to_enclave(regs, eid, 1);
-
-  return SBI_ERR_SM_ENCLAVE_SUCCESS;
+  unsigned long ret = context_switch_to_enclave(regs, eid, 1);
+  if (ret) {
+    spin_lock(&encl_lock);
+    enclaves[eid].state = FRESH;
+    enclaves[eid].n_thread--;
+    spin_unlock(&encl_lock);
+  }
+  return ret;
 }
 
 unsigned long exit_enclave(struct sbi_trap_regs *regs, enclave_id eid)
@@ -634,6 +665,7 @@ unsigned long stop_enclave(struct sbi_trap_regs *regs, uint64_t request, enclave
 unsigned long resume_enclave(struct sbi_trap_regs *regs, enclave_id eid)
 {
   int resumable;
+  enclave_state previous_state;
 
   spin_lock(&encl_lock);
   resumable = (ENCLAVE_EXISTS(eid)
@@ -644,15 +676,21 @@ unsigned long resume_enclave(struct sbi_trap_regs *regs, enclave_id eid)
     spin_unlock(&encl_lock);
     return SBI_ERR_SM_ENCLAVE_NOT_RESUMABLE;
   } else {
+    previous_state = enclaves[eid].state;
     enclaves[eid].n_thread++;
     enclaves[eid].state = RUNNING;
   }
   spin_unlock(&encl_lock);
 
   // Enclave is OK to resume, context switch to it
-  context_switch_to_enclave(regs, eid, 0);
-
-  return SBI_ERR_SM_ENCLAVE_SUCCESS;
+  unsigned long ret = context_switch_to_enclave(regs, eid, 0);
+  if (ret) {
+    spin_lock(&encl_lock);
+    enclaves[eid].state = previous_state;
+    enclaves[eid].n_thread--;
+    spin_unlock(&encl_lock);
+  }
+  return ret;
 }
 
 unsigned long attest_enclave(uintptr_t report_ptr, uintptr_t data, uintptr_t size, enclave_id eid)

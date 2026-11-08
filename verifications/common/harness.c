@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <setjmp.h>
 #define __riscv_xlen 64
 #define KEYSTONE_K3_PMP_N_REG 16
 #define TARGET_PLATFORM_HEADER "platform/spacemit_k3/platform.h"
@@ -36,10 +37,15 @@ static int ready, enclave_context, context_eid, copy_fail, firmware_fail;
 static int init_calls, fail_init_call, active_regions, global_calls, global_fail;
 static int unset_calls, free_calls, platform_calls, platform_fail, hash_calls, hash_fail;
 static int destroy_calls, vector_calls, guard_fail, local_pmp_calls, local_pmp_fail;
-static int fail_unset, cases, findings;
+static int osm_calls, osm_fail_call, rollback_fail, failed_once, free_fail_call;
+static int nested_destroy, hang_expected, host_vector_calls;
+static unsigned long nested_result;
+static jmp_buf hang_target;
+static int fail_unset, unset_fail_call, cases, findings;
 static int region_used[64];
 static uintptr_t region_base[64];
 static uint64_t region_size[64];
+static int local_permissions[64], os_permissions;
 static char operations[256];
 static size_t op_count;
 static void op(char c) { assert(op_count+1 < sizeof operations); operations[op_count++]=c; operations[op_count]=0; }
@@ -47,6 +53,7 @@ int sm_is_ready(void) { return ready; }
 int cpu_is_enclave_context(void) { return enclave_context; }
 int cpu_get_enclave_id(void) { return context_eid; }
 void cpu_enter_enclave_context(enclave_id id) { enclave_context=1;context_eid=(int)id;op('C'); }
+void cpu_exit_enclave_context(void) { enclave_context=0;op('c'); }
 static int copy_to_sm(void *dest, uintptr_t src, size_t size) {
   if(copy_fail || src != (uintptr_t)&args || size != sizeof args) return 1;
   memcpy(dest,(void*)src,size);return 0;
@@ -60,42 +67,50 @@ int pmp_region_init_atomic(uintptr_t base,uint64_t size,enum pmp_priority pri,re
  return -1;
 }
 int pmp_region_free_atomic(region_id id) {
- assert(id>=0 && id<64 && region_used[id]);region_used[id]=0;active_regions--;free_calls++;op('F');return 0;
+ assert(id>=0 && id<64 && region_used[id]);free_calls++;op('F');if(free_calls==free_fail_call)return -1;
+ region_used[id]=0;active_regions--;return 0;
 }
 int pmp_set_global(region_id id,uint8_t permissions) {
  assert(region_used[id] && permissions==PMP_NO_PERM);global_calls++;op('G');return global_fail;
 }
-int pmp_unset_global(region_id id) { assert(region_used[id]);unset_calls++;op('U');return fail_unset; }
+int pmp_unset_global(region_id id) { assert(region_used[id]);unset_calls++;op('U');return unset_calls==unset_fail_call ? -1 : fail_unset; }
 uintptr_t pmp_region_get_addr(region_id id) { assert(region_used[id]);return region_base[id]; }
 uint64_t pmp_region_get_size(region_id id) { assert(region_used[id]);return region_size[id]; }
 int pmp_set_keystone(region_id id,uint8_t permissions) {
- assert(region_used[id] && permissions==PMP_ALL_PERM);local_pmp_calls++;op('P');return local_pmp_fail;
+ assert(region_used[id]);local_pmp_calls++;op(permissions==PMP_ALL_PERM?'P':'p');
+ if(permissions==PMP_ALL_PERM && local_pmp_calls==local_pmp_fail){failed_once=1;local_permissions[id]=permissions;return -1;}
+ if(permissions==PMP_NO_PERM && rollback_fail)return -1;
+ local_permissions[id]=permissions;return 0;
 }
-int osm_pmp_set(uint8_t perm) { assert(perm==PMP_NO_PERM);op('O');return 0; }
+int osm_pmp_set(uint8_t perm) { osm_calls++;op(perm==PMP_NO_PERM?'O':'o');
+ if(osm_calls==osm_fail_call){os_permissions=perm;return -1;}
+ os_permissions=perm;return 0; }
 static int k3_keystone_pmp_assert_active(void) { return guard_fail; }
-static void sbi_hart_hang(void) { abort(); }
+static void __attribute__((noreturn)) sbi_hart_hang(void) { if(hang_expected)longjmp(hang_target,1);abort(); }
 void platform_init_enclave(struct enclave *e) { (void)e; }
 unsigned long platform_create_enclave(struct enclave *e) {
  assert(e->state==ALLOCATED);platform_calls++;op('B');return platform_fail;
 }
 void platform_destroy_enclave(struct enclave *e) {
  assert(e->state==DESTROYING || e->state==ALLOCATED);destroy_calls++;op('D');
+ if(nested_destroy){nested_destroy=0;nested_result=destroy_enclave(e->eid);}
 }
 unsigned long validate_and_hash_enclave(struct enclave *e) {
  hash_calls++;op('H');memset(e->hash,0x42,sizeof e->hash);return hash_fail;
 }
 void platform_switch_to_enclave(struct enclave *e) { assert(e->state==RUNNING);op('T'); }
 void switch_vector_enclave(void) { vector_calls++;op('V'); }
+void switch_vector_host(void) { host_vector_calls++;op('v'); }
+void platform_switch_from_enclave(struct enclave *e) { op('t'); }
 /* Actual thread swap helpers run against a software CSR bank. */
-enum { sstatus,sie,stvec,scounteren,sscratch,sepc,scause,stval,sip,satp,mideleg,csr_count };
+enum { sstatus,sie,stvec,scounteren,sscratch,sepc,scause,stval,sip,satp,mideleg,mip,csr_count };
 static uintptr_t csrs[csr_count];
 #define csr_read(name) (csrs[name])
 #define csr_write(name,value) (csrs[name]=(uintptr_t)(value))
+#define csr_clear(name,value) (csrs[name]&=~(uintptr_t)(value))
+#define csr_set(name,value) (csrs[name]|=(uintptr_t)(value))
 
 /* Non-target SBI bodies are unreachable in these tests. */
-unsigned long resume_enclave(struct sbi_trap_regs *r,enclave_id id) { abort(); }
-unsigned long stop_enclave(struct sbi_trap_regs *r,uint64_t reason,enclave_id id) { abort(); }
-unsigned long exit_enclave(struct sbi_trap_regs *r,enclave_id id) { abort(); }
 unsigned long attest_enclave(uintptr_t a,uintptr_t b,uintptr_t c,enclave_id id) { abort(); }
 unsigned long get_sealing_key(uintptr_t a,uintptr_t b,size_t c,enclave_id id) { abort(); }
 static unsigned long call_plugin(int id,uintptr_t a,uintptr_t b,uintptr_t c,uintptr_t d) { abort(); }
@@ -113,7 +128,10 @@ static void reset_fixture(void) {
  ready=1;enclave_context=0;context_eid=0;copy_fail=0;firmware_fail=0;
  init_calls=0;fail_init_call=0;active_regions=0;global_calls=0;global_fail=0;
  unset_calls=0;free_calls=0;platform_calls=0;platform_fail=0;hash_calls=0;hash_fail=0;
- destroy_calls=0;vector_calls=0;guard_fail=0;local_pmp_calls=0;local_pmp_fail=0;fail_unset=0;
+ destroy_calls=0;vector_calls=0;guard_fail=0;local_pmp_calls=0;local_pmp_fail=0;fail_unset=0;unset_fail_call=0;
+ osm_calls=0;osm_fail_call=0;rollback_fail=0;failed_once=0;free_fail_call=0;
+ nested_destroy=0;nested_result=0;hang_expected=0;host_vector_calls=0;os_permissions=PMP_ALL_PERM;
+ memset(local_permissions,0,sizeof local_permissions);
  op_count=0;operations[0]=0;encl_lock=0;
  memset(region_used,0,sizeof region_used);memset(csrs,0,sizeof csrs);
  memset(enclaves,0,sizeof enclaves);enclave_init_metadata();
