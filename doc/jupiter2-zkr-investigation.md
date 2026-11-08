@@ -83,3 +83,7 @@ DTでZkrが宣言されない状態では、この条件付き処理を根拠に
 
 Zkrのない機種に対する候補と選択方針は
 [乱数供給元のfallback設計](keystone-random-fallback-design.md)を参照。
+
+追加調査でZkrとは別のWTM RNGドライバをベンダーOP-TEEに確認した。
+[Security Engine/RNGの利用案](jupiter2-security-engine-rng.md)を参照。
+Zkr非対応という前提でも、実機向けの具体的な供給元候補が見つかっている。

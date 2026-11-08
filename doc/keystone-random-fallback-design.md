@@ -40,7 +40,8 @@ OpenSBIのtimer/IPI/hashを組み合わせるだけでは、新しいentropy供�
 
 ## A. TRNG / Security Engineを使う案
 
-Jupiter 2で最初に調査すべき実機向け経路。
+Jupiter 2ではベンダーOP-TEEのK3専用WTM RNGドライバを確認した。
+[具体的な実装と利用案](jupiter2-security-engine-rng.md)を第一候補とする。
 ベンダーのTRNG/RNG実装、MMIOアドレス、clock/reset、ready/error処理を探す。
 Linuxに既存ドライバがあればレジスタ処理は参考にできるが、
 M-modeからLinuxのgetrandom関数やLinuxデバイスドライバを直接呼ぶ方式にはしない。
@@ -126,5 +127,6 @@ Eyrieはa0のstatusを必ず確認し、getrandom/AT_RANDOMへ伝播させる。
 QEMUでZkrを無効にして代替経路を検証する場合は、実装したRNGデバイスや
 実際のboot seed受け渡し経路を使う。模擬SBI/CSRの試験には戻さない。
 
-Jupiter 2については、現段階でA/Bの供給元もCのfresh seedも未確認。
+Jupiter 2ではAのWTM RNGドライバの存在を確認した。実機動作・初期seed/reseed仕様、
+Bの呼び出し可否、Cのfresh seedはまだ未確認。
 Zkrが見つからないことを理由に、未確認のTRNG/RPMIサービスを存在するものとして扱わない。

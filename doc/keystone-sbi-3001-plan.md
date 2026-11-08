@@ -147,6 +147,12 @@ paging/page cryptoでも鍵・IV等の乱数取得失敗を成功として使わ
 
 ## 5. 実機Jupiter 2へ接続する
 
+追加調査で、ベンダーOP-TEEのK3専用 `k3_prng.c` とWTM RNGのMMIO定義を確認した。
+[Security Engine/RNGの調査と利用案](jupiter2-security-engine-rng.md)を参照。
+Zkr非対応のJupiter 2では、そのCPU読み出し経路をSMへ移植する案を第一候補とする。
+OP-TEEを使う構成では既存RNGサービスの利用も候補だが、domain/PMP併用設計が必要。
+
+
 [実機Zkr対応の追加調査](jupiter2-zkr-investigation.md)では、公式製品資料、
 K3の全16 CPU定義、SpacemiT公式OpenSBIも照合したが、対応の根拠は確認できなかった。
 **実機はZkr非対応として計画し、仕様・M-mode実測で確認された場合だけ有効化する。**
