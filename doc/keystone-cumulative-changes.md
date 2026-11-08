@@ -337,3 +337,15 @@ mainへ直接入るnative eappでgpが未初期化となり、gp相対のglobal�
 既存のlibc付きアプリは変更しません。hello-nativeと全native verificationのリンクを更新し、
 実ELFのentry/gp計算チェックを追加しました。QEMU user-modeの入口CPU probeでは
 旧main直入の失敗と新入口の成功を確認。新しいsystem guestでの再試験は未確認です。
+
+## SBI 3004 STOPの要求検査・ABIと専用verification
+
+実装コミット：[9b7285ae5](https://github.com/yutaka-ishikawa/public/commit/9b7285ae5)。
+不正requestの事前拒否、host a1の0初期化、Eyrie asmのa1入出力宣言を追加。
+SDK observerで実際のSTOP statusを観測し、直接yield・OCALL・timer設定区間の
+非同期STOP/RESUMEを検査する専用suiteを `verifications/sbi-3004` へ追加した。
+S-modeからの3004拒否も既存kernel試験に追加し、全suiteへ組み込んだ。
+SM/OpenSBI・SDK・パッケージ・kernel objectのbuildを確認。
+追加試験の実ゲスト実行と.koリンクは未確認。過去の全PASSとは区別する。
+[実装記録](keystone-sbi-3004-implementation.md)、
+[専用試験](../verifications/sbi-3004/README.md)、KSB-027を参照。

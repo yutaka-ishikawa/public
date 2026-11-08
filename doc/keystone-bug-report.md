@@ -386,7 +386,7 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
 - 方針：0/1以外は切替前にILLEGAL_ARGUMENTで同じenclaveへ返す。
   2（STOP_EXIT_ENCLAVEという旧定義）もSTOPの有効な要求ではない。終了は3006。
   STOP成功時のホストa1は0。既存のtimer/OCALLフレーム保存方式は維持する。
-- 修正：本変更「Complete SBI 3004 STOP validation and real guest verification」。
+- 修正：[9b7285ae5](https://github.com/yutaka-ishikawa/public/commit/9b7285ae5)「Complete SBI 3004 STOP validation and real guest verification」。
   hostへのa1を0とし、Eyrie asmのa1入出力も宣言。専用試験は実statusを観測する。
 - 検証：SM/OpenSBI trace版、SDK、通常／専用runtimeと全verificationパッケージをbuild。
   sbi-errorsのkernel objectもbuild。通常runtimeから専用hookが除外されることをnmで確認。

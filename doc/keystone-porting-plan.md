@@ -1,6 +1,6 @@
 # K3 Keystone移植状況と残作業計画
 
-更新基準：本リポジトリ `d96b39cbd`（本書更新直前）。
+更新基準：本リポジトリ `9b7285ae5`（SBI 3004追加実装まで）。
 初回調査は `8b5e1d870`、当時の上流比較対象はKeystone
 `b8c2385355b2afb5b94a4e5dc503936f1502b972`。
 旧計画の「乱数・attestation・sealingが未実装」は現在には当てはまらない。
@@ -27,7 +27,7 @@ Keystone拡張IDは `0x08424b45`。表の番号はFID。
 | 3001 | RANDOM：Zkr、Jupiter2 WTM、他機種用interface＋開発用counterを実装済み。 | 機能・QEMUモデル・7ケース試験は [867a23e57](https://github.com/yutaka-ishikawa/public/commit/867a23e57)。native SDK停止修正は [2c99fb066](https://github.com/yutaka-ishikawa/public/commit/2c99fb066)、native入口修正は [9455ab462](https://github.com/yutaka-ishikawa/public/commit/9455ab462)。 | ユーザー環境のQEMUで7ケースPASS。実機WTMと実機Zkrの利用可否・品質は未確認。counterは暗号学的乱数ではない。 |
 | 3002 | ATTEST：共通provider、report生成、署名チェーン、外部pin付きverifierを実装済み。 | 初回実装は [9bdd68447](https://github.com/yutaka-ishikawa/public/commit/9bdd68447)。native crypto archive分離は [08f0ac69c](https://github.com/yutaka-ishikawa/public/commit/08f0ac69c)、起動不具合修正まで含む到達点は [9455ab462](https://github.com/yutaka-ishikawa/public/commit/9455ab462)。 | qemu-devの正常系と通常unavailableの拒否をQEMUで確認。実機鍵providerと認証済みbootは未実装。 |
 | 3003 | GET_SEALING_KEY：既存HKDF・署名を共通基盤へ接続済み。 | 3002と同時実装 [9bdd68447](https://github.com/yutaka-ishikawa/public/commit/9bdd68447)、native実行修正の到達点 [9455ab462](https://github.com/yutaka-ishikawa/public/commit/9455ab462)。 | QEMUで既知値・識別子分離・再起動整合性等を確認。実機永続鍵・更新運用・暗号化保存サンプルは残る。 |
-| 3004 | STOP：OCALL時のホスト復帰を接続済み。 | フレーム切替基盤 [75f5c0377](https://github.com/yutaka-ishikawa/public/commit/75f5c0377)、実ゲスト試験 [0977df6be](https://github.com/yutaka-ishikawa/public/commit/0977df6be)。 | 明示OCALL経路は確認。timerによる中断を全hartで確認したとはしない。 |
+| 3004 | STOP：0/1の有効要求、無効要求の事前拒否、host status/a1と切替処理を実装済み。 | 既存の切替基盤は [75f5c0377](https://github.com/yutaka-ishikawa/public/commit/75f5c0377)。要求検査・返却ABI修正と専用実ゲスト試験の追加は [9b7285ae5](https://github.com/yutaka-ishikawa/public/commit/9b7285ae5)。 | 従来OCALLはQEMUで確認済み。追加した直接yield、不正要求、timer設定区間の非同期中断試験はbuild済み・ゲスト実行待ち。詳細は [3004実装記録](keystone-sbi-3004-implementation.md)。 |
 | 3006 | EXIT：終了値を伴うホスト復帰を接続済み。 | フレーム切替基盤 [75f5c0377](https://github.com/yutaka-ishikawa/public/commit/75f5c0377)、実ゲスト試験 [0977df6be](https://github.com/yutaka-ishikawa/public/commit/0977df6be)。 | suiteの正常終了を確認。全終了値・異常終了条件の網羅試験は残る。 |
 | 4000 | CALL_PLUGIN：dispatcherあり。multimemを含むK3機能統合は未完了。 | 完了コミットなし。 | backing store登録・所有権・解放とpaging連携を設計する。 |
 
@@ -54,7 +54,8 @@ qemu-dev-boot1、qemu-dev-boot2、unavailableおよび乱数7ケースすべて�
 これは `9455ab462` の修正後に受領した実行報告である。
 添付ログ自体に実行したHEAD・全artifact hashはないため、バイナリのcommit一致まで
 独立に確定した結果としては扱わない。各起動のserialログとmanifestを合わせて保存する。
-表示変更 `d96b39cbd` は再ビルド確認済みだが、表示変更後の全suite再実行は本環境では未実施。
+表示変更 `d96b39cbd` と3004専用試験 `9b7285ae5` はbuild確認済み。
+これらを含む全suiteの再実行は本環境では未実施で、前述の全PASS報告とは区別する。
 
 ```bash
 git pull
@@ -112,7 +113,8 @@ QEMU作業列と実機作業列は並行可能だが、実機資料がない部�
 ### N0：現行機能の回帰・残る検証を先行
 
 1. 現在の全suiteを基準として、HEADとartifact manifestを保存する。
-2. 実タイマーによるSTOP/RESUME、非0 EXIT、複数enclaveの交互実行、
+2. 3004専用試験（`9b7285ae5`）をユーザーの実QEMUゲストで実行し、
+   traceでM_TIMER原因を確認する。続いて非0 EXIT、複数enclaveの交互実行、
    RUN中DESTROY拒否、資源枯渇後の回収を実ゲスト試験へ追加する。
 3. 暗号providerの片側ready・初期化失敗、鍵/root変更・SM更新時の鍵導出の期待動作、
    Zkr WAIT/DEAD等、既存matrixが通さない異常経路を専用profileで確認する。
