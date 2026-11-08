@@ -8,7 +8,7 @@ The `main` branch contains `qemu/`, `opensbi/`, `keystone/`, and `linux-k3/`. Or
 
 未移植機能の一覧と実装順序は、[K3 Keystone移植計画](doc/keystone-porting-plan.md)を参照してください。
 
-SBI 2001–2004のソース検証・テスト・結果は、[verifications/README.md](verifications/README.md)にまとめています。
+QEMU上の実OpenSBI・Keystone SMを通る統合試験は、[verifications/README.md](verifications/README.md)にまとめています。
 
 検証の意味と実際のQEMUゲストでのテスト方法は、[検証範囲とQEMU実行手順](doc/keystone-verification-methods.md)を参照してください。
 
@@ -245,7 +245,7 @@ Use `--only qemu` or `--only linux` for the other components. Preview deletions 
 The script **never removes** source trees, patches, rootfs files, or files installed to `bin/`, `firmware/k3/`, `boot/k3/`, or `lib/modules/`. Stop running builds before cleaning. This is not a full uninstall.
 
 Keystoneの大容量EPM（256 MiB）には、修正版ドライバと起動時のCMA予約を使う。
-[設定・ビルド・実ゲスト検証手順](verifications/epm-allocation/README.md)を参照。
+[設定・ビルド・実ゲスト検証手順](doc/keystone-large-epm.md)を参照。
 
 For module/network commands, updating an existing image and `depmod` usage, see
 [Keystone guest commands](doc/keystone-guest-commands.md).

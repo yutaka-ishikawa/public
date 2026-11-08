@@ -6,7 +6,7 @@
 DMA制約、CMA予約を修正し、256 MiBのEPM確保経路を追加した。
 edgecallの既定free memoryも2 MiBに戻した。
 現在の構成と更新・試験方法は
-[EPM確保の検証](../verifications/epm-allocation/README.md)を参照。
+[EPM確保の検証](keystone-large-epm.md)を参照。
 
 ## 観測結果
 
@@ -35,22 +35,22 @@ SDKの `calculate_required_pages()` はeapp、runtime、loaderのファイルサ
 | free memory以外の要求 | 54 pages |
 | 旧要求 | 512 + 54 = 566 pages |
 | buddy allocatorで必要な連続領域 | order 10、1024 pages、4 MiB |
-| 修正後の要求 | 64 + 54 = 118 pages |
-| 修正後の連続領域 | order 7、128 pages、512 KiB |
+| 一時回避時の要求（現在は不使用） | 64 + 54 = 118 pages |
+| 一時回避時の連続領域 | order 7、128 pages、512 KiB |
 
-`keystone/linux-keystone-driver/keystone-page.c` の `epm_init()` は
+`keystone/linux-keystone-driver/keystone-page.c` の旧 `epm_init()` は
 Linux 6.8以降で `order < MAX_PAGE_ORDER` のときだけbuddy allocatorを呼ぶ。
 一方、現在の `linux-k3/include/linux/mmzone.h` はMAX_PAGE_ORDERを含めた
 orderを有効とする。標準設定のMAX_PAGE_ORDER=10では、旧要求のorder 10は
 有効なのに呼び出しがスキップされる。この境界条件の問題を確認した。
 
-さらにCMAへのfallbackは `GFP_KERNEL | __GFP_DMA32` を渡す。
+さらに旧CMAへのfallbackは `GFP_KERNEL | __GFP_DMA32` を渡す。
 現在のQEMU Jupiter2構成のRAMは0x102000000以上にあり、4 GiB未満を対象とする
 DMA32制約と整合しない。CMA領域やデバイスのDMA設定にも依存するため、
 単に「ゲスト全体の空きメモリ不足」とは断定できない。
 ログの566という値は、countを要求ページ数へ戻したfallback経路と一致する。
 
-## 今回の変更と範囲
+## 一時回避とその後の本修正
 
 この試験の最大データは4096 bytesで、ヘッダ込み4120 bytes。
 free memoryとUTMを、既存helloと同じ各256 KiBに変更した。
@@ -62,23 +62,17 @@ EPM全体のサイズという意味ではない。
 `init=/bin/bash` では通常の初期化処理がなく、makeself内のdfが
 マウント情報を取得できない警告にも対応する。
 
-今回はテストのメモリ予算と起動準備を変更した。
-ドライバの最大order境界条件とDMA32 fallbackは未修正であり、
-大きなenclaveを扱う際には別途ドライバの修正・検証が必要である。
-小さい要求でも連続領域の確保成功を保証するものではない。
+その後、最大order境界条件とDMA32制約を修正し、CMAの高位RAM予約を追加した。
+現在はfree memoryを2 MiBに戻し、さらに256 MiB設定の実SM試験を用意している。
+更新・ビルド手順は [大容量EPM](keystone-large-epm.md) を参照。
 
-## 確認結果
+## 現在の検証
 
-- ホスト側のSBI・edgecall試験：77グループPASS（ハードウェアは模擬）。
-- RISC-Vゲストプログラム：`-Wall -Wextra -Werror` で再ビルド成功。
-- makeselfパッケージ：`--check` 成功。
-- シェル構文検査：成功。
-- 修正後の実QEMUゲスト実行：この環境では未確認。
-
-[ホスト試験ログ](../verifications/edgecall/evidence/epm-budget-fix/host-run.log)と
-[クロスビルドログ](../verifications/edgecall/evidence/epm-budget-fix/guest-build.log)を保存した。
-
-過去のホスト試験結果は、今回のゲストのEPM確保成功を証明するものではない。
+過去の模擬試験とそのログは削除した。
+[実QEMU統合試験](../verifications/README.md)で、実enclaveの作成・実行・
+データ往復・破棄を確認する。ドライバ交換後、ユーザーの実ゲストで
+4 MiB EPMのbuddy確保とOCALL往復PASSが報告された。
+新しい256 MiB統合試験の実行成功は未確認。
 
 ## 再実行
 

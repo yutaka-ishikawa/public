@@ -1,8 +1,0 @@
-{
-  "verifications/sbi-2004/test.c": "ede022a89ac753e9570d4d9de4692779dc8f10f24fefbf09429479d912af867d",
-  "verifications/sbi-2004/Makefile": "ebc41910b9669ae695d2fc9a8ae80f5e2d3e5d32b5b5e4017b30bf2145ec73c7",
-  "verifications/sbi-2004/run-tests.sh": "f73e0a4d6f4a2a123ba6ad7b31750b950f3c9e9fc99146780238c4e8713c6bb8",
-  "verifications/common/harness.c": "18226023826c70c629c2df0f118cd348f0aa3e588392c7b87ec621b451a522a0",
-  "verifications/common/extract_sources.py": "b72b8b3f8df630f9f7d72bdb9c274694fbb946eb972d0da7c37c1108fd5fad25",
-  "verifications/common/verification.mk": "42cf93ed918eed9d5cef9a19dc9443a43c4128d1da0b2d4b9be0ee1b6810af0a"
-}

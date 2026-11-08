@@ -145,6 +145,13 @@ static int execute_guest(char **argv)
 		calls, failed);
 	return 1;
     }
+    result = instance.destroy();
+    if (result != Keystone::Error::Success) {
+	fprintf(stderr, "FAIL GUEST: explicit DESTROY failed: %d\n",
+		static_cast<int>(result));
+	return 1;
+    }
+    printf("PASS GUEST: CREATE/RUN/STOP/RESUME/EXIT/DESTROY\n");
     printf("PASS GUEST: 8 binary OCALL round trips and invalid return "
 	   "rejection\n");
     return 0;

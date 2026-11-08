@@ -56,22 +56,23 @@ KeystoneDevice::finalize(
   return Error::Success;
 }
 
-Error
-KeystoneDevice::destroy() {
-  struct keystone_ioctl_create_enclave encl;
-  encl.eid = eid;
+Error KeystoneDevice::destroy()
+{
+    struct keystone_ioctl_create_enclave encl;
+    encl.eid = eid;
 
-  /* if the enclave has never created */
-  if (eid < 0) {
+    /* if the enclave has never created */
+    if (eid < 0) {
+	return Error::Success;
+    }
+
+    if (ioctl(fd, KEYSTONE_IOC_DESTROY_ENCLAVE, &encl)) {
+	perror("ioctl error");
+	return Error::IoctlErrorDestroy;
+    }
+
+    eid = -1;
     return Error::Success;
-  }
-
-  if (ioctl(fd, KEYSTONE_IOC_DESTROY_ENCLAVE, &encl)) {
-    perror("ioctl error");
-    return Error::IoctlErrorDestroy;
-  }
-
-  return Error::Success;
 }
 
 Error

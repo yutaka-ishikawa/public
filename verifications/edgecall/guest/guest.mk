@@ -9,7 +9,7 @@ GCC := $(CROSS_COMPILE)gcc
 GXX := $(CROSS_COMPILE)g++
 CCFLAGS ?= -O2 -g
 FREE_MEM_MIB ?= 2
-OUT := build/guest
+OUT ?= build/guest
 SDK_LIBS := $(SDK_DIR)/lib/libkeystone-host.a $(SDK_DIR)/lib/libkeystone-edge.a
 .PHONY: guest kernel-module kernel-object
 guest: $(OUT)/edgecall.ke

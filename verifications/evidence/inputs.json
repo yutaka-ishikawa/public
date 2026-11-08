@@ -1,0 +1,11 @@
+{
+  "scope": "build only; system-guest execution unverified",
+  "sha256": {
+    "keystone/sdk/src/host/KeystoneDevice.cpp": "7ea82d137c55239b810e25f84f28a2f1cc1adcea10698f4549156be4f1f0ba31",
+    "verifications/edgecall/guest/host.cpp": "603aeedb4fe322436101bc983dff45f6df74e103e69a3d64145404e8bd8f5f3a",
+    "verifications/edgecall/guest/eapp.c": "d0175a2aea7122a0a8919320c02eafe1ee5093a049d24ea67d19f598dc1c53e4",
+    "verifications/edgecall/kernel/edgecall_pmp_probe.c": "f47a8b29a3a9f8ef0d2b95e4e4e074e84e37cf9cbef2c55aafca603594d03257",
+    "verifications/sbi-errors/kernel/keystone_sbi_verify.c": "6ecc2cd16a983986e66df5b6c8080ede78c4df7c85c304aa6758bb241cb8886f",
+    "verifications/sbi-errors/test.c": "dab1fd80026d77712792d22538ed1374f7ef349bab876988d8c9cb48b9e6b7fa"
+  }
+}

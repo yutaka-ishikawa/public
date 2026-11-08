@@ -1,129 +1,116 @@
-# Keystone SBI・edgecallの検証
+# QEMU上のOpenSBI・Keystone SM統合試験
 
-## この試験の意味と限界
+このディレクトリは、K3 QEMUのLinuxゲストから実際のOpenSBI・Keystone SMへ
+`ecall`し、enclaveの実行と復帰を確認する試験だけを収録する。
+C関数の抽出実行、模擬PMP/CSR/IPI、模擬SBIの試験とその過去ログは削除した。
 
-主な検査対象はKeystone/OpenSBIの実装です。テストが製品ソースの実C関数を呼び、入力に対する状態変化や戻り値を検査します。verifications自身のコードだけを検査するものではありません。
-
-ただし、PMP設定API・CSR・IPI等は代替処理です。PASSは「用意した条件でCロジックが期待どおり動いた」という結果で、実CPU上の移植全体の正しさを示しません。期待値や代替処理の誤りをこの試験だけで排除することもできません。**同じ単体試験をゲスト内で実行しても、実PMP等の統合試験には変わりません。**
-
-[検証範囲の説明とQEMUゲストでの実行手順](../doc/keystone-verification-methods.md)を参照してください。
-
-
-初回検証：`c6598a7bc`。修正後の検証対象：`cc885e6ad`。検証日：2026-11-08（日本時間）。
-
-| function ID | 対象 | ソース検証 | 実行結果 |
-| --- | --- | --- | --- |
-| 2001 | CREATE | [内容](sbi-2001/source-review.md) | [結果](sbi-2001/results.md) |
-| 2002 | DESTROY | [内容](sbi-2002/source-review.md) | [結果](sbi-2002/results.md) |
-| 2003 | RUN | [内容](sbi-2003/source-review.md) | [結果](sbi-2003/results.md) |
-| 2004 | 未定義 | [内容](sbi-2004/source-review.md) | [結果](sbi-2004/results.md) |
-| 2005 | RESUME | [内容](sbi-2005/source-review.md) | [結果](sbi-2005/results.md) |
-
-これらはextension ID `0x08424b45`のfunction IDであり、独立したSBI extension IDではありません。2004は上流・現在のコードともに未定義です。RESUMEは2005なので、2004をRESUMEへ読み替えていません。
-
-## 実行方法
-
-64ビットLinuxホストにCコンパイラ、GNU Make、Python 3、Bashが必要です。クロスコンパイラ・SDKの事前ビルド・root権限・QEMUは不要です。
-
-```bash
-bash verifications/run-all.sh
-```
-
-個別に実行する場合：
-
-```bash
-bash verifications/sbi-2001/run-tests.sh
-bash verifications/sbi-2002/run-tests.sh
-bash verifications/sbi-2003/run-tests.sh
-bash verifications/sbi-2004/run-tests.sh
-bash verifications/sbi-2005/run-tests.sh
-```
-
-Makefileからの実行も可能です。
-
-```bash
-make -C verifications test
-make -C verifications/sbi-2001 test
-```
-
-既定は`-O2 -g`とAddressSanitizer／UndefinedBehaviorSanitizerです。フラグを変更する場合は先にcleanしてください。
-
-```bash
-make -C verifications clean
-bash verifications/run-all.sh CFLAGS='-O0 -g' SANITIZERS=undefined
-```
-
-`assert`が判定を行うため、`-DNDEBUG`を指定しないでください。失敗はassert、sanitizer、makeまたはスクリプトの非ゼロ終了として検出します。
-
-## 何を実行しているか
-
-各`test.c`は[共通ハーネス](common/harness.c)と、ビルド時に生成する`production.inc`をコンパイルします。[抽出スクリプト](common/extract_sources.py)は、現在のリポジトリの実際の関数本文をそのまま取り込みます。関数のコピーを手動で書き直したモデルではありません。
-
-実際に取り込むのは、OpenSBIの`sbi_ecall_handler()`、Keystone adapter、対象のSM helper、CREATE/DESTROY/RUN本体と関連関数、RUN/RESUME/STOP/EXITのcontext切替・threadのレジスタ交換処理です。`enclave.h`、`thread.h`、`pmp.h`、共有ABIヘッダーは実ファイルを使用し、OpenSBIのtrap register構造も実定義から生成します。
-
-各SBIディレクトリの`build/`には以下を生成します。
+## 試験経路と構成
 
 ```text
-production.inc          実関数の抽出結果（#lineで元ファイル・行に対応）
-include/sbi/            ホストビルド用の最小型定義と実trap構造
-source-manifest.json    入力ソースのSHA-256と抽出した関数一覧
-test                    実行バイナリ
-run.log                 run-tests.shで実行したログ
+ゲストLinux runner → Keystone driver → ecall → OpenSBI → Keystone SM
+ → enclave/Eyrie → OCALL STOP → Linux runner → RESUME → enclave → EXIT
+ → DESTROY → Linuxへ成功復帰
 ```
 
-再実行時には現在のソースを検証するため、掲載した結果と異なる場合があります。初回の入力ハッシュとログは各`baseline/`に、修正後の再検証記録は各`after-fix/`に保存しています。
-
-## 模擬している境界と未確認範囲
-
-| 対象 | このテストの扱い |
+| プログラム | 実際に検査するもの |
 | --- | --- |
-| 状態遷移・引数検証・後始末・戻り値・PC補正 | 実ソース関数を実行。 |
-| EPM／UTM | ホスト上のページ整列済み配列。実際のゼロクリアを検査。 |
-| threadレジスタ交換 | 実C関数。CSRアクセスだけ配列へ置換。 |
-| PMP確保／設定／解除／IPI | 呼び出し順序と成功・失敗を模擬。実CSR・遠隔hartの動作は未検証。 |
-| argument copy | コピーの成功／失敗を注入。実MPRV、Linuxアドレス変換、例外回復は未検証。 |
-| enclave測定 | 呼び出し順序と成功／失敗を模擬。SHA3と測定対象の正しさは別検証。 |
-| lock | 単一スレッドでlock/unlockの整合を検査。実際の同時実行は未検証。 |
-| `sm_is_ready`・extension lookup | 準備状態とextensionの存在を模擬。実際の全hart準備判定・登録は未検証。 |
-| platform hooks／CPU context | hookの順序とcontextフラグを模擬。 |
-| ecall／mret | dispatcherのC処理を実行するが、CPU命令としてのecall/mretは未実行。 |
-| Linux driver／SDK | 呼び出し経路をソースで確認。今回のホストテストには含めない。 |
+| `edgecall` | CREATE 2001、RUN 2003、STOP 3004、RESUME 2005、EXIT 3006、DESTROY 2002の正常経路。8種類のバイナリ往復と不正return offsetの拒否。 |
+| `edgecall`の2種類のパッケージ | free memory 2 MiBと256 MiBで上記の正常経路。 |
+| `sbi-errors` | S-modeの検証モジュールから実ecall。CREATEの不正レイアウト、DESTROY/RUN/RESUMEの無効ID、未定義2004の応答。 |
+| `edgecall/kernel` | OCALL中、Linuxの物理RAM direct mapからEPMを読むと拒否され、UTMと通常RAMは読めること。 |
 
-したがって、QEMUゲストや実機で全機能が確認できたという結果ではありません。ホスト側ソース試験で再現できる範囲を明示して実行しています。
+`host.cpp` のhostは開発用PCではなく、QEMUゲストLinux上のrunnerを意味する。
+SBI 2004は定義済み機能ではなく、未定義番号を拒否する試験である。
 
-## 判定の読み方
+## 1. 開発用ホスト：準備・ビルド
 
-- `PASS`：記載した正常系・異常系の期待結果を確認。
-- `OBSERVED ... [not an acceptance PASS]`：現在の不整合・要修正動作の再現に成功。正常性の合格ではありません。
-- テスト全体のexit 0：期待した観測と一致したことを意味します。`OBSERVED`が解決したことは意味しません。
+リポジトリルートで実行する。まだ起動環境がなければ最初に
+`bash scripts/build-install-keystone.sh` で新規Keystoneイメージを作る。
+既存イメージに新しいカーネル/ドライバ修正が必要なら先に反映する。
 
-初回は計36グループ（正常系・異常系31、要修正動作の再現5）でした。修正後は2001が12、2002が15、2003が16、2004が5の**計48グループがPASS**し、OBSERVEDは0です。1グループ内で複数の入力や100回の繰り返しを検査しているため、assert数や入力数とは異なります。
+```bash
+git pull
+# 明示的DESTROY検査のため、修正版SDKも必ず再ビルドする
+bash scripts/build-install-keystone.sh --only sdk
+bash scripts/build-install-k3.sh --only firmware --prefix "$PWD/install/keystone"
+make -C verifications guest
+```
 
-初回に検出したDESTROYの状態条件、PMP APIのエラー未反映、EIDの32ビットへの切り詰めは`cc885e6ad`で修正しました。各SBIの`source-review.md`と`results.md`に修正内容・再検証結果・限界を記載しています。2001のrollback等の未検証事項まで解決したという意味ではありません。
+SDK/Eyrieを別ディレクトリへ出力している場合は、
+`make -C verifications guest KEYSTONE_BUILD_DIR=/absolute/path` と指定する。
 
-既知の動作を修正した場合は、対応する`OBSERVED`の再現テストを、修正後の期待を確認するテストへ更新してください。修正前の不整合を将来も維持するための仕様ではありません。
+`make guest` はRISC-Vプログラムを作るだけで、統合試験を実行しない。
+`make` の既定ターゲットもguestであり、ホスト単体試験は実行しない。
 
-2002/2003の修正設計・更新手順は[修正と再検証](../doc/keystone-sbi-2002-2003-fixes.md)を参照してください。
+次にゲストのImageと一致する完全なカーネル出力を使って検証モジュールを作る。
 
-## コーディングスタイル
+```bash
+cmp install/keystone/boot/k3/Image .build-k3/linux/arch/riscv/boot/Image
+make -C verifications kernel-modules KERNEL_OUT="$PWD/.build-k3/linux"
+```
 
-Cソースは、承認されたK&Rスタイル（1段4文字、タブ幅8。1段目は空白4文字、2段目はタブ1文字。関数の開始波括弧は改行、制御文の開始波括弧は同じ行、変数宣言はブロック冒頭）に統一しています。今後の方針は[AGENTS.md](../AGENTS.md)と[.clang-format](../.clang-format)に保存しています。
+比較失敗時は先へ進まず対応する出力に置き換える。
+`Module.symvers` が必要。`.o`だけではロードできない。
+2つの生成物は以下。
 
-整形後の48グループの再検証記録は[style-check/](style-check/README.md)を参照してください。過去の`baseline/`と`after-fix/`は整形前の証拠として保持しています。
+- `verifications/sbi-errors/kernel/keystone_sbi_verify.ko`
+- `verifications/edgecall/kernel/edgecall_pmp_probe.ko`
 
-`for`・`if`・`else`は本文が1文でも必ず波括弧で囲みます。他のループ本文も同様とし、本文は改行して記載します。`.clang-format`の`InsertBraces: true`にも反映しています。
+これらは検証専用で、製品のKeystoneドライバとは別のモジュール。
+起動中のファームウェアへ実際にecallし、PMPアクセスも実CPUモデルで行う。
 
-## edgecallとprivateメモリの専用試験
+## 2. QEMUゲスト内：全試験
 
-[edgecall/](edgecall/README.md)に、データ往復・offset/長さ・privateポインタ拒否の10グループと、OCALLのSTOP/RESUMEの2グループを追加しました。`run-all.sh`は既存48グループと合わせてホスト試験60グループを実行します。
+ホストで `bash scripts/run-k3.sh` から起動し、ゲストのrootシェルで：
 
-同ディレクトリには、KeystoneゲストでEPMの物理ページへのLinux側の参照が拒否されることを確認するアプリ・runner・カーネルprobeもあります。こちらはクロスビルド／オブジェクトコンパイルまで確認済みで、実PMPの試験実行は未確認です。ホスト試験のPASSと区別してください。
+```bash
+mount-hostshare
+cd /mnt/host/verifications
+bash run-all.sh
+echo "exit=$?"
+```
 
-## RESUME（2005）の専用検証
+スクリプトがprocfs/sysfsをマウントし、必要なモジュールをロードする。
+Keystoneプロファイルの既定起動引数には `cma=512M@4G-16G` を含む。
+256 MiB試験の前提として `grep Cma /proc/meminfo` で512 MiB予約を確認する。
+詳細は [大容量EPM](../doc/keystone-large-epm.md) を参照。
 
-[sbi-2005/](sbi-2005/source-review.md)へ、保存レジスタ・CSR・a0/PC、中断理由、状態、PMP失敗時の復旧等の専用17グループを追加しました。現在の`run-all.sh`は既存60グループと合わせて**77グループ**を実行します。すべてホスト上のソース試験であり、実CPUのecall/mretや実タイマーを検証した結果ではありません。
+SBIエラー応答5件、2 MiB/256 MiBの各パッケージでOCALL往復、
+PMP参照拒否、明示的DESTROYの全成功と `exit=0` を確認する。
+失敗した場合はそこで停止し、全体PASSを表示しない。
 
-## 大容量EPMの確保
+PMP参照probeを省く場合だけ明示的に：
 
-[epm-allocation](epm-allocation/README.md)で4/256/257 MiBの確保・解放を検証する。
-ホスト試験は実関数と模擬Linux API、ゲスト試験は実ドライバのioctlを使用する。
+```bash
+bash run-all.sh --data-only
+```
+
+この場合も実SBI試験と実enclave実行を行う。省略するのはEPM直接参照試験のみ。
+`sbi-errors` の検証モジュールはこの場合も必要。
+
+追加モジュールをまだ用意できない場合、正常経路だけは：
+
+```bash
+cd /mnt/host/verifications/edgecall
+bash run-guest.sh --data-only
+```
+
+これは全試験の完了とは区別する。
+
+## 現在の結果と限界
+
+ユーザーのQEMUゲストで、free memory 2 MiBのパッケージは4 MiBのEPM確保と
+8回のOCALL往復・不正return拒否に成功したとの画面報告がある。
+その報告は、今回追加した明示的DESTROY検査・SBIエラー試験・256 MiBパッケージ・
+PMP実参照拒否までのPASSを示すものではない。
+
+このクラウド環境ではRISC-Vビルドと検証モジュールのオブジェクト生成までを確認する。
+完全な対応カーネルと稼働中K3システムゲストがないため、新しい全試験の実行結果は
+**未確認**であり、コンパイル成功を実行PASSとして報告しない。
+
+全hart、実タイマー中断、競合、各エラー経路、実機固有の動作を網羅するものではない。
+各プログラムは実CPUモデルを使うが、QEMUの成功を実機での成功とは扱わない。
+以前の模擬試験のグループ数・PASS表は現行の結果として引き継がない。
+
+コンパイルとパッケージ検査の記録は [evidence](evidence/README.md) に保存する。
+CIもビルド検査のみで、システムゲストの試験結果を代用しない。

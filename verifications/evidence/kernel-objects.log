@@ -1,0 +1,22 @@
+make: Entering directory '/workspace/public/verifications'
+make -C edgecall kernel-object
+make[1]: Entering directory '/workspace/public/verifications/edgecall'
+make -f guest/guest.mk kernel-object
+make[2]: Entering directory '/workspace/public/verifications/edgecall'
+make -C /workspace/public/linux-k3 O=/workspace/public/.build-k3/linux ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- M=/workspace/public/verifications/edgecall/kernel edgecall_pmp_probe.o
+make[3]: Entering directory '/workspace/public/linux-k3'
+make[4]: Entering directory '/workspace/public/verifications/edgecall/kernel'
+make[4]: Leaving directory '/workspace/public/verifications/edgecall/kernel'
+make[3]: Leaving directory '/workspace/public/linux-k3'
+make[2]: Leaving directory '/workspace/public/verifications/edgecall'
+make[1]: Leaving directory '/workspace/public/verifications/edgecall'
+make -C sbi-errors kernel-object
+make[1]: Entering directory '/workspace/public/verifications/sbi-errors'
+make -C /workspace/public/linux-k3 O=/workspace/public/.build-k3/linux ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- M=/workspace/public/verifications/sbi-errors/kernel keystone_sbi_verify.o
+make[2]: Entering directory '/workspace/public/linux-k3'
+make[3]: Entering directory '/workspace/public/verifications/sbi-errors/kernel'
+  CC [M]  keystone_sbi_verify.o
+make[3]: Leaving directory '/workspace/public/verifications/sbi-errors/kernel'
+make[2]: Leaving directory '/workspace/public/linux-k3'
+make[1]: Leaving directory '/workspace/public/verifications/sbi-errors'
+make: Leaving directory '/workspace/public/verifications'

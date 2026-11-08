@@ -5,7 +5,8 @@
 
 ## 対象
 
-[初回検証](../verifications/README.md)で再現した次の5件を修正した。
+当時発見した次の5件を修正した。旧模擬試験は削除し、現在は
+[実QEMU統合試験](../verifications/README.md)で連携動作を確認する。
 
 | SBI | 初回の問題 | 修正後 |
 | --- | --- | --- |
@@ -25,7 +26,7 @@
 
 PMP descriptor解放自体のエラーも確認する。既に解放できたdescriptorを巻き戻す処理はないが、全private領域の消去・global解除が成功した後の段階である。EIDと残る資源はDESTROYINGのまま保持し、再入・RUN/RESUMEを拒否する。
 
-この異常状態から自動的に再試行するAPIは追加していない。PMP状態を確認できない場合に、推測で元のFRESH/STOPPEDへ戻すこともしない。通常時の資源再利用は100回のCREATE/DESTROY試験で確認した。
+この異常状態から自動的に再試行するAPIは追加していない。PMP状態を確認できない場合に、推測で元のFRESH/STOPPEDへ戻すこともしない。現在の資源再利用確認は、実enclaveのCREATE/DESTROYを含む統合試験で行う。
 
 ## RUN：PMP設定を先に完了してからcontextを交換する
 
@@ -39,7 +40,7 @@ FRESH → RUNNING、thread数を予約
  → 成功時だけレジスタ・CSR・trap vector・CPU contextを切替
 ```
 
-途中のPMP設定が失敗した場合は、enclave領域の権限を取り消してOS領域を復旧する。復旧できればstateをFRESH、thread数を元へ戻し、変更していないhost contextへ`PMP_FAILURE`を返す。復旧後の再RUNもテストした。
+途中のPMP設定が失敗した場合は、enclave領域の権限を取り消してOS領域を復旧する。復旧できればstateをFRESH、thread数を元へ戻し、変更していないhost contextへ`PMP_FAILURE`を返す。復旧後の再RUNは実QEMU試験では未確認。
 
 取り消しやOS権限復旧まで失敗した場合は`sbi_hart_hang()`で停止する。不明なPMP状態でS-modeへ成功・エラー復帰しない。これは通常のRUNで停止する変更ではなく、PMPとその復旧の両方が成立しない異常時の処理である。
 
@@ -47,57 +48,28 @@ FRESH → RUNNING、thread数を予約
 
 同じ関数を使うRESUME 2005も失敗を検出し、元のstateとthread数を復元する。EIDの全幅検査もRESUMEに適用した。
 
-hostへ戻る共通経路にもPMP設定の戻り値検査を追加した。復旧できない権限状態でhost contextへ戻らず停止する。正常なRUN→timer STOP→RESUME→EXITと、host復帰時のPMPエラーを回帰試験に含めた。
+hostへ戻る共通経路にもPMP設定の戻り値検査を追加した。復旧できない権限状態でhost contextへ戻らず停止する。現在の統合試験ではOCALLによるSTOP/RESUME/EXITを実行する。
+実タイマー中断やPMPエラー注入の網羅は未確認。
 
-## 再検証結果
+## 現在の検証方法
 
-| 対象 | グループ数 | 結果 |
-| --- | --- | --- |
-| 2001 CREATE | 12 | PASS |
-| 2002 DESTROY | 15 | PASS |
-| 2003 RUNと共有経路 | 16 | PASS |
-| 2004 未定義ID | 5 | PASS |
-| 合計 | 48 | すべてPASS、OBSERVED 0 |
-
-旧5件のOBSERVEDは、修正後の期待動作を確認するテストに変更した。さらに、callback内再入、複数private領域の後段解除失敗、descriptor解放失敗、rollback不能、復旧後のRUN再試行、共通RESUME/STOP/EXITを追加した。
-
-AddressSanitizerとUndefinedBehaviorSanitizerを有効にし、assert失敗・sanitizer検出がないことを確認した。既存のSM trap/戻り値、システムreset、タイマーポリシーのテスト計5件も成功した。
-
-また、修正したSMをOpenSBIへ組み込み、ファームウェアのコンパイル・リンクに成功した。今回のトレース有効ビルドの`fw_dynamic.bin`のSHA-256は以下。
-
-```text
-9b5081d5a2025dd949487d0277671bc158e78007adb3c30a998c8d60280368e4
-```
-
-トレースにはビルド日時が入るため、別の時刻にビルドしたファイルのハッシュ一致を要求するものではない。
-
-## 証拠と実行方法
-
-各SBIの`baseline/`に初回記録を残し、`after-fix/`へ修正後のログ・環境・製品ソースとテストのSHA-256を保存した。
-
-- [2002：修正後のソース検証](../verifications/sbi-2002/source-review.md)
-- [2002：結果](../verifications/sbi-2002/results.md)
-- [2003：修正後のソース検証](../verifications/sbi-2003/source-review.md)
-- [2003：結果](../verifications/sbi-2003/results.md)
-
-```bash
-bash verifications/run-all.sh
-```
+旧ホスト模擬試験のPASS表、baseline/after-fixログ、実行コードは削除した。
+現在の試験と実行結果は [QEMU統合試験](../verifications/README.md) を参照。
+正常系では実CREATE/RUN/STOP/RESUME/EXIT/DESTROYを通し、
+異常系では実ecallで無効ID等の応答を検査する。
+旧試験のグループ数や失敗注入結果を現行のゲスト試験の結果に流用しない。
 
 ## 既存QEMU環境への更新
 
-古いQEMUプロセスを終了し、ホスト側でファームウェアだけを再ビルドする。
+ホストでファームウェアとSDKを更新して、ゲスト試験をビルドする。
 
 ```bash
 git pull
 bash scripts/build-install-k3.sh --only firmware --prefix "$PWD/install/keystone"
-bash scripts/run-k3.sh
+bash scripts/build-install-keystone.sh --only sdk
+make -C verifications guest
 ```
 
-SDK・example・カーネル・rootfsの再ビルドは不要。独自のインストール先を使う場合はビルドと起動で同じ`--prefix`を指定する。
-
-## 検証の限界
-
-テストは実ソース関数を取り込んだホスト上の試験である。PMP CSR、IPI、CSRアクセス、実タイマー配送、lockの同時性は模擬している。停止分岐もテスト用の捕捉処理で確認し、物理hartを停止していない。
-
-QEMUゲストでのhello再実行、実機での全hart同期、driverと物理ページ管理までの統合確認は今回未実行である。ファームウェアのビルド成功を、実機対応やenclave隔離の証明とはしていない。2001のrollback等、今回対象外の残る確認事項もそのまま区別している。
+ゲストを再起動して新しいファームウェアを使う。全試験には対応カーネル用の
+検証モジュールも必要。[手順](../verifications/README.md)に従う。
+現在のQEMU試験でも全hart・実タイマー・競合・全異常系は未網羅。

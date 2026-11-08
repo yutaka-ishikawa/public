@@ -1,20 +1,17 @@
-.DEFAULT_GOAL := test
-.PHONY: all test clean
-all:
-	$(MAKE) -C sbi-2001 all
-	$(MAKE) -C sbi-2002 all
-	$(MAKE) -C sbi-2003 all
-	$(MAKE) -C sbi-2004 all
-	$(MAKE) -C sbi-2005 all
-	$(MAKE) -C edgecall all
-	$(MAKE) -C epm-allocation all
+.DEFAULT_GOAL := guest
+.PHONY: all guest test kernel-modules kernel-objects clean
+all guest:
+	$(MAKE) -C edgecall guest OUT=build/guest FREE_MEM_MIB=2
+	$(MAKE) -C edgecall guest OUT=build/guest-256 FREE_MEM_MIB=256
+	$(MAKE) -C sbi-errors guest
 test:
 	bash run-all.sh
+kernel-modules:
+	$(MAKE) -C edgecall kernel-module
+	$(MAKE) -C sbi-errors kernel-module
+kernel-objects:
+	$(MAKE) -C edgecall kernel-object
+	$(MAKE) -C sbi-errors kernel-object
 clean:
-	$(MAKE) -C sbi-2001 clean
-	$(MAKE) -C sbi-2002 clean
-	$(MAKE) -C sbi-2003 clean
-	$(MAKE) -C sbi-2004 clean
-	$(MAKE) -C sbi-2005 clean
 	$(MAKE) -C edgecall clean
-	$(MAKE) -C epm-allocation clean
+	$(MAKE) -C sbi-errors clean

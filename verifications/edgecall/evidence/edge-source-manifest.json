@@ -1,7 +1,0 @@
-{
-  "keystone/runtime/call/syscall.c": "ff8d1f3436e9bcdb4c9dedcdb45de58b39afff15a28b5d64c512cc53a7e2a102",
-  "keystone/sdk/src/edge/edge_call.c": "ae59ba2ca2f570660de0605a46b7421f74fc65762f948a4e41f3b79ce362f771",
-  "keystone/sdk/src/edge/edge_dispatch.c": "385ff01370ce1944664c7cd8eae971a08101a831cb8f3605e459652e7aa2eba8",
-  "keystone/sdk/include/edge/edge_call.h": "c79a97a22c2a7916cb965861601e9d4c2d688a024b01123bd2ff78e3c13760c0",
-  "keystone/sdk/include/edge/edge_common.h": "967fe2aaed04b093f968eeac8c3638fee6c128d9dadcddb843ac56ab63103f82"
-}

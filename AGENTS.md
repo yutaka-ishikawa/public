@@ -22,6 +22,9 @@ Apply this style to newly written or modified C/C++ code. Do not reformat unrela
 vendor code as part of another task. Python, shell, and Makefiles should retain their
 language-appropriate indentation; embedded C definitions should follow the C style.
 
-Verification tests extract production function bodies verbatim. Do not reformat those
-extracted bodies or overwrite historical evidence under `baseline/` or `after-fix/`.
-Run `bash verifications/run-all.sh` after changing verification C sources.
+Verification tests now run through the actual K3 QEMU guest, OpenSBI and SM.
+Do not add mocked SBI/PMP/CSR tests or extract production functions into tests.
+Build with `make -C verifications guest` and `make -C verifications kernel-modules`.
+Run `bash verifications/run-all.sh` only inside the system guest. If a complete
+matching kernel or a running guest is unavailable, report integration execution
+as unverified; compilation alone is not a guest PASS.

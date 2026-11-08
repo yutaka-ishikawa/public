@@ -1,0 +1,56 @@
+make: Entering directory '/workspace/public/verifications'
+make -C edgecall guest OUT=build/guest FREE_MEM_MIB=2
+make[1]: Entering directory '/workspace/public/verifications/edgecall'
+make -f guest/guest.mk guest
+make[2]: Entering directory '/workspace/public/verifications/edgecall'
+mkdir -p build/guest
+riscv64-linux-gnu-gcc --sysroot=/workspace/.k3-env/sysroot -O2 -g -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-e,main -Iguest -I/workspace/public/.build-keystone/ssp-regression/sdk-install/include guest/eapp.c /workspace/public/.build-keystone/ssp-regression/sdk-install/lib/libkeystone-eapp.a -o build/guest/eapp
+riscv64-linux-gnu-g++ --sysroot=/workspace/.k3-env/sysroot -DEDGE_VERIFY_FREE_MEM_MIB=2 -O2 -g -Wall -Wextra -Werror -std=c++17 -include cstdint -Iguest -I/workspace/public/.build-keystone/ssp-regression/sdk-install/include guest/host.cpp /workspace/public/.build-keystone/ssp-regression/sdk-install/lib/libkeystone-host.a /workspace/public/.build-keystone/ssp-regression/sdk-install/lib/libkeystone-edge.a -o build/guest/runner
+mkdir -p build/guest/pkg
+cp build/guest/eapp build/guest/runner /workspace/public/.build-keystone/ssp-regression/examples/hello-native/eyrie-rt /workspace/public/.build-keystone/ssp-regression/examples/hello-native/loader.bin build/guest/pkg/
+makeself --noprogress build/guest/pkg build/guest/edgecall.ke 'Keystone edgecall verification' ./runner eapp eyrie-rt loader.bin
+Header is 720 lines long
+
+WARNING: Overwriting existing file: build/guest/edgecall.ke
+About to compress 296 KB of data...
+Adding files to archive named "build/guest/edgecall.ke"...
+a ./eapp
+a ./eyrie-rt
+a ./loader.bin
+a ./runner
+CRC: 788824318
+MD5: 21211c8ffaa342e46507c7c06f606e6c
+
+Self-extractable archive "build/guest/edgecall.ke" successfully created.
+make[2]: Leaving directory '/workspace/public/verifications/edgecall'
+make[1]: Leaving directory '/workspace/public/verifications/edgecall'
+make -C edgecall guest OUT=build/guest-256 FREE_MEM_MIB=256
+make[1]: Entering directory '/workspace/public/verifications/edgecall'
+make -f guest/guest.mk guest
+make[2]: Entering directory '/workspace/public/verifications/edgecall'
+mkdir -p build/guest-256
+riscv64-linux-gnu-gcc --sysroot=/workspace/.k3-env/sysroot -O2 -g -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-e,main -Iguest -I/workspace/public/.build-keystone/ssp-regression/sdk-install/include guest/eapp.c /workspace/public/.build-keystone/ssp-regression/sdk-install/lib/libkeystone-eapp.a -o build/guest-256/eapp
+riscv64-linux-gnu-g++ --sysroot=/workspace/.k3-env/sysroot -DEDGE_VERIFY_FREE_MEM_MIB=256 -O2 -g -Wall -Wextra -Werror -std=c++17 -include cstdint -Iguest -I/workspace/public/.build-keystone/ssp-regression/sdk-install/include guest/host.cpp /workspace/public/.build-keystone/ssp-regression/sdk-install/lib/libkeystone-host.a /workspace/public/.build-keystone/ssp-regression/sdk-install/lib/libkeystone-edge.a -o build/guest-256/runner
+mkdir -p build/guest-256/pkg
+cp build/guest-256/eapp build/guest-256/runner /workspace/public/.build-keystone/ssp-regression/examples/hello-native/eyrie-rt /workspace/public/.build-keystone/ssp-regression/examples/hello-native/loader.bin build/guest-256/pkg/
+makeself --noprogress build/guest-256/pkg build/guest-256/edgecall.ke 'Keystone edgecall verification' ./runner eapp eyrie-rt loader.bin
+Header is 720 lines long
+
+About to compress 296 KB of data...
+Adding files to archive named "build/guest-256/edgecall.ke"...
+a ./eapp
+a ./eyrie-rt
+a ./loader.bin
+a ./runner
+CRC: 822557172
+MD5: 855fd20a36128b95239b18bd561ef9f6
+
+Self-extractable archive "build/guest-256/edgecall.ke" successfully created.
+make[2]: Leaving directory '/workspace/public/verifications/edgecall'
+make[1]: Leaving directory '/workspace/public/verifications/edgecall'
+make -C sbi-errors guest
+make[1]: Entering directory '/workspace/public/verifications/sbi-errors'
+mkdir -p build
+riscv64-linux-gnu-gcc --sysroot=/workspace/.k3-env/sysroot -O2 -g -static -Wall -Wextra -Werror -I/workspace/public/keystone/sdk/include/shared test.c -o build/test
+make[1]: Leaving directory '/workspace/public/verifications/sbi-errors'
+make: Leaving directory '/workspace/public/verifications'

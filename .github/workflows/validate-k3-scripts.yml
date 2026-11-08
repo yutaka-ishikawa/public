@@ -13,11 +13,8 @@ on:
       - 'scripts/install-keystone-guest-tools.sh'
       - 'scripts/guest/**'
       - 'scripts/tests/test-keystone-guest-tools.py'
-      - 'scripts/tests/test-keystone-system-reset.py'
       - 'opensbi/lib/sbi/sbi_system.c'
       - 'opensbi/platform/generic/configs/k3_keystone_audit_defconfig'
-      - 'scripts/tests/test-keystone-sm-port.py'
-      - 'scripts/tests/test-keystone-timer-policy.py'
       - 'keystone/linux-keystone-driver/**'
       - 'keystone/sm/src/**'
       - 'keystone/sm/tools/**'
@@ -34,6 +31,7 @@ on:
       - 'keystone/runtime/loader-binary/**'
       - 'scripts/tests/test-keystone-loader-entry.py'
       - 'scripts/tests/keystone-loader-entry-check.c'
+      - 'keystone/sdk/src/host/**'
       - 'keystone/sdk/src/edge/CMakeLists.txt'
       - 'keystone/sdk/src/app/CMakeLists.txt'
       - 'keystone/examples/hello-native/CMakeLists.txt'
@@ -69,13 +67,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y e2fsprogs fakeroot libfdt-dev
-      - name: Verify Keystone SM trap and timer contracts
-        run: |
-          python3 scripts/tests/test-keystone-system-reset.py
-          python3 scripts/tests/test-keystone-sm-port.py
-          python3 scripts/tests/test-keystone-timer-policy.py
-      - name: Verify SBI 2001 through 2005 and edgecall source paths
-        run: bash verifications/run-all.sh
       - name: Verify image creation and Keystone overlay
         run: python3 scripts/tests/test-build-rootfs-k3.py
       - name: Verify guest helper installation and shutdown control
@@ -99,10 +90,18 @@ jobs:
           make -C samples/helloworld -j2
           make -C samples/helloworld check
           qemu-riscv64 samples/helloworld/build/hello | grep -Fx 'hello, world!'
-      - name: Build edgecall guest verification package
+      - name: Build real SBI and enclave integration programs
         run: |
-          make -C verifications/edgecall guest
+          make -C verifications guest
           bash verifications/edgecall/build/guest/edgecall.ke --check
+          bash verifications/edgecall/build/guest-256/edgecall.ke --check
+          # A hosted runner has no K3 system guest: never report integration PASS.
+          if bash verifications/run-all.sh; then
+            echo 'Unexpected integration execution outside the system guest' >&2
+            exit 1
+          else
+            test "$?" -eq 2
+          fi
       - name: Build and exercise static guest module loader
         run: |
           set -euo pipefail

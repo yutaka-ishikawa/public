@@ -65,10 +65,9 @@ shutdown -h now
 
 QEMUが終了してホスト側のシェルに戻ることを確認する。再起動は、別途ゲストを起動して`shutdown -r now`で確認する。
 
-## 検証
+## 現在の検証方法
 
-- [`test-keystone-system-reset.py`](../scripts/tests/test-keystone-system-reset.py)で実際の`sbi_system_reset()`関数を取り出し、電源断デバイスなどを模擬して実行した。shutdown・cold reboot・warm rebootと各reasonについて、Keystone構成がHSM停止を通らずデバイスへ進むこと、拒否・未登録・デバイスからの復帰時に待機すること、非Keystone構成の従来経路を確認した。
-- 同テストで、実際のcarray生成規則と生成スクリプトを使い、設定ヘッダー変更後にドライバ一覧が更新されることを3種類の規則で確認した。
-- 既存ビルドディレクトリでSMとOpenSBIを再ビルド・リンクできた。生成したファームウェアELFとドライバ一覧に`fdt_syscon_poweroff`／`fdt_syscon_reboot`が含まれることを確認した。
-
-以上はホスト上の回帰テストとファームウェアのビルド検証である。修正後のjupiter2ゲストでの電源断・再起動の実動作は、この修正時点では未確認。
+旧reset関数の模擬試験は削除した。現在の動作確認は上記の実ゲストでの
+shutdown/reboot手順を使い、ファームウェアのビルド成功とは区別する。
+過去のビルドではSM/OpenSBIのリンクとsyscon poweroff/rebootドライバの収録を
+確認したが、それだけで実ゲストの電源断が成功したとは扱わない。
