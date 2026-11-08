@@ -99,3 +99,5 @@ run.log                 run-tests.shで実行したログ
 Cソースは、承認されたK&Rスタイル（1段4文字、タブ幅8。1段目は空白4文字、2段目はタブ1文字。関数の開始波括弧は改行、制御文の開始波括弧は同じ行、変数宣言はブロック冒頭）に統一しています。今後の方針は[AGENTS.md](../AGENTS.md)と[.clang-format](../.clang-format)に保存しています。
 
 整形後の48グループの再検証記録は[style-check/](style-check/README.md)を参照してください。過去の`baseline/`と`after-fix/`は整形前の証拠として保持しています。
+
+`for`・`if`・`else`は本文が1文でも必ず波括弧で囲みます。他のループ本文も同様とし、本文は改行して記載します。`.clang-format`の`InsertBraces: true`にも反映しています。

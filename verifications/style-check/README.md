@@ -1,6 +1,6 @@
 # K&R整形後の検証
 
-日付：2026-11-08（日本時間）。今回の整形前の基準コミット：`ff8a76076`。
+日付：2026-11-08（日本時間）。今回の整形前の基準コミット：`4c850b64b`。
 
 承認されたK&Rスタイルに合わせ、`common/harness.c`と各SBIの`test.c`を整形した。関数の開始波括弧を改行し、制御文の開始波括弧は同じ行に置き、1段4文字・タブ幅8（1段目は空白4文字、2段目はタブ1文字）、1文1行、ブロック冒頭の変数宣言とした。副作用のある初期化は宣言から分離し、元の実行位置を維持した。
 
@@ -32,3 +32,9 @@ bash verifications/run-all.sh
 ```
 
 前回の1段8文字の整形記録は[results-8column.json](results-8column.json)に保持し、現在の設定で再検証した結果を`results.json`に記録しています。
+
+## 単文の制御ブロックにも波括弧を付与
+
+`for`・`if`・`else`を含む制御構文は、本文が1文でも波括弧を付け、本文を改行しました。インデント4文字・タブ幅8は維持しています。設定に`InsertBraces: true`を加え、AGENTS.mdにも今後のルールを記載しました。この設定を使う場合はclang-format 15以降を使用してください。
+
+再実行した全48グループがPASSし、実行ログは既存の`after-fix/`と一致しました。変更前の整形記録は[results-before-required-braces.json](results-before-required-braces.json)、今回の結果は[results.json](results.json)に保存しています。

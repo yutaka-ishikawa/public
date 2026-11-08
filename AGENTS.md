@@ -8,6 +8,9 @@ Follow the root `.clang-format` and the approved verification example:
   four spaces. Use tabs where an entire 8-column tab stop fits.
 - Put the opening brace of a function definition on the next line.
 - Put opening braces for `if`, `else`, `for`, `while`, and `switch` on the same line.
+- Always use braces around `for`, `if`, and `else` bodies, even for one
+  statement. Apply the same rule to other loop bodies. Never collapse the
+  braced body onto a single line.
 - Put each statement on its own line and use spaces around operators and after commas.
 - Declare local variables at the beginning of their block. When moving a declaration,
   keep any initializer with side effects at its original execution point.

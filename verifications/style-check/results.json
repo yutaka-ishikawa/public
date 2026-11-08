@@ -1,6 +1,6 @@
 {
   "date_jst": "2026-11-08",
-  "source_base_revision": "ff8a76076",
+  "source_base_revision": "4c850b64b",
   "formatter": "clang-format 23.1.5",
   "flags": "-O2 -g -fsanitize=address,undefined",
   "test_results": [
@@ -30,16 +30,17 @@
     }
   ],
   "formatted_input_sha256": {
-    ".clang-format": "bc0df0fcc3ebf6788c3e4ad65d2edef732e63dc22abbac9ffc86aae44c84c03e",
-    "AGENTS.md": "20961c83dd7ec6dec41e0b1f605113823c93f9e7533be7b38b027ee4f3c818c4",
-    "verifications/sbi-2001/test.c": "b2e2a205416ee3e5bcd58978896e889e187adfccfac10493adc40c0af8620aef",
-    "verifications/sbi-2002/test.c": "89de7bed76a372b8ac7d1e52c5d502e2837902032ceadf9e7cad76edf96516be",
-    "verifications/sbi-2003/test.c": "8eef7900df40b2d7154cedd1e127a1110b39e2668dafca565ab0a83422d82a36",
+    ".clang-format": "2821a20dcd599b8dcc898652a1abe825ea5e00e91bce4da9a1cea07d465291b8",
+    "AGENTS.md": "18d758f7773e668c11f1c78c8f5a61239c991feb83c5546ee1523f171ef0ace5",
+    "verifications/sbi-2001/test.c": "e2b7730f6b9ef341da5659626db48b641f6b74df9002e332947d0b8838923fc1",
+    "verifications/sbi-2002/test.c": "77f99679e6a97d9604b9b1df6a7af401e292809c780f1503235574c505b37857",
+    "verifications/sbi-2003/test.c": "cb56facf8157d32862286586762021dc6e35c2e913c45f35c923cbb205817e19",
     "verifications/sbi-2004/test.c": "b3af5350dee87070e85c2779738aac5c27ff3c9d13dcb111fd5b91c9f7814f21",
-    "verifications/common/harness.c": "3e3e42377ea8c14ab347840866aca9f08bfc52e03c29d72fdf03a847e0e32081",
+    "verifications/common/harness.c": "f978b2969e76d08cb1e6da723b095b6a24071037994cfb16fce0a583c1a5bb5c",
     "verifications/common/extract_sources.py": "6ed8c68f7b5970eae9e7668a83997de4e7b8433c8366a2eae1348727ea8b43a9"
   },
   "production_source_inputs_unchanged": true,
   "indent_width": 4,
-  "tab_width": 8
+  "tab_width": 8,
+  "braces_required": true
 }

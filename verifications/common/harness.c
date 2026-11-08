@@ -99,8 +99,9 @@ void cpu_exit_enclave_context(void)
 
 static int copy_to_sm(void *dest, uintptr_t src, size_t size)
 {
-    if (copy_fail || src != (uintptr_t)&args || size != sizeof args)
+    if (copy_fail || src != (uintptr_t)&args || size != sizeof args) {
 	return 1;
+    }
     memcpy(dest, (void *)src, size);
     return 0;
 }
@@ -119,9 +120,10 @@ int pmp_region_init_atomic(uintptr_t base, uint64_t size, enum pmp_priority pri,
 
     init_calls++;
     op('A');
-    if (init_calls == fail_init_call)
+    if (init_calls == fail_init_call) {
 	return -1;
-    for (i = 0; i < 64; i++)
+    }
+    for (i = 0; i < 64; i++) {
 	if (!region_used[i]) {
 	    region_used[i] = 1;
 	    region_base[i] = base;
@@ -130,6 +132,7 @@ int pmp_region_init_atomic(uintptr_t base, uint64_t size, enum pmp_priority pri,
 	    active_regions++;
 	    return 0;
 	}
+    }
     return -1;
 }
 
@@ -138,8 +141,9 @@ int pmp_region_free_atomic(region_id id)
     assert(id >= 0 && id < 64 && region_used[id]);
     free_calls++;
     op('F');
-    if (free_calls == free_fail_call)
+    if (free_calls == free_fail_call) {
 	return -1;
+    }
     region_used[id] = 0;
     active_regions--;
     return 0;
@@ -183,8 +187,9 @@ int pmp_set_keystone(region_id id, uint8_t permissions)
 	local_permissions[id] = permissions;
 	return -1;
     }
-    if (permissions == PMP_NO_PERM && rollback_fail)
+    if (permissions == PMP_NO_PERM && rollback_fail) {
 	return -1;
+    }
     local_permissions[id] = permissions;
     return 0;
 }
@@ -208,8 +213,9 @@ static int k3_keystone_pmp_assert_active(void)
 
 static void __attribute__((noreturn)) sbi_hart_hang(void)
 {
-    if (hang_expected)
+    if (hang_expected) {
 	longjmp(hang_target, 1);
+    }
     abort();
 }
 
@@ -414,8 +420,9 @@ static void no_allocated_eids(void)
 {
     int i;
 
-    for (i = 0; i < ENCL_MAX; i++)
+    for (i = 0; i < ENCL_MAX; i++) {
 	assert(enclaves[i].state == INVALID);
+    }
 }
 
 static unsigned long create_fixture(void)

@@ -13,3 +13,4 @@ IndentCaseLabels: false
 SortIncludes: Never
 BreakStringLiterals: true
 SeparateDefinitionBlocks: Always
+InsertBraces: true

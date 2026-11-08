@@ -24,12 +24,15 @@ int main(void)
     assert(!enclaves[id].encl_satp && !enclaves[id].n_thread);
     zero = (struct runtime_params_t){0};
     assert(!memcmp(&enclaves[id].params, &zero, sizeof zero));
-    for (offset = 0; offset < sizeof epm; offset++)
+    for (offset = 0; offset < sizeof epm; offset++) {
 	assert(epm[offset] == 0);
-    for (offset = 0; offset < sizeof utm; offset++)
+    }
+    for (offset = 0; offset < sizeof utm; offset++) {
 	assert(utm[offset] == 0x93);
-    for (i = 0; i < ENCLAVE_REGIONS_MAX; i++)
+    }
+    for (i = 0; i < ENCLAVE_REGIONS_MAX; i++) {
 	assert(enclaves[id].regions[i].type == REGION_INVALID);
+    }
 
     CASE("destroy FRESH: zero private pages, retain UTM, free after global "
 	 "unset");

@@ -17,10 +17,12 @@ int main(void)
 	   hash_calls == 1);
     assert(!strcmp(operations, "AAGBH"));
     assert(enclaves[id].params.free_requested == args.free_requested);
-    for (offset = 0; offset < sizeof utm; offset++)
+    for (offset = 0; offset < sizeof utm; offset++) {
 	assert(utm[offset] == 0);
-    for (offset = 0; offset < sizeof epm; offset++)
+    }
+    for (offset = 0; offset < sizeof epm; offset++) {
 	assert(epm[offset] == 0x5a);
+    }
 
     CASE("CREATE success: EID, FRESH, EPM/UTM, zero UTM, measure order, "
 	 "PC+4");
@@ -104,8 +106,9 @@ int main(void)
     CASE("free_paddr exactly EPM end accepted");
 
     reset_fixture();
-    for (i = 0; i < ENCL_MAX; i++)
+    for (i = 0; i < ENCL_MAX; i++) {
 	enclaves[i].state = FRESH;
+    }
     r = invoke(2001, (uintptr_t)&args);
     normal_return(r, SBI_ERR_SM_ENCLAVE_NO_FREE_RESOURCE);
     assert(init_calls == 0);

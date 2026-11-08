@@ -9,10 +9,12 @@ static void verify_host_unchanged(unsigned long id)
 	   csrs[mideleg] == 0xffff);
     assert(!enclaves[id].threads[0].prev_mepc &&
 	   os_permissions == PMP_ALL_PERM);
-    for (i = 0; i < ENCLAVE_REGIONS_MAX; i++)
-	if (enclaves[id].regions[i].type != REGION_INVALID)
+    for (i = 0; i < ENCLAVE_REGIONS_MAX; i++) {
+	if (enclaves[id].regions[i].type != REGION_INVALID) {
 	    assert(local_permissions[enclaves[id].regions[i].pmp_rid] ==
 		   PMP_NO_PERM);
+	}
+    }
 }
 
 int main(void)
