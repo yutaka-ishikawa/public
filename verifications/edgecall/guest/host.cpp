@@ -116,8 +116,9 @@ static int execute_guest(char **argv)
     Keystone::Error result;
     uintptr_t retval;
 
-    params.setFreeMemSize(2 * 1024 * 1024);
-    params.setUntrustedSize(2 * 1024 * 1024);
+    /* Match hello: avoid a needless multi-MiB contiguous EPM allocation. */
+    params.setFreeMemSize(256 * 1024);
+    params.setUntrustedSize(256 * 1024);
     enclave = &instance;
     result = instance.init(argv[1], argv[2], argv[3], params);
     if (result != Keystone::Error::Success) {

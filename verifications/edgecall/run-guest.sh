@@ -6,6 +6,14 @@ if [[ $(uname -m) != riscv64 ]]; then
     exit 2
 fi
 bb=/usr/libexec/keystone/busybox
+# init=/bin/bash does not mount these; makeself/df needs /proc/mounts.
+mkdir -p /proc /sys
+if ! "$bb" mountpoint -q /proc; then
+    "$bb" mount -t proc proc /proc
+fi
+if ! "$bb" mountpoint -q /sys; then
+    "$bb" mount -t sysfs sysfs /sys
+fi
 if [[ ! -e /dev/keystone_enclave ]]; then
     "$bb" insmod "/usr/lib/modules/$(uname -r)/extra/keystone-driver.ko"
 fi

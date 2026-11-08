@@ -1,0 +1,97 @@
+make: Nothing to be done for 'all'.
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/test
+PASS 01 CREATE success: EID, FRESH, EPM/UTM, zero UTM, measure order, PC+4
+PASS 02 adapter rejects unready SM
+PASS 03 helper readiness gate
+PASS 04 enclave cannot call host CREATE
+PASS 05 argument copy failure has no allocation
+PASS 06 8 invalid layouts/firmware range cases rejected before EID/PMP changes
+PASS 07 free_paddr exactly EPM end accepted
+PASS 08 EID exhaustion
+PASS 09 EPM and UTM allocation failures roll back resources
+PASS 10 global PMP failure prevents platform/hash and frees resources
+PASS 11 platform failure unsets PMP and releases resources
+PASS 12 hash failure destroys platform state and rolls back
+SUMMARY SBI 2001: 12 groups completed, 0 known findings reproduced (hardware mocked)
+make: Nothing to be done for 'all'.
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/test
+PASS 01 destroy FRESH: zero private pages, retain UTM, free after global unset
+PASS 02 double destroy rejected
+PASS 03 STOPPED enclave destroyable
+PASS 04 RUNNING rejected without freeing resources
+PASS 05 DESTROYING and ALLOCATED rejected without callbacks or frees
+PASS 06 out-of-range IDs rejected before narrowing
+PASS 07 enclave context rejected
+PASS 08 unready adapter rejected
+PASS 09 100 create/destroy cycles reuse EID and mocked PMP regions
+PASS 10 failed global unset quarantines EID and all allocations; retry rejected
+PASS 11 64-bit EIDs cannot alias a valid enclave
+PASS 12 reentrant destroy during callback cannot acquire DESTROYING enclave
+PASS 13 private descriptor free failure does not release EID or UTM
+PASS 14 UTM descriptor free failure does not release EID
+PASS 15 later private-region unset failure retains all descriptors, including earlier successful unset
+SUMMARY SBI 2002: 15 groups completed, 0 known findings reproduced (hardware mocked)
+make: Nothing to be done for 'all'.
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/test
+PASS 01 RUN success preserves entry ABI and saves host context after PMP preparation
+PASS 02 second RUN rejected without thread increment
+PASS 03 STOPPED requires RESUME 2005, not RUN
+PASS 04 invalid/unallocated/out-of-range IDs
+PASS 05 enclave context cannot invoke host RUN
+PASS 06 unready adapter rejected before state mutation
+PASS 07 EPM/UTM failure restores host/PMP/state and permits a successful RUN retry
+PASS 08 64-bit EID cannot alias a valid enclave
+PASS 09 OS permission setup failure is reported with successful host rollback
+PASS 10 failed permission revocation halts before any S-mode return
+PASS 11 failed OS permission restore halts before any S-mode return
+PASS 12 shared RESUME switch failure restores original STOPPED state
+PASS 13 shared RESUME helper also checks full-width EID
+PASS 14 actual RUN -> timer STOP -> RESUME -> EXIT preserves state and return ABI
+PASS 15 shared host return halts when enclave permission revocation fails
+PASS 16 shared host return halts when OS mapping restore fails
+SUMMARY SBI 2003: 16 groups completed, 0 known findings reproduced (hardware mocked)
+make: Nothing to be done for 'all'.
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/test
+PASS 01 unassigned 2004 returns 100100 with PC+4 and zero a1
+PASS 02 2004 does not run/resume/destroy existing enclave
+PASS 03 host-range check precedes unsupported-ID handling
+PASS 04 readiness gate precedes unsupported-ID handling
+PASS 05 unused argument does not cause memory access or allocation
+SUMMARY SBI 2004: 5 groups completed, 0 known findings reproduced (unassigned ID)
+make: Nothing to be done for 'all'.
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/test
+PASS 01 STOPPED resume restores saved registers/CSRs and exact PC, not RUN boot parameters
+PASS 02 timer interruption marker preserves saved a0; PC bias adjusted exactly once
+PASS 03 OCALL marker returns success in a0 without overwriting other restored registers
+PASS 04 INVALID/DESTROYING/ALLOCATED/FRESH states cannot resume
+PASS 05 STOPPED/RUNNING with full thread count rejected without extra reservation
+PASS 06 source predicate accepts synthetic RUNNING with zero active threads
+PASS 07 full-width EID bounds reject all aliases before 32-bit conversion
+PASS 08 enclave context cannot issue host RESUME
+PASS 09 unready SM rejects RESUME before state changes
+PASS 10 EPM/UTM setup failure restores STOPPED context/permissions and allows retry
+PASS 11 rollback restores original RUNNING state, not unconditionally STOPPED
+PASS 12 OS PMP setup failure restores saved context and thread reservation
+PASS 13 failed permission rollback halts before S-mode return
+PASS 14 failed OS mapping restore halts before S-mode return
+PASS 15 PMP/HSM guard prevents any context/permission switch
+PASS 16 actual timer-reason STOP helper and RESUME preserve interrupted a0 and PC
+PASS 17 100 OCALL STOP/RESUME cycles preserve shared data and release resources after EXIT
+SUMMARY SBI 2005: 17 groups completed, 0 known findings reproduced (hardware mocked)
+make: Nothing to be done for 'all'.
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/test
+PASS EDGE 01 11 sizes: binary data with NUL bytes, copied arguments, transformed return, canaries
+PASS EDGE 02 maximum shared payload fits exactly
+PASS EDGE 03 one byte too many rejected before STOP/host dispatch
+PASS EDGE 04 forged return offset/length and host error do not copy to private output
+PASS EDGE 05 short return copies only available bytes; long return is capped at caller length
+PASS EDGE 06 OCALL without a return buffer
+PASS EDGE 07 failed STOP does not dispatch or report success
+PASS EDGE 08 SDK refuses private pointers as shared argument/return ranges
+PASS EDGE 09 host argument decoder rejects end/overflow/cross-end/private-address offsets
+PASS EDGE 10 shared pointer/offset round trip
+SUMMARY EDGE DATA: 10 groups passed (SBI/user-copy mocked; not a PMP access test)
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/sm-test
+PASS 01 OCALL STOP returns EDGE_CALL_HOST and revokes EPM before host context
+PASS 02 RESUME preserves host-written shared return data and restores enclave mapping
+SUMMARY EDGE SM: 2 groups passed, 0 findings (PMP API mocked)

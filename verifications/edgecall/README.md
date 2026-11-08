@@ -9,7 +9,7 @@
 | `guest/eapp.c`＋`guest/host.cpp` | Keystoneゲストでの8種類のデータ往復・不正戻り値拒否 | RISC-Vクロスビルド成功。ゲスト実行は未確認。 |
 | `kernel/edgecall_pmp_probe.c` | OCALL中、Linux S-modeから元のEPM物理ページを読む試験 | オブジェクトのコンパイル成功。実PMP拒否は未確認。 |
 
-既存SBIの48グループと合わせ、`verifications/run-all.sh`はホスト試験60グループを実行する。**ホスト試験のPASSだけで、実PMPによる参照拒否が確認できたとはしない。**
+既存SBIの65グループと合わせ、`verifications/run-all.sh`はホスト試験77グループを実行する。**ホスト試験のPASSだけで、実PMPによる参照拒否が確認できたとはしない。**
 
 この環境には起動用Linux Imageと完全な対応カーネルの`Module.symvers`がなく、実行可能なKeystoneゲストも起動していない。カーネル試験は`.o`の生成までで、ロード可能な`.ko`の生成・ロード・実行は未確認である。
 
@@ -158,3 +158,8 @@ rmmod edgecall_pmp_probe
 Keystone driver自体をアンロードする必要はない。
 
 ホスト単体試験とゲスト統合試験の違い、ファームウェア更新からの一連の手順は[検証方法](../../doc/keystone-verification-methods.md)にもまとめています。
+
+## ゲストでEPM確保に失敗する場合
+
+`failed to allocate 566 page(s)` の原因、メモリ予算の修正と再実行手順は
+[調査記録](../../doc/keystone-edgecall-epm-allocation.md)を参照。
