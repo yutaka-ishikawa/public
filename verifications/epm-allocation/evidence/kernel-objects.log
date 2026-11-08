@@ -1,0 +1,25 @@
+make: Entering directory '/workspace/public/linux-k3'
+make[1]: Entering directory '/workspace/public/.build-keystone/epm-driver-check'
+  CC [M]  keystone-page.o
+  CC [M]  keystone.o
+  CC [M]  keystone-ioctl.o
+keystone-ioctl.c:14:5: warning: no previous prototype for ‘keystone_create_enclave’ [-Wmissing-prototypes]
+   14 | int keystone_create_enclave(struct file *filep, unsigned long arg)
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+keystone-ioctl.c:39:5: warning: no previous prototype for ‘keystone_finalize_enclave’ [-Wmissing-prototypes]
+   39 | int keystone_finalize_enclave(unsigned long arg)
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~
+keystone-ioctl.c:95:5: warning: no previous prototype for ‘keystone_run_enclave’ [-Wmissing-prototypes]
+   95 | int keystone_run_enclave(unsigned long data)
+      |     ^~~~~~~~~~~~~~~~~~~~
+keystone-ioctl.c:123:5: warning: no previous prototype for ‘utm_init_ioctl’ [-Wmissing-prototypes]
+  123 | int utm_init_ioctl(struct file *filp, unsigned long arg)
+      |     ^~~~~~~~~~~~~~
+keystone-ioctl.c:155:5: warning: no previous prototype for ‘keystone_destroy_enclave’ [-Wmissing-prototypes]
+  155 | int keystone_destroy_enclave(struct file *filep, unsigned long arg)
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~
+keystone-ioctl.c:198:5: warning: no previous prototype for ‘keystone_resume_enclave’ [-Wmissing-prototypes]
+  198 | int keystone_resume_enclave(unsigned long data)
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+make[1]: Leaving directory '/workspace/public/.build-keystone/epm-driver-check'
+make: Leaving directory '/workspace/public/linux-k3'

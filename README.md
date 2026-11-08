@@ -236,3 +236,6 @@ bash scripts/clean-k3.sh --only firmware
 Use `--only qemu` or `--only linux` for the other components. Preview deletions with `--dry-run`. If building with `--build-dir /path/to/work`, provide the same option to the clean script. Custom build directories must contain the `.k3-build-root` marker created by `build-install-k3.sh`.
 
 The script **never removes** source trees, patches, rootfs files, or files installed to `bin/`, `firmware/k3/`, `boot/k3/`, or `lib/modules/`. Stop running builds before cleaning. This is not a full uninstall.
+
+Keystoneの大容量EPM（256 MiB）には、修正版ドライバと起動時のCMA予約を使う。
+[設定・ビルド・実ゲスト検証手順](verifications/epm-allocation/README.md)を参照。

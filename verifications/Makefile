@@ -7,6 +7,7 @@ all:
 	$(MAKE) -C sbi-2004 all
 	$(MAKE) -C sbi-2005 all
 	$(MAKE) -C edgecall all
+	$(MAKE) -C epm-allocation all
 test:
 	bash run-all.sh
 clean:
@@ -16,3 +17,4 @@ clean:
 	$(MAKE) -C sbi-2004 clean
 	$(MAKE) -C sbi-2005 clean
 	$(MAKE) -C edgecall clean
+	$(MAKE) -C epm-allocation clean

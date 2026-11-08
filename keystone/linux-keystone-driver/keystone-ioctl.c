@@ -167,30 +167,32 @@ int keystone_destroy_enclave(struct file *filep, unsigned long arg)
 
 int __keystone_destroy_enclave(unsigned int ueid)
 {
-  struct sbiret ret;
-  struct enclave *enclave;
-  enclave = get_enclave_by_id(ueid);
+    struct sbiret ret;
+    struct enclave *enclave;
+    enclave = get_enclave_by_id(ueid);
 
-  if (!enclave) {
-    keystone_err("invalid enclave id\n");
-    return -EINVAL;
-  }
-
-  if (enclave->eid >= 0) {
-    ret = sbi_sm_destroy_enclave(enclave->eid);
-    if (ret.error) {
-      keystone_err("fatal: cannot destroy enclave: SBI failed with error code %ld\n", ret.error);
-      return -EINVAL;
+    if (!enclave) {
+	keystone_err("invalid enclave id\n");
+	return -EINVAL;
     }
-  } else {
-    keystone_warn("keystone_destroy_enclave: skipping (enclave does not exist)\n");
-  }
 
+    if (enclave->eid != (unsigned long)-1) {
+	ret = sbi_sm_destroy_enclave(enclave->eid);
+	if (ret.error) {
+	    keystone_err("fatal: cannot destroy enclave: SBI failed with error "
+			 "code %ld\n",
+			 ret.error);
+	    return -EINVAL;
+	}
+    } else {
+	keystone_warn(
+	    "keystone_destroy_enclave: skipping (enclave does not exist)\n");
+    }
 
-  destroy_enclave(enclave);
-  enclave_idr_remove(ueid);
+    destroy_enclave(enclave);
+    enclave_idr_remove(ueid);
 
-  return 0;
+    return 0;
 }
 
 int keystone_resume_enclave(unsigned long data)

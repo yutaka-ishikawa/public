@@ -18,6 +18,7 @@ on:
       - 'opensbi/platform/generic/configs/k3_keystone_audit_defconfig'
       - 'scripts/tests/test-keystone-sm-port.py'
       - 'scripts/tests/test-keystone-timer-policy.py'
+      - 'keystone/linux-keystone-driver/**'
       - 'keystone/sm/src/**'
       - 'keystone/sm/tools/**'
       - 'scripts/build_keystone_sm.sh'

@@ -1,0 +1,4 @@
+make: Entering directory '/workspace/public/verifications/epm-allocation'
+mkdir -p build
+riscv64-linux-gnu-gcc --sysroot=/workspace/.k3-env/sysroot -O2 -g -static -Wall -Wextra -Werror -I../../keystone/sdk/include/shared guest.c -o build/epm-guest
+make: Leaving directory '/workspace/public/verifications/epm-allocation'

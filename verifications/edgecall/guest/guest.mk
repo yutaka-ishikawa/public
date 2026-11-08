@@ -8,6 +8,7 @@ CROSS_COMPILE ?= riscv64-linux-gnu-
 GCC := $(CROSS_COMPILE)gcc
 GXX := $(CROSS_COMPILE)g++
 CCFLAGS ?= -O2 -g
+FREE_MEM_MIB ?= 2
 OUT := build/guest
 SDK_LIBS := $(SDK_DIR)/lib/libkeystone-host.a $(SDK_DIR)/lib/libkeystone-edge.a
 .PHONY: guest kernel-module kernel-object
@@ -18,7 +19,7 @@ $(OUT)/eapp: guest/eapp.c guest/protocol.h guest/guest.mk $(SDK_DIR)/lib/libkeys
 	mkdir -p $(OUT)
 	$(GCC) $(CPPFLAGS) $(CCFLAGS) -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-e,main -Iguest -I$(SDK_DIR)/include $< $(SDK_DIR)/lib/libkeystone-eapp.a -o $@
 $(OUT)/runner: guest/host.cpp guest/protocol.h kernel/probe_abi.h guest/guest.mk $(SDK_LIBS) | $(OUT)
-	$(GXX) $(CPPFLAGS) $(CCFLAGS) -Wall -Wextra -Werror -std=c++17 -include cstdint -Iguest -I$(SDK_DIR)/include $< $(SDK_LIBS) -o $@
+	$(GXX) $(CPPFLAGS) -DEDGE_VERIFY_FREE_MEM_MIB=$(FREE_MEM_MIB) $(CCFLAGS) -Wall -Wextra -Werror -std=c++17 -include cstdint -Iguest -I$(SDK_DIR)/include $< $(SDK_LIBS) -o $@
 $(OUT)/edgecall.ke: $(OUT)/eapp $(OUT)/runner $(RUNTIME_DIR)/eyrie-rt $(RUNTIME_DIR)/loader.bin
 	mkdir -p $(OUT)/pkg
 	cp $(OUT)/eapp $(OUT)/runner $(RUNTIME_DIR)/eyrie-rt $(RUNTIME_DIR)/loader.bin $(OUT)/pkg/

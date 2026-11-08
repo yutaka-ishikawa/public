@@ -41,6 +41,7 @@ class RootfsTests(unittest.TestCase):
         result = self.run_guest()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"file={bianbu},format=raw,if=none,id=hd0", result.stdout)
+        self.assertNotIn("cma=", result.stdout)
         result = self.run_guest("--rootfs", str(minimal))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"file={minimal},format=raw,if=none,id=hd0", result.stdout)
@@ -61,6 +62,7 @@ class RootfsTests(unittest.TestCase):
         result = self.run_guest(image=None)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("jupiter2", result.stdout)
+        self.assertIn("cma=512M@4G-16G", result.stdout)
         self.assertIn("fw_dynamic.bin", result.stdout)
         self.assertIn("virtio-blk-pci,drive=hd0", result.stdout)
         self.assertIn("keystone-rootfs.img", result.stdout)
@@ -71,6 +73,7 @@ class RootfsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(str(custom), result.stdout)
         self.assertIn("custom args", result.stdout)
+        self.assertNotIn("cma=", result.stdout)
         self.assertIn("-smp\n2\n", result.stdout)
 
     def test_invalid_profile_is_rejected(self):

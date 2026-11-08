@@ -163,3 +163,7 @@ Keystone driver自体をアンロードする必要はない。
 
 `failed to allocate 566 page(s)` の原因、メモリ予算の修正と再実行手順は
 [調査記録](../../doc/keystone-edgecall-epm-allocation.md)を参照。
+
+256 MiB free memoryで試す場合は
+[大容量EPMの設定とドライバ更新](../epm-allocation/README.md)に従う。
+修正版ドライバでは通常のfree memory要求を2 MiBに戻している。

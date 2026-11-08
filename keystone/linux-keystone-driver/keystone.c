@@ -77,19 +77,22 @@ int keystone_mmap(struct file* filp, struct vm_area_struct *vma)
 
 static int __init keystone_dev_init(void)
 {
-  int  ret;
+    int ret;
 
-
-  ret = misc_register(&keystone_dev);
-  if (ret < 0)
-  {
-    pr_err("keystone_enclave: misc_register() failed\n");
-  }
-
-  keystone_dev.this_device->coherent_dma_mask = DMA_BIT_MASK(32);
-
-  pr_info("keystone_enclave: " DRV_DESCRIPTION " v" DRV_VERSION "\n");
-  return ret;
+    ret = misc_register(&keystone_dev);
+    if (ret < 0) {
+	pr_err("keystone_enclave: misc_register() failed\n");
+	return ret;
+    }
+    /* K3 RAM starts above 4 GiB. EPM is not a 32-bit DMA device. */
+    ret = dma_coerce_mask_and_coherent(keystone_dev.this_device,
+				       DMA_BIT_MASK(64));
+    if (ret) {
+	misc_deregister(&keystone_dev);
+	return ret;
+    }
+    pr_info("keystone_enclave: " DRV_DESCRIPTION " v" DRV_VERSION "\n");
+    return 0;
 }
 
 static void __exit keystone_dev_exit(void)

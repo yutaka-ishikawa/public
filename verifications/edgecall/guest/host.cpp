@@ -109,6 +109,10 @@ static void bad_return(void *buffer)
     call->return_data.call_status = CALL_STATUS_OK;
 }
 
+#ifndef EDGE_VERIFY_FREE_MEM_MIB
+#define EDGE_VERIFY_FREE_MEM_MIB 2
+#endif
+
 static int execute_guest(char **argv)
 {
     Keystone::Enclave instance;
@@ -116,8 +120,7 @@ static int execute_guest(char **argv)
     Keystone::Error result;
     uintptr_t retval;
 
-    /* Match hello: avoid a needless multi-MiB contiguous EPM allocation. */
-    params.setFreeMemSize(256 * 1024);
+    params.setFreeMemSize((size_t)EDGE_VERIFY_FREE_MEM_MIB * 1024 * 1024);
     params.setUntrustedSize(256 * 1024);
     enclave = &instance;
     result = instance.init(argv[1], argv[2], argv[3], params);

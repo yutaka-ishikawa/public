@@ -74,7 +74,12 @@ if [[ $IMAGE == keystone ]]; then
 else
  : "${ROOTFS:=$PREFIX/rootfs/bianbu-rootfs.img}"
 fi
-if ((!APPEND_SET)); then CMDLINE='root=/dev/vda rw rootwait console=ttyS0,115200 earlycon=sbi init=/bin/bash loglevel=7'; fi
+if ((!APPEND_SET)); then
+ CMDLINE='root=/dev/vda rw rootwait console=ttyS0,115200 earlycon=sbi init=/bin/bash loglevel=7'
+ # RISC-V's default CMA reservation limit is 4 GiB, below all K3 RAM.
+ # Supply an explicit allocation range; memblock selects available RAM in it.
+ if [[ $IMAGE == keystone ]]; then CMDLINE+=' cma=512M@4G-16G'; fi
+fi
 for value in "$SMP" "$GDB_PORT" "$MONITOR_PORT"; do
  [[ $value =~ ^[1-9][0-9]*$ ]] || { echo "Invalid numeric value: $value" >&2; exit 2; }
 done

@@ -35,12 +35,13 @@ int keystone_mmap(struct file *filp, struct vm_area_struct *vma);
 
 /* enclave private memory */
 struct epm {
-  pte_t* root_page_table;
-  vaddr_t ptr;
-  size_t size;
-  unsigned long order;
-  paddr_t pa;
-  bool is_cma;
+    pte_t* root_page_table;
+    vaddr_t ptr;
+    size_t size;
+    unsigned long order;
+    paddr_t pa;
+    bool is_dma;
+    dma_addr_t dma_handle;
 };
 
 struct utm {

@@ -1,0 +1,24 @@
+make: Entering directory '/workspace/public/verifications/edgecall'
+make -f guest/guest.mk
+make[1]: Entering directory '/workspace/public/verifications/edgecall'
+mkdir -p build/guest
+riscv64-linux-gnu-gcc --sysroot=/workspace/.k3-env/sysroot -O2 -g -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-e,main -Iguest -I/workspace/public/.build-keystone/ssp-regression/sdk-install/include guest/eapp.c /workspace/public/.build-keystone/ssp-regression/sdk-install/lib/libkeystone-eapp.a -o build/guest/eapp
+riscv64-linux-gnu-g++ --sysroot=/workspace/.k3-env/sysroot -DEDGE_VERIFY_FREE_MEM_MIB=2 -O2 -g -Wall -Wextra -Werror -std=c++17 -include cstdint -Iguest -I/workspace/public/.build-keystone/ssp-regression/sdk-install/include guest/host.cpp /workspace/public/.build-keystone/ssp-regression/sdk-install/lib/libkeystone-host.a /workspace/public/.build-keystone/ssp-regression/sdk-install/lib/libkeystone-edge.a -o build/guest/runner
+mkdir -p build/guest/pkg
+cp build/guest/eapp build/guest/runner /workspace/public/.build-keystone/ssp-regression/examples/hello-native/eyrie-rt /workspace/public/.build-keystone/ssp-regression/examples/hello-native/loader.bin build/guest/pkg/
+makeself --noprogress build/guest/pkg build/guest/edgecall.ke 'Keystone edgecall verification' ./runner eapp eyrie-rt loader.bin
+Header is 720 lines long
+
+WARNING: Overwriting existing file: build/guest/edgecall.ke
+About to compress 296 KB of data...
+Adding files to archive named "build/guest/edgecall.ke"...
+a ./eapp
+a ./eyrie-rt
+a ./loader.bin
+a ./runner
+CRC: 830291773
+MD5: a315bbbdf2cb49a8d8037e4af9e4c4bf
+
+Self-extractable archive "build/guest/edgecall.ke" successfully created.
+make[1]: Leaving directory '/workspace/public/verifications/edgecall'
+make: Leaving directory '/workspace/public/verifications/edgecall'

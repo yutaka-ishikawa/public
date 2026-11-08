@@ -1,5 +1,13 @@
 # edgecallゲスト試験のEPM割り当て失敗
 
+## 後続修正
+
+以下は256 KiBへ縮小した時点の調査記録である。その後、ドライバの境界条件、
+DMA制約、CMA予約を修正し、256 MiBのEPM確保経路を追加した。
+edgecallの既定free memoryも2 MiBに戻した。
+現在の構成と更新・試験方法は
+[EPM確保の検証](../verifications/epm-allocation/README.md)を参照。
+
 ## 観測結果
 
 ユーザーのQEMUゲストで `bash run-guest.sh --data-only` を実行すると、
