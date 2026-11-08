@@ -22,9 +22,12 @@ if [[ ${1:-} != --data-only ]]; then
     }
 fi
 bash sbi-errors/run-guest.sh
-for package in build/guest/edgecall.ke build/guest-256/edgecall.ke; do
-    printf 'Integration package: %s\n' "$package"
-    EDGE_VERIFY_PACKAGE="$package" bash edgecall/run-guest.sh "$@"
+# Recreate both sizes after verified DESTROY to exercise TOR teardown/reuse.
+for iteration in 1 2; do
+    for package in build/guest/edgecall.ke build/guest-256/edgecall.ke; do
+        printf 'Integration cycle %s package: %s\n' "$iteration" "$package"
+        EDGE_VERIFY_PACKAGE="$package" bash edgecall/run-guest.sh "$@"
+    done
 done
 printf 'PASS GUEST SUITE: real SBI errors and enclave lifecycle at 2/256 MiB free memory\n'
 if [[ ${1:-} == --data-only ]]; then

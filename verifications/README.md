@@ -75,7 +75,7 @@ Keystoneプロファイルの既定起動引数には `cma=512M@4G-16G` を含�
 256 MiB試験の前提として `grep Cma /proc/meminfo` で512 MiB予約を確認する。
 詳細は [大容量EPM](../doc/keystone-large-epm.md) を参照。
 
-SBIエラー応答5件、2 MiB/256 MiBの各パッケージでOCALL往復、
+SBIエラー応答5件、2 MiB/256 MiBの各パッケージを2周しOCALL往復、
 PMP参照拒否、明示的DESTROYの全成功と `exit=0` を確認する。
 失敗した場合はそこで停止し、全体PASSを表示しない。
 
@@ -114,3 +114,6 @@ PMP実参照拒否までのPASSを示すものではない。
 
 コンパイルとパッケージ検査の記録は [evidence](evidence/README.md) に保存する。
 CIもビルド検査のみで、システムゲストの試験結果を代用しない。
+
+256 MiB版のCREATEが100003で失敗した場合は
+[TOR PMPの原因とファームウェア修正](../doc/keystone-tor-pmp.md)を参照。

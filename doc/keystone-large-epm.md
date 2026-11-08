@@ -81,3 +81,7 @@ EDGE_VERIFY_PACKAGE=build/guest-256/edgecall.ke bash run-guest.sh --data-only
 現在は実enclaveの正常ライフサイクルを通る上記試験を使う。
 実ゲストで4 MiB buddy確保とOCALL往復の成功報告はあるが、
 新しい256 MiB統合試験の実行成功は未確認。
+
+CMA確保後に `PMP global set unavailable or incomplete` / 100003となる場合、
+旧SMのTOR読み戻し検証が未対応。[原因と修正](keystone-tor-pmp.md)に従い
+ファームウェアを更新してQEMUを起動し直す。

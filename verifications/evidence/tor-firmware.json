@@ -1,0 +1,9 @@
+{
+  "scope": "firmware build/link only; corrected 256 MiB system-guest run unverified",
+  "trace": true,
+  "sha256": {
+    "keystone/sm/src/pmp.c": "c4aca633f8466494cec3e99d7955b69e1bef57a89f50124c9a5a44f224ecb6a9",
+    "verifications/run-all.sh": "69bf12a3df76c65567558763e6401fcbc90a21bf5c02d536a64dfba888de0106",
+    "install/keystone/firmware/k3/fw_dynamic.bin": "538f1648952b815b03298b7fbcaa144cd26039dd9afb81a19d1d5cde5e49c396"
+  }
+}

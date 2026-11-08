@@ -387,43 +387,126 @@ int pmp_set_keystone(int region_idx, uint8_t perm)
 
 int pmp_unset(int region_idx);
 
-/* Called on the receiving hart. A successful return requires CSR readback.
- * The global sender separately verifies every hart's generation ACK. */
+/* Read raw entries: pmp_get() represents size as an order and cannot
+ * describe an arbitrary TOR interval. Boundary addresses here are pmpaddr
+ * units (four bytes), including the WARL low bits for the current mode.
+ */
+static int k3_pmp_read_entry(unsigned int reg, unsigned long *flags,
+			     unsigned long *address)
+{
+    unsigned long cfg;
+
+    switch (reg) {
+#define X(n, g)                                                                \
+    case n:                                                                    \
+	cfg = csr_read(pmpcfg##g);                                             \
+	*address = csr_read(pmpaddr##n);                                       \
+	break;
+	LIST_OF_PMP_REGS
+#undef X
+    default:
+	return -1;
+    }
+    *flags = (cfg >> (8 * (reg % PMP_PER_GROUP))) & 0xff;
+    return 0;
+}
+
+static int k3_pmp_verify_tor(int region, int operation, uint8_t permissions)
+{
+    unsigned int reg;
+    unsigned long flags;
+    unsigned long address;
+    unsigned long lower_flags;
+    unsigned long lower_address;
+    uintptr_t start;
+    uint64_t size;
+
+    reg = region_register_idx(region);
+    if (k3_pmp_read_entry(reg, &flags, &address)) {
+	return -1;
+    }
+    lower_address = 0;
+    if (reg) {
+	if (k3_pmp_read_entry(reg - 1, &lower_flags, &lower_address)) {
+	    return -1;
+	}
+	/* The lower entry supplies the boundary and must remain OFF,
+	 * unlocked and without permissions of its own.
+	 */
+	if (lower_flags != 0) {
+	    return -1;
+	}
+    }
+    if (operation == SBI_PMP_IPI_TYPE_UNSET) {
+	return flags == 0 ? 0 : -1;
+    }
+    if (flags != (PMP_A_TOR | (permissions & PMP_ALL_PERM))) {
+	return -1;
+    }
+    start = region_get_addr(region);
+    size = region_get_size(region);
+    if (!size || start + size < start) {
+	return -1;
+    }
+    if (lower_address != (start >> 2) || address != ((start + size) >> 2)) {
+	return -1;
+    }
+    return 0;
+}
+
+/* Called on each receiving hart, including the sender. A successful return
+ * requires local CSR readback; the sender also requires every generation ACK.
+ */
 int k3_pmp_apply_verified(int region, int operation, uint8_t permissions)
 {
-  unsigned long flags, base, order;
-  unsigned int reg;
-  int rc;
-  if (region < 0 || region >= PMP_MAX_N_REGION || !is_pmp_region_valid(region))
-    return -1;
-  reg = region_register_idx(region);
-  /* K3 pmp_get() cannot independently validate the lower TOR boundary. */
-  if (regions[region].addrmode == PMP_A_TOR) return -1;
-  if (operation == SBI_PMP_IPI_TYPE_SET)
-    rc = pmp_set_keystone(region, permissions);
-  else if (operation == SBI_PMP_IPI_TYPE_UNSET)
-    rc = pmp_unset(region);
-  else return -1;
-  if (rc != SBI_ERR_SM_PMP_SUCCESS) return -1;
-  /* PMP translation results may be cached across a configuration change.
-   * Flush before claiming a locally verified update. A global epoch/ACK
-   * protocol remains separately necessary before any Hart is released. */
-  asm volatile ("fence iorw, iorw\n\tsfence.vma" ::: "memory");
-  rc = pmp_get(reg, &flags, &base, &order);
-  if (rc) return -1;
-  if (operation == SBI_PMP_IPI_TYPE_UNSET)
-    return (flags & PMP_A) ? -1 : 0;
-  if ((flags & (PMP_A | PMP_ALL_PERM)) !=
-      (regions[region].addrmode | (permissions & PMP_ALL_PERM))) return -1;
-  /* Compare effective address ranges, not raw WARL pmpaddr encodings. */
-  /* A readback of mode+permissions alone is NOT sufficient for an
-   * all-addresses NAPOT mapping: the physical range could be different. */
-  if (region_is_napot_all(region))
-    return (base == 0 && order == __riscv_xlen) ? 0 : -1;
-  if (base != region_get_addr(region)) return -1;
-  if (order >= sizeof(unsigned long) * 8) return -1;
-  if ((1UL << order) != region_get_size(region)) return -1;
-  return 0;
+    unsigned long flags;
+    unsigned long base;
+    unsigned long order;
+    unsigned int reg;
+    int rc;
+
+    if (region < 0 || region >= PMP_MAX_N_REGION ||
+	!is_pmp_region_valid(region)) {
+	return -1;
+    }
+    reg = region_register_idx(region);
+    if (operation == SBI_PMP_IPI_TYPE_SET) {
+	rc = pmp_set_keystone(region, permissions);
+    } else if (operation == SBI_PMP_IPI_TYPE_UNSET) {
+	rc = pmp_unset(region);
+    } else {
+	return -1;
+    }
+    if (rc != SBI_ERR_SM_PMP_SUCCESS) {
+	return -1;
+    }
+    /* Flush cached translations before acknowledging the new permissions. */
+    asm volatile("fence iorw, iorw\n\tsfence.vma" ::: "memory");
+    if (region_is_tor(region)) {
+	return k3_pmp_verify_tor(region, operation, permissions);
+    }
+    rc = pmp_get(reg, &flags, &base, &order);
+    if (rc) {
+	return -1;
+    }
+    if (operation == SBI_PMP_IPI_TYPE_UNSET) {
+	return (flags & PMP_A) ? -1 : 0;
+    }
+    if ((flags & (PMP_A | PMP_ALL_PERM)) !=
+	(regions[region].addrmode | (permissions & PMP_ALL_PERM))) {
+	return -1;
+    }
+    /* Compare effective ranges, not raw WARL NAPOT encodings. */
+    if (region_is_napot_all(region)) {
+	return (base == 0 && order == __riscv_xlen) ? 0 : -1;
+    }
+    if (base != region_get_addr(region) || order >= sizeof(unsigned long) * 8) {
+	return -1;
+    }
+    if ((1UL << order) != region_get_size(region)) {
+	return -1;
+    }
+    return 0;
 }
 
 int pmp_unset(int region_idx)
