@@ -232,3 +232,8 @@ compatible = "spacemit,k3-pico-itx";
 - [PMP情報の検査](../opensbi/include/sbi/k3_pmp_partition_evidence.h)
 - [Eyrie入口の修正](keystone-eyrie-entry-build-id.md)
 - [システム終了の修正](keystone-system-reset.md)
+
+## Zkr乱数拡張の追加調査
+
+公式資料・K3 CPU定義・実機情報からZkrの利用可能性は確認できていない。
+[調査結果と実機での確定方法](jupiter2-zkr-investigation.md)を参照。
