@@ -3,7 +3,9 @@
 The user has requested K&R style for all future C/C++ work in this repository.
 Follow the root `.clang-format` and the approved verification example:
 
-- Use tabs for indentation, with a tab width of 8.
+- Use a 4-column indentation step and an 8-column tab width. The first level
+  uses four spaces; the second level uses one tab; the third uses a tab plus
+  four spaces. Use tabs where an entire 8-column tab stop fits.
 - Put the opening brace of a function definition on the next line.
 - Put opening braces for `if`, `else`, `for`, `while`, and `switch` on the same line.
 - Put each statement on its own line and use spaces around operators and after commas.

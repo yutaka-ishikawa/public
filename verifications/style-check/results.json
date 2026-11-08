@@ -1,6 +1,6 @@
 {
   "date_jst": "2026-11-08",
-  "source_base_revision": "7993483f7",
+  "source_base_revision": "ff8a76076",
   "formatter": "clang-format 23.1.5",
   "flags": "-O2 -g -fsanitize=address,undefined",
   "test_results": [
@@ -30,14 +30,16 @@
     }
   ],
   "formatted_input_sha256": {
-    ".clang-format": "e7d32557daf3974006b26c2b7d0c87dd92691b3c8cea15eb52783019a0554f0a",
-    "AGENTS.md": "1b659c59a3d7521f56b287f45d760677f63afab2a80f7bfd964971e2cc307dc7",
-    "verifications/sbi-2001/test.c": "f9075d2582d72376349c68e9339103a368659288dc7524491dc65600ae115f7a",
-    "verifications/sbi-2002/test.c": "aae373c4fd30ce7f8d5263b975a061eaa37c512f73ae4e33f5a3375aae8a7334",
-    "verifications/sbi-2003/test.c": "af349f51df4550a6f90301adefdfd29f390f0a32935b162af8f25d62dee75eca",
-    "verifications/sbi-2004/test.c": "72322a99777ac3e58a2997a5997f4d17f531ac2e482ea8b429f9e998412daef2",
-    "verifications/common/harness.c": "c972ef743e4dda19a2951e195aee35de347f9d0fe881c118b0312cef7f45fc3d",
-    "verifications/common/extract_sources.py": "06d99221f64408fcb6643618206b258476b37d151539eccf9dc269e0c4fd7977"
+    ".clang-format": "bc0df0fcc3ebf6788c3e4ad65d2edef732e63dc22abbac9ffc86aae44c84c03e",
+    "AGENTS.md": "20961c83dd7ec6dec41e0b1f605113823c93f9e7533be7b38b027ee4f3c818c4",
+    "verifications/sbi-2001/test.c": "b2e2a205416ee3e5bcd58978896e889e187adfccfac10493adc40c0af8620aef",
+    "verifications/sbi-2002/test.c": "89de7bed76a372b8ac7d1e52c5d502e2837902032ceadf9e7cad76edf96516be",
+    "verifications/sbi-2003/test.c": "8eef7900df40b2d7154cedd1e127a1110b39e2668dafca565ab0a83422d82a36",
+    "verifications/sbi-2004/test.c": "b3af5350dee87070e85c2779738aac5c27ff3c9d13dcb111fd5b91c9f7814f21",
+    "verifications/common/harness.c": "3e3e42377ea8c14ab347840866aca9f08bfc52e03c29d72fdf03a847e0e32081",
+    "verifications/common/extract_sources.py": "6ed8c68f7b5970eae9e7668a83997de4e7b8433c8366a2eae1348727ea8b43a9"
   },
-  "production_source_inputs_unchanged": true
+  "production_source_inputs_unchanged": true,
+  "indent_width": 4,
+  "tab_width": 8
 }

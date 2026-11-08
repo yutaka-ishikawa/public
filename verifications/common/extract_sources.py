@@ -56,7 +56,7 @@ typedef uint64_t u64;
 ''')
     (out / 'include/sbi/riscv_atomic.h').write_text('''#pragma once
 typedef struct {
-\tlong value;
+    long value;
 } atomic_t;
 ''')
     selected = {

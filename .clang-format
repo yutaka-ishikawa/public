@@ -1,8 +1,8 @@
 BasedOnStyle: LLVM
 UseTab: Always
 TabWidth: 8
-IndentWidth: 8
-ContinuationIndentWidth: 8
+IndentWidth: 4
+ContinuationIndentWidth: 4
 ColumnLimit: 80
 BreakBeforeBraces: Linux
 AllowShortFunctionsOnASingleLine: None
