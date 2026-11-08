@@ -252,3 +252,6 @@ For module/network commands, updating an existing image and `depmod` usage, see
 
 Eyrie・raw loader・SDK・ドライバ・SMの変更履歴と現在の確認範囲は
 [Keystone側の累積修正記録](doc/keystone-cumulative-changes.md)を参照。
+
+SBI 3001の既存OpenSBI/QEMU機能を使う案は
+[乱数機能の移植計画](doc/keystone-sbi-3001-plan.md)を参照。

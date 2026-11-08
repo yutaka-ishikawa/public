@@ -152,20 +152,14 @@ P6 hotplug／suspend等は固定オンライン構成の完成後に別途判断
 
 ### P1：乱数をエンドツーエンドで移植
 
-**作業**
+詳細は [SBI 3001の移植計画](keystone-sbi-3001-plan.md) を参照。
+OpenSBIの既存Zkr検出・CSR helper、QEMUの既存seed/crypto backendを組み合わせる。
+SMのchecked provider、3001のa0/a1 ABI、Eyrieのgetrandom/AT_RANDOMと
+全呼び出し元のエラー伝播を実装する。
 
-- statusと値を分離したplatform providerおよびruntimeのchecked APIを定義する。
-- 既存のSBI 3001を保ち、adapterからSDK/runtimeまでエラーを伝える。
-- QEMU用にM-modeから利用できる乱数供給手段を選定・実装する。候補は明示的な仮想RNGモデル、利用可能なISA乱数機能、テスト専用provider。現時点でいずれかが既に利用可能とは仮定しない。
-- モック用の決定的providerはテストに限定し、実行用の乱数源と区別する。
-- ENV_SETUP、Linux getrandom、swap初期化の呼び出し元を更新する。
-
-**完了条件**
-
-- サイズ0、1、7、8、9、16、32バイトを正しく取得する。
-- 供給失敗・未対応をruntimeが検出し、成功バイト数や無条件のa1として扱わない。
-- 最適化・PIEを含む通常ビルドでa0/a1が正しく伝わる。
-- helloの起動環境が維持され、AT_RANDOMにも有効なデータが入る。値の変化だけを乱数品質の証明とはしない。
+検証は実QEMUゲストでZkr有効/無効の両起動を行う。模擬providerや
+製品関数の抽出試験は追加しない。実機のZkr/TRNG供給元は別途確認し、
+QEMUでの動作を実機の乱数機能の完成とは扱わない。
 
 ### P2：鍵・SM測定providerと機能初期化
 
