@@ -9,6 +9,7 @@ QEMU_BUILD="$ROOT/.build-k3"
 JOBS=${JOBS:-$(nproc)}
 BACKEND=all
 SKIP_QEMU=0
+SKIP_SDK=0
 while (($#)); do
  case "$1" in
   --prefix|--build-dir|--sdk-build-dir|--qemu-build-dir|--jobs|--backend)
@@ -19,9 +20,10 @@ while (($#)); do
     --jobs) JOBS=$2;; --backend) BACKEND=$2;;
    esac
    shift 2;;
+  --skip-sdk) SKIP_SDK=1; shift;;
   --skip-qemu) SKIP_QEMU=1; shift;;
   --help|-h)
-   echo 'Usage: bash scripts/build-verification-rng.sh [--backend all|zkr|jupiter2|counter] [--prefix DIR] [--build-dir DIR] [--sdk-build-dir DIR] [--qemu-build-dir DIR] [--jobs N] [--skip-qemu]'
+   echo 'Usage: bash scripts/build-verification-rng.sh [--backend all|zkr|jupiter2|counter] [--prefix DIR] [--build-dir DIR] [--sdk-build-dir DIR] [--qemu-build-dir DIR] [--jobs N] [--skip-qemu] [--skip-sdk]'
    exit 0;;
   *) echo "Unknown argument: $1" >&2; exit 2;;
  esac
@@ -34,7 +36,9 @@ SDK_BUILD=$(realpath -m "$SDK_BUILD")
 if ((!SKIP_QEMU)); then
  bash "$ROOT/scripts/build-install-k3.sh" --only qemu --prefix "$PREFIX" --build-dir "$QEMU_BUILD" --jobs "$JOBS"
 fi
-bash "$ROOT/scripts/build-install-keystone.sh" --only sdk --build-dir "$SDK_BUILD" --jobs "$JOBS"
+if ((!SKIP_SDK)); then
+ bash "$ROOT/scripts/build-install-keystone.sh" --only sdk --build-dir "$SDK_BUILD" --jobs "$JOBS"
+fi
 for backend in "${backends[@]}"; do
  dest="$PREFIX/firmware/k3/rng-$backend"
  stage="$BUILD_DIR/$backend/install"

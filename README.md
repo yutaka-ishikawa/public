@@ -1,5 +1,9 @@
 # Milk-V Jupiter 2 / SpacemiT K3 integrated source tree
 
+ソース変更後のビルド・インストールは、リポジトリ直下で `make JOBS=4`。
+初回作成と既存イメージの更新に対応します。QEMUを停止してから実行してください。
+詳しくは [makeによるビルドとインストール](doc/make-build-install.md) を参照。
+
 The `main` branch contains `qemu/`, `opensbi/`, `keystone/`, and `linux-k3/`. Original patches are under `patches/`.
 
 独立したアプリ開発用サンプルは、[samples/helloworld/README.md](samples/helloworld/README.md)を参照してください。通常のMakefileでhelloをビルド・パッケージ化できます。

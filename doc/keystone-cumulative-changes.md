@@ -241,3 +241,13 @@ page swapの乱数取得失敗伝播を変更しました。
 方式別firmwareのビルド、起動オプション、実ゲスト専用の検証コードと
 QEMUマトリクスを追加しています。実施済みのSM初期化確認と、未実施の
 enclave統合実行の区別は [実装記録](keystone-sbi-3001-implementation.md) を参照してください。
+
+## ルートMakefileと既存rootfsの更新
+
+`make` / `make install` でQEMU、通常版と乱数3方式のfirmware、Linux、SDK/Eyrie、
+ドライバ、verification、samplesをビルドし、既存rootfsにもドライバ・examples・
+ゲストツールを反映する入口を追加しました。rootfsは一時コピーを更新して検査後に
+置き換えます。元データ保持・置換・実行権限・失敗時保持・使用中ロックの検査は
+実ext4イメージで確認済みです。Makefile経由のSDKとhelloworldビルドも確認済みです。
+この作業環境では完全なカーネル成果物がないため、全体の `make install` と
+更新後ゲストの起動までは未確認です。[操作方法](make-build-install.md) を参照してください。

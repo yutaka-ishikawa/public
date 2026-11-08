@@ -20,10 +20,12 @@ Usage: bash scripts/build-install-keystone.sh [options]
   --rootfs-archive FILE Local Bianbu base tar.gz; otherwise download Bianbu 26.04
   --rootfs-sha256 HASH  Independently obtained archive checksum
   --only sdk            Build just SDK and basic hello examples for development
+  --only guest          Install prepared kernel/SDK/driver/tools into new or existing image
 Uses the SAME K3 machine, Keystone-capable OpenSBI and Linux as the Bianbu build.
 Builds the matching driver and installs hello.ke and hello-native.ke in a separate
-8 GiB guest image. Existing Keystone guest images are never overwritten; choose
-another prefix to install a fresh stack. Enclave runtime behavior needs validation.
+8 GiB guest image. The default all mode requires a fresh destination.
+--only guest creates or updates the image using an already built kernel/SDK.
+Stop QEMU before updating. Enclave runtime behavior needs validation.
 HELP
 }
 while (($#)); do
@@ -41,7 +43,7 @@ while (($#)); do
  esac
 done
 [[ $JOBS =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid --jobs' >&2; exit 2; }
-case "$ONLY" in all|sdk) :;; *) echo 'Only --only sdk is supported' >&2; exit 2;; esac
+case "$ONLY" in all|sdk|guest) :;; *) echo 'Use --only sdk or guest' >&2; exit 2;; esac
 if [[ $ONLY == all && ( -e "$PREFIX/rootfs/keystone-rootfs.img" || -L "$PREFIX/rootfs/keystone-rootfs.img" ) ]]; then
  echo 'Keystone image already exists. Use a new --prefix to preserve guest changes.' >&2; exit 3
 fi
@@ -53,7 +55,7 @@ BASE_PREFIX=$(realpath -m "$BASE_PREFIX")
 if [[ $ONLY == all && $PREFIX == "$BASE_PREFIX" ]]; then
  echo 'Keystone and Bianbu must use separate installation directories.' >&2; exit 2
 fi
-if [[ $ONLY == all ]]; then
+if [[ $ONLY != sdk ]]; then
  for tool in mke2fs debugfs e2fsck tune2fs; do
   command -v "$tool" >/dev/null || { echo "Missing $tool; install e2fsprogs first." >&2; exit 3; }
  done
@@ -71,6 +73,7 @@ for tool in gcc g++ as ld ar objcopy objdump; do
 done
 export PATH="$BUILD_DIR/toolchain:$PATH"
 SDK="$BUILD_DIR/sdk-install"
+if [[ $ONLY != guest ]]; then
 # sm_call.h currently needs cstdint visible to SDK C++ users.
 CMAKE_ARGS=(-DKEYSTONE_BITS=64 -DKEYSTONE_SDK_DIR="$SDK" -DCMAKE_BUILD_TYPE=Release
  -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=riscv64
@@ -87,7 +90,9 @@ for name in hello hello-native; do
  if [[ -d $runtime_copy ]]; then cp -a "$ROOT/keystone/runtime/." "$runtime_copy/"; fi
 done
 cmake --build "$BUILD_DIR/examples" --target hello-package hello-native-package --parallel "$JOBS"
+fi
 if [[ $ONLY == sdk ]]; then echo "SDK and examples built at $BUILD_DIR"; exit 0; fi
+if [[ $ONLY != guest ]]; then
 mkdir -p "$PREFIX"
 PREFIX=$(cd "$PREFIX" && pwd -P)
 for component in qemu firmware linux; do
@@ -105,6 +110,7 @@ for component in qemu firmware linux; do
   bash "$ROOT/scripts/build-install-k3.sh" --only "$component" --prefix "$PREFIX" --build-dir "$K3_BUILD_DIR" --jobs "$JOBS"
  fi
 done
+fi
 KERNEL_OUT="$K3_BUILD_DIR/linux"
 # A driver must match the installed Image, not merely a similar source version.
 cmp "$PREFIX/boot/k3/Image" "$KERNEL_OUT/arch/riscv/boot/Image" || {
@@ -120,13 +126,23 @@ RELEASE=$(make -s -C "$ROOT/linux-k3" O="$KERNEL_OUT" ARCH=riscv CROSS_COMPILE="
 [[ $RELEASE =~ ^[A-Za-z0-9._+-]+$ ]] || { echo 'Invalid kernel release' >&2; exit 4; }
 GUEST=$(mktemp -d "$BUILD_DIR/guest.XXXXXX")
 trap 'rm -rf "$GUEST"' EXIT
+# Refresh loadable kernel modules together with the matching kernel Image.
+if [[ -d "$PREFIX/lib/modules/$RELEASE" ]]; then
+ mkdir -p "$GUEST/usr/lib/modules"
+ cp -a "$PREFIX/lib/modules/$RELEASE" "$GUEST/usr/lib/modules/"
+ rm -f "$GUEST/usr/lib/modules/$RELEASE/build" "$GUEST/usr/lib/modules/$RELEASE/source"
+fi
 install -D -m 0644 "$DRIVER/keystone-driver.ko" "$GUEST/usr/lib/modules/$RELEASE/extra/keystone-driver.ko"
 for name in hello hello-native; do
  install -D -m 0755 "$BUILD_DIR/examples/$name/$name.ke" "$GUEST/usr/share/keystone/examples/$name.ke"
 done
 bash "$ROOT/scripts/build-keystone-guest-tools.sh" "$BUILD_DIR/guest-tools/busybox" "$BUILD_DIR/guest-tools/build" "$JOBS"
 bash "$ROOT/scripts/install-keystone-guest-tools.sh" "$GUEST" "$BUILD_DIR/guest-tools/busybox"
-bash "$ROOT/scripts/build-rootfs-keystone.sh" "$PREFIX/rootfs/keystone-rootfs.img" "$BUILD_DIR/rootfs" "$GUEST" "$ARCHIVE" "$HASH"
+if [[ -e "$PREFIX/rootfs/keystone-rootfs.img" ]]; then
+ python3 "$ROOT/scripts/update-keystone-rootfs.py" "$PREFIX/rootfs/keystone-rootfs.img" "$GUEST"
+else
+ bash "$ROOT/scripts/build-rootfs-keystone.sh" "$PREFIX/rootfs/keystone-rootfs.img" "$BUILD_DIR/rootfs" "$GUEST" "$ARCHIVE" "$HASH"
+fi
 mkdir -p "$PREFIX/share/keystone"
 printf 'profile=keystone-k3\nkernelrelease=%s\nsdk=%s\n' "$RELEASE" "$SDK" > "$PREFIX/share/keystone/build-manifest.txt"
 echo "Installed K3 Keystone stack at $PREFIX"
