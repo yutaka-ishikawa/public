@@ -52,6 +52,7 @@
 | KSB-024 | HKDF最大出力で8 bit loop counterがwrap | SM暗号ライブラリ | 修正済 |
 | KSB-025 | hosted verifierをnative eappへリンクしてcanary参照が未解決 | 今回のverification統合 | 修正済 |
 | KSB-026 | native入口でgp未初期化のまま緩和済み命令を実行 | SDK/native build統合 | 修正済 |
+| KSB-027 | STOPの要求検査前の状態変更・未使用a1の不定値 | SM取込／OpenSBI移植契約 | 修正済 |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
 KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
@@ -373,6 +374,25 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
 - matrixがFAILの理由を表示しなかった点は試験ツールの診断不足で、`e1cbdabca`で改善済み。
   乱数eapp本体の停止原因KSB-001とは区別する。
 - 本書は既知の発見と修正記録の整理。新たな網羅的な不具合調査を完了したものではない。
+
+## KSB-027: STOP要求の事前検査と戻り値の明確化
+
+- 状態：修正済（SBI 3004実装完了作業で登録）。
+- 対象：SM `stop_enclave`、`sbi_sm_stop_enclave`、Eyrie `sbi_stop_enclave`。
+- 根拠：不正requestもSTOPPEDへ変更しcontext_switch_to_host後にUNKNOWN_ERRORを返す。
+  helperはこれも切替成功として扱い、SDKは回復不能なエラーとして終了する。
+  ホスト復帰のa1は明示設定されず、Eyrieのinline asmもa1出力を宣言していない。
+- 由来：取込STOP処理とOpenSBI接続の契約。現上流最新版での再現は未確認。
+- 方針：0/1以外は切替前にILLEGAL_ARGUMENTで同じenclaveへ返す。
+  2（STOP_EXIT_ENCLAVEという旧定義）もSTOPの有効な要求ではない。終了は3006。
+  STOP成功時のホストa1は0。既存のtimer/OCALLフレーム保存方式は維持する。
+- 修正：本変更「Complete SBI 3004 STOP validation and real guest verification」。
+  hostへのa1を0とし、Eyrie asmのa1入出力も宣言。専用試験は実statusを観測する。
+- 検証：SM/OpenSBI trace版、SDK、通常／専用runtimeと全verificationパッケージをbuild。
+  sbi-errorsのkernel objectもbuild。通常runtimeから専用hookが除外されることをnmで確認。
+- 未確認：対応Linux Image/rootfsと完全なModule.symversがないため、追加試験の実ゲスト実行、
+  .koリンクは未実施。timer区間の非同期statusだけでM_TIMERとM_SOFTは区別できず、
+  原因特定はSM traceのcauseを確認する。既存全PASS報告を新試験のPASSには流用しない。
 
 ## 今後の必須更新手順
 

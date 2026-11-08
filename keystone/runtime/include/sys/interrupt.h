@@ -10,5 +10,9 @@
 #define INTERRUPT_CAUSE_EXTERNAL  9
 
 void init_timer(void);
+#ifdef USE_STOP_VERIFY
+unsigned long stop_verify_control(unsigned long operation,
+				  unsigned long request);
+#endif
 
 #endif

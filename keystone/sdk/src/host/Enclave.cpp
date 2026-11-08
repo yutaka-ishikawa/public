@@ -232,24 +232,26 @@ Enclave::destroy() {
   return pDevice->destroy();
 }
 
-Error
-Enclave::run(uintptr_t* retval) {
-  Error ret = pDevice->run(retval);
-  while (ret == Error::EdgeCallHost || ret == Error::EnclaveInterrupted) {
-    /* enclave is stopped in the middle. */
-    if (ret == Error::EdgeCallHost && oFuncDispatch != NULL) {
-      oFuncDispatch(getSharedBuffer());
+Error Enclave::run(uintptr_t *retval)
+{
+    Error ret;
+
+    ret = pDevice->run(retval);
+    while (ret == Error::EdgeCallHost || ret == Error::EnclaveInterrupted) {
+	if (stopDispatch) {
+	    stopDispatch(ret);
+	}
+	if (ret == Error::EdgeCallHost && oFuncDispatch != NULL) {
+	    oFuncDispatch(getSharedBuffer());
+	}
+	ret = pDevice->resume(retval);
     }
-    ret = pDevice->resume(retval);
-  }
-
-  if (ret != Error::Success) {
-    ERROR("failed to run enclave - ioctl() failed");
-    destroy();
-    return Error::DeviceError;
-  }
-
-  return Error::Success;
+    if (ret != Error::Success) {
+	ERROR("failed to run enclave - ioctl() failed");
+	destroy();
+	return Error::DeviceError;
+    }
+    return Error::Success;
 }
 
 void*
@@ -271,6 +273,12 @@ Error
 Enclave::registerOcallDispatch(OcallFunc func) {
   oFuncDispatch = func;
   return Error::Success;
+}
+
+Error Enclave::registerStopDispatch(StopFunc func)
+{
+    stopDispatch = func;
+    return Error::Success;
 }
 
 }  // namespace Keystone

@@ -17,7 +17,7 @@ static long verify_ioctl(struct file *file, unsigned int command,
 	SBI_SM_CREATE_ENCLAVE, SBI_SM_DESTROY_ENCLAVE,
 	SBI_SM_RUN_ENCLAVE,    2004,
 	SBI_SM_RESUME_ENCLAVE, SBI_SM_RANDOM,
-	SBI_SM_ATTEST_ENCLAVE, SBI_SM_GET_SEALING_KEY};
+	SBI_SM_ATTEST_ENCLAVE, SBI_SM_GET_SEALING_KEY, SBI_SM_STOP_ENCLAVE};
     struct keystone_sbi_create_t invalid_layout = {0};
     struct keystone_verify_sbi result = {0};
     struct sbiret ret;

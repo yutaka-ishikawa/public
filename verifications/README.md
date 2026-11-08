@@ -17,6 +17,7 @@ C関数の抽出実行、模擬PMP/CSR/IPI、模擬SBIの試験とその過去�
 | `edgecall` | CREATE 2001、RUN 2003、STOP 3004、RESUME 2005、EXIT 3006、DESTROY 2002の正常経路。8種類のバイナリ往復と不正return offsetの拒否。 |
 | `edgecall`の2種類のパッケージ | free memory 2 MiBと256 MiBで上記の正常経路。 |
 | `sbi-errors` | S-modeの検証モジュールから実ecall。CREATEの不正レイアウト、DESTROY/RUN/RESUMEの無効ID、未定義2004の応答、hostからの3001拒否とa1=0。 |
+| `sbi-3004` | STOPの不正要求拒否、明示yield、OCALL、timer設定区間の非同期中断とRESUME、データ保存。 |
 | `crypto` | 3002/3003の署名チェーン・鍵導出・コピー境界等。通常起動では未対応、qemu-dev起動では正常系を検査。 |
 | `random` | 実enclaveからSBI 3001/getrandom/AT_RANDOM。乱数データのOCALL往復とRESUME、異常伝播。 |
 | `edgecall/kernel` | OCALL中、Linuxの物理RAM direct mapからEPMを読むと拒否され、UTMと通常RAMは読めること。 |
@@ -34,6 +35,7 @@ SBI 2004は定義済み機能ではなく、未定義番号を拒否する試験
 | --- | --- |
 | 2001 CREATE、2002 DESTROY、2003 RUN、2005 RESUME、3004 STOP、3006 EXIT | `edgecall/guest/host.cpp`（ゲストLinux runner）、`edgecall/guest/eapp.c`（enclave）。ライフサイクル全体を通して検査する。 |
 | 2001〜2005、3001〜3003の不正引数・呼出権限 | `sbi-errors/kernel/keystone_sbi_verify.c`（実ecall）、`sbi-errors/test.c`（ioctlと結果判定）。2004は未定義番号の拒否を検査。 |
+| 3004 STOP専用 | `sbi-3004/eapp.c`、`sbi-3004/host.cpp`。専用runtimeと実SM経路で検査する。 |
 | 3001 RANDOM | `random/eapp.c`、`random/env.c`（AT_RANDOM）、`random/host.cpp`。 |
 | 3002 ATTEST、3003 SEALING KEY | `crypto/eapp.c`、`crypto/host.cpp`。 |
 | EPMのPMP保護 | `edgecall/kernel/edgecall_pmp_probe.c`、`edgecall/guest/host.cpp`。CREATEで設定された保護を検査する。専用のSBI番号ではない。 |
@@ -99,7 +101,7 @@ Keystoneプロファイルの既定起動引数には `cma=512M@4G-16G` を含�
 256 MiB試験の前提として `grep Cma /proc/meminfo` で512 MiB予約を確認する。
 詳細は [大容量EPM](../doc/keystone-large-epm.md) を参照。
 
-SBIエラー応答5件、2 MiB/256 MiBの各パッケージを2周しOCALL往復、
+SBIエラー応答9件、STOP専用試験、2 MiB/256 MiBの各パッケージを2周しOCALL往復、
 PMP参照拒否、明示的DESTROYの全成功と `exit=0` を確認する。
 失敗した場合はそこで停止し、全体PASSを表示しない。
 
@@ -152,3 +154,5 @@ SBI 3001の [検証手順](random/README.md) を追加した。run-all.shは現�
 
 3002/3003正常系と再起動の試験は [crypto手順](crypto/README.md) に従い、
 `--crypto qemu-dev` で明示的に起動します。既定unavailable試験のPASSと区別してください。
+
+STOPの追加試験・source確認・未実行範囲は [SBI 3004](sbi-3004/README.md) を参照。

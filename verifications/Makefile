@@ -6,6 +6,7 @@ all guest:
 	$(MAKE) -C sbi-errors guest
 	$(MAKE) -C random guest
 	$(MAKE) -C crypto guest
+	$(MAKE) -C sbi-3004 guest
 test:
 	bash run-all.sh
 kernel-modules:
@@ -19,3 +20,4 @@ clean:
 	$(MAKE) -C sbi-errors clean
 	$(MAKE) -C random clean
 	$(MAKE) -C crypto clean
+	$(MAKE) -C sbi-3004 clean

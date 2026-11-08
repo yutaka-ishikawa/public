@@ -29,6 +29,7 @@ extern "C" {
 namespace Keystone {
 
 typedef std::function<void(void*)> OcallFunc;
+typedef std::function<void(Error)> StopFunc;
 
 class Enclave {
  private:
@@ -40,6 +41,7 @@ class Enclave {
   void* shared_buffer;
   size_t shared_buffer_size;
   OcallFunc oFuncDispatch;
+    StopFunc stopDispatch;
   bool mapUntrusted(size_t size);
   void copyFile(uintptr_t filePtr, size_t fileSize);
   void allocUninitialized(ElfFile* elfFile);
@@ -60,6 +62,8 @@ class Enclave {
   uintptr_t getRuntimeElfAddr() { return runtimeElfAddr; }
   uintptr_t getEnclaveElfAddr() { return enclaveElfAddr; }
   Error registerOcallDispatch(OcallFunc func);
+    /* Observe STOP status before dispatch/resume; do not reenter run(). */
+    Error registerStopDispatch(StopFunc func);
   Error init(const char* filepath, const char* runtime, const char* loaderpath, Params parameters);
   Error init(
       const char* eapppath, const char* runtimepath, const char* loaderpath, Params _params,

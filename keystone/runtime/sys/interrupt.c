@@ -11,6 +11,25 @@
 
 #define DEFAULT_CLOCK_DELAY 10000
 
+#ifdef USE_STOP_VERIFY
+/* Available only in the dedicated verification runtime (syscall 1100). */
+unsigned long stop_verify_control(unsigned long operation,
+				  unsigned long request)
+{
+    if (operation == 0) {
+	csr_clear(sie, SIE_STIE | SIE_SSIE);
+	sbi_set_timer(UINT64_MAX);
+	return sbi_stop_enclave(request);
+    }
+    if (operation == 1) {
+	sbi_set_timer(get_cycles64() + DEFAULT_CLOCK_DELAY);
+	csr_set(sie, SIE_STIE);
+	return 0;
+    }
+    return (unsigned long)-1;
+}
+#endif
+
 void init_timer(void)
 {
   sbi_set_timer(get_cycles64() + DEFAULT_CLOCK_DELAY);
@@ -18,13 +37,14 @@ void init_timer(void)
   csr_set(sie, SIE_STIE | SIE_SSIE);
 }
 
-void handle_timer_interrupt()
+void handle_timer_interrupt(void)
 {
-  sbi_stop_enclave(0);
-  unsigned long next_cycle = get_cycles64() + DEFAULT_CLOCK_DELAY;
-  sbi_set_timer(next_cycle);
-  csr_set(sstatus, SR_SPIE);
-  return;
+    unsigned long next_cycle;
+
+    sbi_stop_enclave(STOP_TIMER_INTERRUPT);
+    next_cycle = get_cycles64() + DEFAULT_CLOCK_DELAY;
+    sbi_set_timer(next_cycle);
+    csr_set(sstatus, SR_SPIE);
 }
 
 void handle_interrupts(struct encl_ctx* regs)

@@ -68,9 +68,12 @@ def run(args, name, provider):
                             minimum = 3 if provider == 'qemu-dev' else 1
                             record['guest_exit'] = int(match[1])
                             record['pass'] = (int(match[1]) == 0 and banner in captured and
-                                              captured.count(b'PASS GUEST CRYPTO:') >= minimum)
+                                              captured.count(b'PASS GUEST CRYPTO:') >= minimum and
+                                              (not args.all or
+                                               (b'PASS GUEST SBI 3004: STOP/RESUME,' in captured and
+                                                b'PASS GUEST SUITE SBI ' in captured)))
                             if not record['pass']:
-                                record['error'] = 'Guest failure, provider mismatch or incomplete crypto test'
+                                record['error'] = 'Guest failure, provider mismatch or incomplete crypto/STOP suite'
                             return record
                     raise TimeoutError('Timed out waiting for ' + ('test result' if sent else 'root prompt'))
             finally:

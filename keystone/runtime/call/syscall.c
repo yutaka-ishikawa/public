@@ -13,6 +13,9 @@
 #include "util/rt_util.h"
 
 #include "call/syscall_nums.h"
+#ifdef USE_STOP_VERIFY
+#include "sys/interrupt.h"
+#endif
 
 #ifdef USE_IO_SYSCALL
 #include "call/io_wrap.h"
@@ -326,6 +329,11 @@ void handle_syscall(struct encl_ctx* ctx)
   ctx->regs.sepc += 4;
 
   switch (n) {
+#ifdef USE_STOP_VERIFY
+  case 1100:
+      ret = stop_verify_control(arg0, arg1);
+      break;
+#endif
 #ifdef USE_CRYPTO_VERIFY
   case 1099:
       ret = crypto_raw_probe(arg0, arg1);

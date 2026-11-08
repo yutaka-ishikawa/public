@@ -12,6 +12,10 @@ SBI処理・PMP・戻り値を模擬したり、製品C関数を試験へ組み�
 | 2003 RUN | ID = ULONG_MAX | INVALID_ID = 100001 |
 | 2004 | 未定義FID | NOT_IMPLEMENTED = 100100 |
 | 2005 RESUME | ID = ULONG_MAX | INVALID_ID = 100001 |
+| 3001 RANDOM | Linuxホストから呼出し | PROHIBITED = 100014、a1=0 |
+| 3002 ATTEST | Linuxホストから呼出し | PROHIBITED = 100014、a1=0 |
+| 3003 SEALING | Linuxホストから呼出し | PROHIBITED = 100014、a1=0 |
+| 3004 STOP | Linuxホストから呼出し | PROHIBITED = 100014、a1=0 |
 
 要求はモジュール内の固定値だけで、ユーザーから任意のSBI引数を受け付けない。
 デバイスは0600、実行にはrootとCAP_SYS_RAWIOが必要。
@@ -35,5 +39,7 @@ bash run-guest.sh
 対応するImage、完全なModule.symvers、SM対応ファームウェアが必要。
 [全体の手順](../README.md)を参照。
 CREATE/RUN/RESUME/DESTROYの正常経路はedgecall試験で確認する。
-ここで確認する異常系は上表の5件のみで、従来の模擬試験の網羅性を引き継いだとはしない。
+ここで確認する異常系は上表の9件のみで、従来の模擬試験の網羅性を引き継いだとはしない。
 実ゲストでの新規試験結果は未確認。
+
+3004追加でioctl構造体を拡張した。古い.koを再利用せず、再ビルドしてゲストを再起動する。

@@ -635,32 +635,31 @@ unsigned long exit_enclave(struct sbi_trap_regs *regs, enclave_id eid)
   return SBI_ERR_SM_ENCLAVE_SUCCESS;
 }
 
-unsigned long stop_enclave(struct sbi_trap_regs *regs, uint64_t request, enclave_id eid)
+unsigned long stop_enclave(struct sbi_trap_regs *regs, uint64_t request,
+			   enclave_id eid)
 {
-  int stoppable;
+    int stoppable;
 
-  spin_lock(&encl_lock);
-  stoppable = enclaves[eid].state == RUNNING;
-  if (stoppable) {
-    enclaves[eid].n_thread--;
-    if(enclaves[eid].n_thread == 0)
-      enclaves[eid].state = STOPPED;
-  }
-  spin_unlock(&encl_lock);
-
-  if(!stoppable)
-    return SBI_ERR_SM_ENCLAVE_NOT_RUNNING;
-
-  context_switch_to_host(regs, eid, request == STOP_EDGE_CALL_HOST);
-
-  switch(request) {
-    case(STOP_TIMER_INTERRUPT):
-      return SBI_ERR_SM_ENCLAVE_INTERRUPTED;
-    case(STOP_EDGE_CALL_HOST):
-      return SBI_ERR_SM_ENCLAVE_EDGE_CALL_HOST;
-    default:
-      return SBI_ERR_SM_ENCLAVE_UNKNOWN_ERROR;
-  }
+    /* Reject before changing state or selecting the saved host frame. */
+    if (request != STOP_TIMER_INTERRUPT && request != STOP_EDGE_CALL_HOST) {
+	return SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT;
+    }
+    spin_lock(&encl_lock);
+    stoppable = ENCLAVE_EXISTS(eid) && enclaves[eid].state == RUNNING &&
+		enclaves[eid].n_thread > 0;
+    if (stoppable) {
+	enclaves[eid].n_thread--;
+	if (enclaves[eid].n_thread == 0) {
+	    enclaves[eid].state = STOPPED;
+	}
+    }
+    spin_unlock(&encl_lock);
+    if (!stoppable) {
+	return SBI_ERR_SM_ENCLAVE_NOT_RUNNING;
+    }
+    context_switch_to_host(regs, eid, request == STOP_EDGE_CALL_HOST);
+    return request == STOP_TIMER_INTERRUPT ? SBI_ERR_SM_ENCLAVE_INTERRUPTED :
+					    SBI_ERR_SM_ENCLAVE_EDGE_CALL_HOST;
 }
 
 unsigned long resume_enclave(struct sbi_trap_regs *regs, enclave_id eid)

@@ -85,17 +85,21 @@ unsigned long sbi_sm_exit_enclave(struct sbi_trap_regs *regs, unsigned long retv
   return rc == SBI_ERR_SM_ENCLAVE_SUCCESS ? 0 : rc;
 }
 
-unsigned long sbi_sm_stop_enclave(struct sbi_trap_regs *regs, unsigned long request)
+unsigned long sbi_sm_stop_enclave(struct sbi_trap_regs *regs,
+				  unsigned long request)
 {
-  unsigned long rc = stop_enclave(regs, request, cpu_get_enclave_id());
-  if (rc == SBI_ERR_SM_ENCLAVE_INTERRUPTED ||
-      rc == SBI_ERR_SM_ENCLAVE_EDGE_CALL_HOST ||
-      rc == SBI_ERR_SM_ENCLAVE_UNKNOWN_ERROR) {
+    unsigned long rc;
+
+    rc = stop_enclave(regs, request, cpu_get_enclave_id());
+    if (rc != SBI_ERR_SM_ENCLAVE_INTERRUPTED &&
+	rc != SBI_ERR_SM_ENCLAVE_EDGE_CALL_HOST) {
+	return rc;
+    }
+    /* This is now the host RUN/RESUME frame, not the enclave ecall frame. */
     regs->a0 = rc;
+    regs->a1 = 0;
     regs->mepc += 4;
-  }
-  /* K3 OpenSBI restores regs and performs mret after the ecall handler. */
-  return (rc == SBI_ERR_SM_ENCLAVE_INTERRUPTED || rc == SBI_ERR_SM_ENCLAVE_EDGE_CALL_HOST || rc == SBI_ERR_SM_ENCLAVE_UNKNOWN_ERROR) ? 0 : rc;
+    return 0;
 }
 
 unsigned long sbi_sm_attest_enclave(uintptr_t report, uintptr_t data, uintptr_t size)

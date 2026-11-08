@@ -1,4 +1,5 @@
 #include "enclave.h"
+#include "sm_trace.h"
 #include <sbi/riscv_asm.h>
 #include <sbi/riscv_encoding.h>
 #include <sbi/sbi_console.h>
@@ -117,6 +118,7 @@ void sbi_trap_handler_keystone_enclave(struct sbi_trap_regs *regs)
 		switch (mcause) {
 		case IRQ_M_TIMER:
 		case IRQ_M_SOFT:
+      SM_TRACE_VALUES("STOP asynchronous cause", mcause, regs->mepc);
       /* RESUME adds four to the saved enclave PC, hence this bias only
        * applies to the interrupted enclave frame. STOP itself advances the
        * restored host ECALL PC exactly once. Unlike old sbi_trap_exit(), the

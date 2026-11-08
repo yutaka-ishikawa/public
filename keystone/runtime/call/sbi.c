@@ -38,9 +38,19 @@ sbi_set_timer(uint64_t stime_value) {
 #endif
 }
 
-uintptr_t
-sbi_stop_enclave(uint64_t request) {
-  return SBI_CALL_1(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_STOP_ENCLAVE, request);
+uintptr_t sbi_stop_enclave(uint64_t request)
+{
+    register uintptr_t a0 __asm__("a0") = request;
+    register uintptr_t a1 __asm__("a1") = 0;
+    register uintptr_t a6 __asm__("a6") = SBI_SM_STOP_ENCLAVE;
+    register uintptr_t a7 __asm__("a7") =
+	SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE;
+
+    __asm__ volatile("ecall"
+		     : "+r"(a0), "+r"(a1)
+		     : "r"(a6), "r"(a7)
+		     : "memory");
+    return a0;
 }
 
 void
