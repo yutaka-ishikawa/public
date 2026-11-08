@@ -9,7 +9,7 @@ readelf -h "$SM_OBJ" | grep -Eq 'Machine:.*RISC-V' || { echo 'ERROR: SM is not R
 [ -f "$S/platform/generic/configs/k3_keystone_audit_defconfig" ] || { echo 'ERROR: audit defconfig absent in OpenSBI source' >&2; exit 3; }
 mkdir -p "$W" "$O"
 set -o pipefail
-make -C "$S" -j"$(nproc)" LLVM=1 PLATFORM=generic PLATFORM_RISCV_XLEN=64 \
+make -C "$S" -j"${JOBS:-$(nproc)}" LLVM=1 PLATFORM=generic PLATFORM_RISCV_XLEN=64 \
   PLATFORM_DEFCONFIG=k3_keystone_audit_defconfig K3_PMP_BOOT_TRACE=1 \
   KEYSTONE_K3_SM_LINK_PROBE="$SM_OBJ" O="$O" \
   "$O/platform/generic/firmware/fw_dynamic.bin" 2>&1 | tee "$W/opensbi-keystone-build.log"

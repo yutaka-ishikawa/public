@@ -21,6 +21,7 @@ Usage: bash scripts/build-install-keystone.sh [options]
   --rootfs-sha256 HASH  Independently obtained archive checksum
   --only sdk            Build just SDK and basic hello examples for development
   --only guest          Install prepared kernel/SDK/driver/tools into new or existing image
+  --only overlay        Build driver/tools and retain guest-overlay; do not create/update image
 Uses the SAME K3 machine, Keystone-capable OpenSBI and Linux as the Bianbu build.
 Builds the matching driver and installs hello.ke and hello-native.ke in a separate
 8 GiB guest image. The default all mode requires a fresh destination.
@@ -43,7 +44,7 @@ while (($#)); do
  esac
 done
 [[ $JOBS =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid --jobs' >&2; exit 2; }
-case "$ONLY" in all|sdk|guest) :;; *) echo 'Use --only sdk or guest' >&2; exit 2;; esac
+case "$ONLY" in all|sdk|guest|overlay) :;; *) echo 'Use --only sdk or guest' >&2; exit 2;; esac
 if [[ $ONLY == all && ( -e "$PREFIX/rootfs/keystone-rootfs.img" || -L "$PREFIX/rootfs/keystone-rootfs.img" ) ]]; then
  echo 'Keystone image already exists. Use a new --prefix to preserve guest changes.' >&2; exit 3
 fi
@@ -73,7 +74,7 @@ for tool in gcc g++ as ld ar objcopy objdump; do
 done
 export PATH="$BUILD_DIR/toolchain:$PATH"
 SDK="$BUILD_DIR/sdk-install"
-if [[ $ONLY != guest ]]; then
+if [[ $ONLY != guest && $ONLY != overlay ]]; then
 # sm_call.h currently needs cstdint visible to SDK C++ users.
 CMAKE_ARGS=(-DKEYSTONE_BITS=64 -DKEYSTONE_SDK_DIR="$SDK" -DCMAKE_BUILD_TYPE=Release
  -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=riscv64
@@ -92,7 +93,7 @@ done
 cmake --build "$BUILD_DIR/examples" --target hello-package hello-native-package --parallel "$JOBS"
 fi
 if [[ $ONLY == sdk ]]; then echo "SDK and examples built at $BUILD_DIR"; exit 0; fi
-if [[ $ONLY != guest ]]; then
+if [[ $ONLY != guest && $ONLY != overlay ]]; then
 mkdir -p "$PREFIX"
 PREFIX=$(cd "$PREFIX" && pwd -P)
 for component in qemu firmware linux; do
@@ -138,6 +139,13 @@ for name in hello hello-native; do
 done
 bash "$ROOT/scripts/build-keystone-guest-tools.sh" "$BUILD_DIR/guest-tools/busybox" "$BUILD_DIR/guest-tools/build" "$JOBS"
 bash "$ROOT/scripts/install-keystone-guest-tools.sh" "$GUEST" "$BUILD_DIR/guest-tools/busybox"
+if [[ $ONLY == overlay ]]; then
+ rm -rf "$BUILD_DIR/guest-overlay"
+ mv "$GUEST" "$BUILD_DIR/guest-overlay"
+ sha256sum "$PREFIX/boot/k3/Image" | cut -d' ' -f1 > "$BUILD_DIR/guest-overlay.kernel.sha256"
+ echo "Built guest overlay: $BUILD_DIR/guest-overlay"
+ exit 0
+fi
 if [[ -e "$PREFIX/rootfs/keystone-rootfs.img" ]]; then
  python3 "$ROOT/scripts/update-keystone-rootfs.py" "$PREFIX/rootfs/keystone-rootfs.img" "$GUEST"
 else

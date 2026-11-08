@@ -1,46 +1,65 @@
-# Host build/install entry point. Component tools check their own dependencies.
-.DEFAULT_GOAL := all
+# build writes only build directories; install publishes already-built artifacts.
+.DEFAULT_GOAL := build
 .NOTPARALLEL:
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 PREFIX ?= $(ROOT)/install/keystone
 K3_BUILD_DIR ?= $(ROOT)/.build-k3
 KEYSTONE_BUILD_DIR ?= $(ROOT)/.build-keystone
-SAMPLE_DIRS := $(patsubst %/Makefile,%,$(wildcard $(ROOT)/samples/*/Makefile))
+STAGE := $(abspath $(KEYSTONE_BUILD_DIR))/stage
 JOBS ?= $(shell nproc)
 CROSS_COMPILE ?= riscv64-linux-gnu-
 ROOTFS_ARCHIVE ?=
 ROOTFS_SHA256 ?=
-export CROSS_COMPILE
-K3_ARGS = --prefix "$(PREFIX)" --build-dir "$(K3_BUILD_DIR)" --jobs "$(JOBS)"
+export CROSS_COMPILE JOBS
+K3_ARGS = --prefix "$(STAGE)" --build-dir "$(K3_BUILD_DIR)" --jobs "$(JOBS)"
 SDK_ARGS = --build-dir "$(KEYSTONE_BUILD_DIR)" --jobs "$(JOBS)"
 VERIFY_ARGS = KEYSTONE_BUILD_DIR="$(KEYSTONE_BUILD_DIR)" KERNEL_OUT="$(K3_BUILD_DIR)/linux"
-.PHONY: all install qemu firmware linux sdk rng verifications samples guest run help
-all: install
-install: qemu firmware linux sdk rng verifications samples guest
+COMPONENTS := qemu opensbi linux eyrie keystone rng verifications samples
+.PHONY: all build install build-install $(COMPONENTS) sm sdk firmware guest erie openSBI install-erie install-openSBI run help $(addprefix install-,$(COMPONENTS))
+all: build
+build: $(COMPONENTS)
+build-install: build install
 qemu:
 	bash "$(ROOT)/scripts/build-install-k3.sh" --only qemu $(K3_ARGS)
-firmware:
-	KEYSTONE_RNG_BACKEND=auto bash "$(ROOT)/scripts/build-install-k3.sh" --only firmware $(K3_ARGS)
+sm:
+	KEYSTONE_RNG_BACKEND=auto bash "$(ROOT)/scripts/build_keystone_sm.sh" "$(ROOT)/keystone" "$(ROOT)/opensbi" "$(K3_BUILD_DIR)/firmware"
+opensbi: sm
+	bash "$(ROOT)/scripts/build_opensbi_link.sh" "$(ROOT)/opensbi" "$(K3_BUILD_DIR)/firmware"
+	mkdir -p "$(STAGE)/firmware/k3"
+	cp "$(K3_BUILD_DIR)/firmware/build-opensbi-k3-keystone/platform/generic/firmware/"fw_dynamic.* "$(STAGE)/firmware/k3/"
+	cp "$(K3_BUILD_DIR)/firmware/sm-combined.o" "$(STAGE)/firmware/k3/"
+firmware: opensbi
+openSBI: opensbi
+install-openSBI: install-opensbi
+install-erie: install-eyrie
 linux:
 	bash "$(ROOT)/scripts/build-install-k3.sh" --only linux $(K3_ARGS)
 sdk:
 	bash "$(ROOT)/scripts/build-install-keystone.sh" --only sdk $(SDK_ARGS)
-rng: sdk
-	bash "$(ROOT)/scripts/build-verification-rng.sh" --skip-qemu --skip-sdk --prefix "$(PREFIX)" --build-dir "$(KEYSTONE_BUILD_DIR)/rng" --sdk-build-dir "$(KEYSTONE_BUILD_DIR)" --qemu-build-dir "$(K3_BUILD_DIR)" --jobs "$(JOBS)"
-verifications: linux sdk
+# Eyrie and examples are built together by the existing SDK workflow.
+eyrie: sdk
+erie: eyrie
+keystone: sm linux eyrie
+	bash "$(ROOT)/scripts/build-install-keystone.sh" --only overlay $(SDK_ARGS) --prefix "$(STAGE)" --k3-build-dir "$(K3_BUILD_DIR)"
+guest: keystone
+rng: eyrie
+	bash "$(ROOT)/scripts/build-verification-rng.sh" --skip-qemu --skip-sdk --prefix "$(STAGE)" --build-dir "$(KEYSTONE_BUILD_DIR)/rng" --sdk-build-dir "$(KEYSTONE_BUILD_DIR)" --qemu-build-dir "$(K3_BUILD_DIR)" --jobs "$(JOBS)"
+verifications: linux eyrie
 	$(MAKE) -C "$(ROOT)/verifications" guest $(VERIFY_ARGS)
 	$(MAKE) -C "$(ROOT)/verifications" kernel-modules $(VERIFY_ARGS)
-samples: sdk
-	@set -e; for directory in $(foreach dir,$(SAMPLE_DIRS),"$(dir)"); do \
-	    $(MAKE) -C "$$directory" KEYSTONE_BUILD_DIR="$(KEYSTONE_BUILD_DIR)"; \
+samples: eyrie
+	@set -e; for directory in "$(ROOT)"/samples/*; do \
+	    if test -f "$$directory/Makefile"; then $(MAKE) -C "$$directory" KEYSTONE_BUILD_DIR="$(KEYSTONE_BUILD_DIR)"; fi; \
 	done
-guest: linux sdk
-	bash "$(ROOT)/scripts/build-install-keystone.sh" --only guest $(SDK_ARGS) --prefix "$(PREFIX)" --k3-build-dir "$(K3_BUILD_DIR)" --rootfs-archive "$(ROOTFS_ARCHIVE)" --rootfs-sha256 "$(ROOTFS_SHA256)"
+install: $(addprefix install-,$(COMPONENTS))
+$(addprefix install-,$(COMPONENTS)):
+	bash "$(ROOT)/scripts/install-built-keystone.sh" "$(@:install-%=%)" "$(STAGE)" "$(PREFIX)" "$(KEYSTONE_BUILD_DIR)" "$(ROOTFS_ARCHIVE)" "$(ROOTFS_SHA256)"
 run:
 	bash "$(ROOT)/scripts/run-k3.sh" --prefix "$(PREFIX)"
 help:
-	@echo 'make [JOBS=4]                 Build/install Keystone stack, RNG variants, verifications and sample'
-	@echo 'make firmware|qemu|sdk|linux  Build/install a selected component'
-	@echo 'make guest                   Build matching kernel/SDK, driver/tools and create/update image'
-	@echo 'make run                     Boot installed Keystone profile'
-	@echo 'Stop QEMU and unmount the guest image before install. No guest tests run automatically.'
+	@echo 'make / make build           Build only (no install/ or rootfs updates)'
+	@echo 'make install                Install already-built outputs; no compilation'
+	@echo 'make build-install JOBS=4    Build then install in one command'
+	@echo 'make qemu|opensbi|sm|eyrie|keystone|verifications|linux|rng|samples'
+	@echo 'make install-qemu|install-opensbi|install-eyrie|install-keystone|install-verifications'
+	@echo 'Stop QEMU/unmount rootfs before install-keystone. See doc/make-build-install.md.'

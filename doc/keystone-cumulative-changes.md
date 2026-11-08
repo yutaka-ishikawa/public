@@ -251,3 +251,13 @@ enclave統合実行の区別は [実装記録](keystone-sbi-3001-implementation.
 実ext4イメージで確認済みです。Makefile経由のSDKとhelloworldビルドも確認済みです。
 この作業環境では完全なカーネル成果物がないため、全体の `make install` と
 更新後ゲストの起動までは未確認です。[操作方法](make-build-install.md) を参照してください。
+
+## Makefileのbuild/install分離
+
+初期の一括方式を変更し、`make` はbuildだけ、`make install` はビルド済み成果物の
+配置だけにしました。一括処理は `make build-install` です。
+QEMU、OpenSBI/SM、Eyrie、Keystone、verifications等の個別ターゲットと、
+対応する `install-*` を追加しています。OpenSBI/SMとEyrie・sampleの実buildで
+最終PREFIXが作られないことを確認し、一時PREFIXへのfirmware・SDK/runtime・sampleの
+installも確認しました。全体のLinux/ゲスト統合実行とは区別しています。
+仕様と依存関係は [make操作方法](make-build-install.md) を参照してください。

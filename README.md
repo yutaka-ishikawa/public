@@ -1,7 +1,7 @@
 # Milk-V Jupiter 2 / SpacemiT K3 integrated source tree
 
-ソース変更後のビルド・インストールは、リポジトリ直下で `make JOBS=4`。
-初回作成と既存イメージの更新に対応します。QEMUを停止してから実行してください。
+リポジトリ直下の `make JOBS=4` はbuildのみ、`make install` はinstallのみです。
+一括処理は `make build-install JOBS=4`。QEMUを停止してからinstallしてください。
 詳しくは [makeによるビルドとインストール](doc/make-build-install.md) を参照。
 
 The `main` branch contains `qemu/`, `opensbi/`, `keystone/`, and `linux-k3/`. Original patches are under `patches/`.
