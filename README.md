@@ -255,3 +255,6 @@ Eyrie・raw loader・SDK・ドライバ・SMの変更履歴と現在の確認範
 
 SBI 3001の既存OpenSBI/QEMU機能を使う案は
 [乱数機能の移植計画](doc/keystone-sbi-3001-plan.md)を参照。
+
+SBI 3001は [Zkr・Jupiter2 WTM・counterの3方式設計](doc/keystone-sbi-3001-three-backends.md)を
+採用予定。各方式を実QEMUゲストから検証する構成とする（設計段階）。

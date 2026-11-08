@@ -120,3 +120,6 @@ CIもビルド検査のみで、システムゲストの試験結果を代用し
 
 Eyrieの物理マップ修正を含む更新履歴と実ゲストでの到達段階は
 [累積修正記録](../doc/keystone-cumulative-changes.md)を参照。
+
+SBI 3001の [3方式の試験設計](../doc/keystone-sbi-3001-three-backends.md) は設計段階。
+現行のrun-all.shにはまだ乱数の3方式試験は含まれない。

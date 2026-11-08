@@ -152,14 +152,15 @@ P6 hotplug／suspend等は固定オンライン構成の完成後に別途判断
 
 ### P1：乱数をエンドツーエンドで移植
 
-詳細は [SBI 3001の移植計画](keystone-sbi-3001-plan.md) を参照。
-OpenSBIの既存Zkr検出・CSR helper、QEMUの既存seed/crypto backendを組み合わせる。
-SMのchecked provider、3001のa0/a1 ABI、Eyrieのgetrandom/AT_RANDOMと
-全呼び出し元のエラー伝播を実装する。
+採用設計は [SBI 3001の3方式](keystone-sbi-3001-three-backends.md)。
+①Zkr、②OP-TEEを参考にしたJupiter2 WTM RNG、③他機種用interfaceと
+counterによる開発用生成器を用意する。③は暗号学的乱数ではないことを明示する。
 
-検証は実QEMUゲストでZkr有効/無効の両起動を行う。模擬providerや
-製品関数の抽出試験は追加しない。実機のZkr/TRNG供給元は別途確認し、
-QEMUでの動作を実機の乱数機能の完成とは扱わない。
+共通のchecked APIとa0/a1 ABI、Eyrieのgetrandom/AT_RANDOMと
+全呼び出し元のエラー伝播を実装する。
+②のQEMU用MMIOデバイスを追加し、3方式をそれぞれ実SBI・実SM経路で試験する。
+模擬providerや製品関数の抽出試験は追加しない。
+共通DRBGやboot seed方式は将来候補で、今回の必須実装ではない。
 
 ### P2：鍵・SM測定providerと機能初期化
 
