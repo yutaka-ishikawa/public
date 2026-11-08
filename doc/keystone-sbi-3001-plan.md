@@ -30,6 +30,14 @@
 これは既存OpenSBIの単一関数への置き換えではなく、拡張検出・CSRアクセス・
 既存ecall経路と、QEMUの既存乱数実装を組み合わせる移植である。
 
+## Zkr非対応機の設計
+
+[Zkr非対応機の供給元・DRBG設計](keystone-random-fallback-design.md)を追加した。
+Zkrを優先し、TRNG/既存管理firmwareサービス、次いで信頼できるSM専用boot seedを
+候補とする。機種別entropy providerとSM内の共通DRBGを分離する案を最終形とし、
+以下のQEMU直接取得案は先行する最小実装として位置づける。
+Linux由来seedを通常の自動fallbackにはせず、供給元がなければ明示的に失敗する。
+
 ## 現在の問題
 
 - `sm-sbi-opensbi.c` はK3の3001を先にNOT_IMPLEMENTEDとして拒否する。

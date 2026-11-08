@@ -80,3 +80,6 @@ DTでZkrが宣言されない状態では、この条件付き処理を根拠に
 - ISA名を追加するだけ、固定値、タイマー値、hash単独等で供給元を代用しない。
 
 詳細は [SBI 3001移植計画](keystone-sbi-3001-plan.md) を参照。
+
+Zkrのない機種に対する候補と選択方針は
+[乱数供給元のfallback設計](keystone-random-fallback-design.md)を参照。
