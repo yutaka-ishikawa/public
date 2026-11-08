@@ -30,6 +30,13 @@ for name in shutdown poweroff reboot; do
  # Bash launched directly as init may have a PATH containing /usr/bin but no sbin.
  copy_guest_file "$ROOT/scripts/guest/$name" "$TARGET/usr/bin/$name"
 done
+# Keep command entry points in both paths: init=/bin/bash may omit sbin.
+for name in insmod rmmod lsmod modprobe depmod modinfo \
+ ip ping ping6 ifconfig route netstat hostname; do
+ for dir in usr/bin usr/sbin; do
+  copy_guest_file "$ROOT/scripts/guest/keystone-busybox-tool" "$TARGET/$dir/$name"
+ done
+done
 echo "Installed Keystone guest helpers at $TARGET"
 if [[ $TARGET == / && ! -x /usr/share/keystone/examples/hello.ke ]]; then
  echo 'Keystone hello.ke is missing from this rootfs. The helper files are installed, but you must boot/build the Keystone image to run the example.' >&2

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Installed under each applet's name; use the bundled static RV64 binary.
+set -eu
+bb=${KEYSTONE_GUEST_BUSYBOX:-/usr/libexec/keystone/busybox}
+exec "$bb" "${0##*/}" "$@"

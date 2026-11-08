@@ -41,6 +41,17 @@ class GuestToolsTests(unittest.TestCase):
             self.assertTrue(os.access(stage / name, os.X_OK), name)
         self.assertFalse((sbin / "shutdown").is_symlink())
         self.assertEqual(original.read_text(), "preserve systemctl")
+        self.mock.write_text('#!/bin/sh\nprintf "<%s>\\n" "$@" > "$CALL_LOG"\n')
+        for name in ("insmod", "rmmod", "lsmod", "modprobe", "depmod", "modinfo",
+                     "ip", "ping", "ping6", "ifconfig", "route", "netstat", "hostname"):
+            for directory in ("usr/bin", "usr/sbin"):
+                command = stage / directory / name
+                self.assertTrue(os.access(command, os.X_OK), str(command))
+                result = subprocess.run([str(command), "argument with spaces", "--flag"],
+                                        env=self.env, text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.log.read_text().splitlines(),
+                                 [f"<{name}>", "<argument with spaces>", "<--flag>"])
 
     def test_shutdown_syncs_and_remounts_before_poweroff(self):
         result = self.run_guest("shutdown", "-h", "now")

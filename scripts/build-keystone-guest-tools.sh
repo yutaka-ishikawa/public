@@ -36,10 +36,24 @@ OUT="$WORK/objects"
 mkdir -p "$OUT"
 make -C "$SRC" O="$OUT" allnoconfig > "$WORK/config.log"
 sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/; s/# CONFIG_BUSYBOX is not set/CONFIG_BUSYBOX=y/; s/# CONFIG_SHOW_USAGE is not set/CONFIG_SHOW_USAGE=y/; s/# CONFIG_INSMOD is not set/CONFIG_INSMOD=y/; s/# CONFIG_LSMOD is not set/CONFIG_LSMOD=y/' "$OUT/.config"
-for option in POWEROFF REBOOT SYNC MOUNT MOUNTPOINT FEATURE_MOUNT_FLAGS MKDIR UNAME; do
+for option in POWEROFF REBOOT SYNC MOUNT MOUNTPOINT FEATURE_MOUNT_FLAGS MKDIR UNAME \
+ RMMOD MODPROBE DEPMOD MODINFO FEATURE_CMDLINE_MODULE_OPTIONS \
+ FEATURE_MODUTILS_ALIAS FEATURE_MODUTILS_SYMBOLS \
+ IP FEATURE_IP_ADDRESS FEATURE_IP_LINK FEATURE_IP_ROUTE FEATURE_IP_RULE \
+ FEATURE_IP_NEIGH FEATURE_IP_TUNNEL PING PING6 FEATURE_IPV6 \
+ IFCONFIG FEATURE_IFCONFIG_STATUS ROUTE NETSTAT HOSTNAME; do
  sed -i "s/# CONFIG_${option} is not set/CONFIG_${option}=y/" "$OUT/.config"
 done
+# Match the module location in the Keystone rootfs, including non-usrmerged bases.
+sed -i 's|^CONFIG_DEFAULT_MODULES_DIR=.*|CONFIG_DEFAULT_MODULES_DIR="/usr/lib/modules"|; s|^CONFIG_DEFAULT_DEPMOD_FILE=.*|CONFIG_DEFAULT_DEPMOD_FILE="modules.dep"|' "$OUT/.config"
 make -C "$SRC" O="$OUT" CROSS_COMPILE="$CROSS_COMPILE" -j "$JOBS"
+# Fail rather than silently ship another BusyBox without required applets.
+for option in INSMOD RMMOD LSMOD MODPROBE DEPMOD MODINFO IP PING PING6 \
+ IFCONFIG ROUTE NETSTAT HOSTNAME; do
+ grep -qx "CONFIG_${option}=y" "$OUT/.config" || {
+  echo "Required guest tool was not built: $option" >&2; exit 4;
+ }
+done
 "${CROSS_COMPILE}readelf" -h "$OUT/busybox" | grep -q 'Machine:.*RISC-V'
 if "${CROSS_COMPILE}readelf" -l "$OUT/busybox" | grep -q INTERP; then
  echo 'Guest tools must be statically linked' >&2; exit 4

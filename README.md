@@ -73,7 +73,7 @@ bash scripts/build-install-keystone.sh --only sdk
 
 ### Host filesystem mounts, guest tools and shutdown
 
-New Keystone images contain `/usr/bin/run-keystone-hello`, `/usr/bin/mount-hostshare`, `shutdown`, `poweroff` and `reboot`. Static BusyBox provides the module-loading, mount and power-control operations without requiring kmod or a running init daemon. From the guest:
+New Keystone images contain `/usr/bin/run-keystone-hello`, `/usr/bin/mount-hostshare`, `shutdown`, `poweroff` and `reboot`, plus `insmod`, `rmmod`, `lsmod`, `modprobe`, `depmod`, `modinfo`, `ip`, `ping`, `ping6`, `ifconfig`, `route`, `netstat` and `hostname`. Static BusyBox provides the module-loading, mount and power-control operations without requiring kmod or a running init daemon. From the guest:
 
 ```bash
 mount-hostshare                       # mount hostshare at /mnt/host
@@ -213,7 +213,7 @@ In the Keystone guest shell:
 /usr/share/keystone/examples/hello-native.ke
 ```
 
-The helper mounts `/proc` and `/sys`, loads the driver matching `uname -r`, then runs `hello.ke`. Since the base rootfs may lack `insmod`, new Keystone images include a statically linked RISC-V BusyBox with `insmod` and `lsmod` at `/usr/libexec/keystone/busybox`. The helper uses it when the system command is unavailable. The build downloads BusyBox 1.36.1 from a pinned, SHA-256-verified archive on `codeload.github.com`; sources remain in the guest-tools build directory. Packaging an image or loading a module does not establish that SM enclave creation succeeds. Current K3 code separates basic PMP-only execution from unavailable secure key/entropy services; attestation and sealing must not be inferred to work from a hello test.
+The helper mounts `/proc` and `/sys`, loads the driver matching `uname -r`, then runs `hello.ke`. Since the base rootfs may lack `insmod`, new Keystone images include a statically linked RISC-V BusyBox with module and network applets at `/usr/libexec/keystone/busybox`. The helper uses it when the system command is unavailable. The build downloads BusyBox 1.36.1 from a pinned, SHA-256-verified archive on `codeload.github.com`; sources remain in the guest-tools build directory. Packaging an image or loading a module does not establish that SM enclave creation succeeds. Current K3 code separates basic PMP-only execution from unavailable secure key/entropy services; attestation and sealing must not be inferred to work from a hello test.
 
 ## Verification status
 
@@ -239,3 +239,6 @@ The script **never removes** source trees, patches, rootfs files, or files insta
 
 Keystoneの大容量EPM（256 MiB）には、修正版ドライバと起動時のCMA予約を使う。
 [設定・ビルド・実ゲスト検証手順](verifications/epm-allocation/README.md)を参照。
+
+For module/network commands, updating an existing image and `depmod` usage, see
+[Keystone guest commands](doc/keystone-guest-commands.md).
