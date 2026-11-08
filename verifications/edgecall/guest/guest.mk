@@ -17,7 +17,8 @@ $(OUT):
 	mkdir -p $@
 $(OUT)/eapp: guest/eapp.c guest/protocol.h guest/guest.mk $(SDK_DIR)/lib/libkeystone-eapp.a
 	mkdir -p $(OUT)
-	$(GCC) $(CPPFLAGS) $(CCFLAGS) -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-e,main -Iguest -I$(SDK_DIR)/include $< $(SDK_DIR)/lib/libkeystone-eapp.a -o $@
+	$(GCC) $(CPPFLAGS) $(CCFLAGS) -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-u,keystone_eapp_start,-e,keystone_eapp_start -Iguest -I$(SDK_DIR)/include $< $(SDK_DIR)/lib/libkeystone-eapp.a -o $@
+	python3 "$(ROOT)/scripts/check-keystone-native-entry.py" "$(CROSS_COMPILE)nm" "$@"
 $(OUT)/runner: guest/host.cpp guest/protocol.h kernel/probe_abi.h guest/guest.mk $(SDK_LIBS) | $(OUT)
 	$(GXX) $(CPPFLAGS) -DEDGE_VERIFY_FREE_MEM_MIB=$(FREE_MEM_MIB) $(CCFLAGS) -Wall -Wextra -Werror -std=c++17 -include cstdint -Iguest -I$(SDK_DIR)/include $< $(SDK_LIBS) -o $@
 $(OUT)/edgecall.ke: $(OUT)/eapp $(OUT)/runner $(RUNTIME_DIR)/eyrie-rt $(RUNTIME_DIR)/loader.bin

@@ -11,7 +11,7 @@ set(eyrie_plugins "none")
 add_executable(${eapp_bin} ${eapp_src})
 # This native enclave links without libc or stack-canary runtime support.
 target_compile_options(${eapp_bin} PRIVATE -fno-stack-protector)
-target_link_libraries(${eapp_bin} "-nostdlib -static" ${KEYSTONE_LIB_EAPP} ${KEYSTONE_LIB_EDGE})
+target_link_libraries(${eapp_bin} "-nostdlib -static -Wl,-u,keystone_eapp_start,-e,keystone_eapp_start" ${KEYSTONE_LIB_EAPP} ${KEYSTONE_LIB_EDGE})
 
 target_include_directories(${eapp_bin}
   PUBLIC ${KEYSTONE_SDK_DIR}/include/app

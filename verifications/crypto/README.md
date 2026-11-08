@@ -142,3 +142,23 @@ python3 verifications/crypto/run-qemu.py --all
 ただし前回buildが検証moduleを作る前に停止した場合は、対応kernelで
 `make -C verifications guest kernel-modules` も完了させてください。
 eappの機械語が変わるので、crypto metadataも再生成・installする必要があります。
+
+## 初期のgp相対アクセスで負のVAへpage faultする場合
+
+[KSB-026](../../doc/keystone-bug-report.md) のnative起動コード修正を取得してください。
+CRTなしでmainへ直接入るとgpが未初期化ですが、GNU linkerの緩和はgp相対アクセスを生成します。
+SDKの専用入口 `keystone_eapp_start` がgpを設定してからmainを呼ぶように変更しました。
+リンク指定は `-Wl,-u,keystone_eapp_start,-e,keystone_eapp_start` です。
+libc付きアプリの通常CRTは変更しません。
+
+入口チェックは実ELFを読み、最初のAUIPC/ADDIが期待するgpを設定することを検査します。
+hello-nativeと各native verificationのbuild時に自動実行されます。
+source修正・SDK更新後は `make build` と `make install` で全パッケージ・既知値も更新してください。
+
+補助CPUテストは、SDKをbuild後に次で実行できます（qemu-riscv64 user-modeが必要）。
+
+```bash
+python3 scripts/tests/test-keystone-native-entry.py
+```
+
+この補助テストはnative入口だけを検査し、ゲストのOpenSBI/SM統合試験を代用しません。

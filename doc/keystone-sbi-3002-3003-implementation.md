@@ -103,3 +103,11 @@ nostdlib eappで未解決になりました。最終linkのフラグだけでは
 C暗号部分をnative設定で別archive libkeystone-verifier-eapp.aへbuildするよう修正しました。
 hosted verifierとLinux runnerは元のarchiveと保護設定を維持します。
 強制stack protector設定でbuildと未解決参照検査を確認しました。ゲスト統合PASSではありません。
+
+## Native入口でのgp初期化（KSB-026）
+
+ユーザーの実ログで、cryptoの最初のglobal変数アクセスが負のVAへload/store page faultしました。
+main直入のままgp相対のlinker緩和を許可していたことが原因です。
+SDKの専用CRT入口でgpを初期化し、root build対象のnative hello/verificationへ適用しました。
+libc付きeappのCRTは維持します。実ELFチェックとQEMU user-modeの入口probeで確認し、
+パッケージ・既知値を再生成しました。新しいsystem guest試験のPASSは未確認です。

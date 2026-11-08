@@ -19,13 +19,16 @@ $(OUT)/runtime.stamp: $(RUNTIME_SRC) Makefile $(SDK_DIR)/include/shared/crypto_a
 	touch $@
 $(OUT)/eapp: eapp.c protocol.h Makefile $(EAPP_LIBS)
 	mkdir -p $(OUT)
-	$(CROSS_COMPILE)gcc $(CPPFLAGS) -O2 -g -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-e,main -I$(SDK_DIR)/include $< $(EAPP_LIBS) -o $@
+	$(CROSS_COMPILE)gcc $(CPPFLAGS) -O2 -g -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-u,keystone_eapp_start,-e,keystone_eapp_start -I$(SDK_DIR)/include $< $(EAPP_LIBS) -o $@
+	python3 "$(ROOT)/scripts/check-keystone-native-entry.py" "$(CROSS_COMPILE)nm" "$@"
 $(OUT)/eapp-b: eapp.c protocol.h Makefile $(EAPP_LIBS)
 	mkdir -p $(OUT)
-	$(CROSS_COMPILE)gcc $(CPPFLAGS) -DVARIANT=1 -O2 -g -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-e,main -I$(SDK_DIR)/include $< $(EAPP_LIBS) -o $@
+	$(CROSS_COMPILE)gcc $(CPPFLAGS) -DVARIANT=1 -O2 -g -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-u,keystone_eapp_start,-e,keystone_eapp_start -I$(SDK_DIR)/include $< $(EAPP_LIBS) -o $@
+	python3 "$(ROOT)/scripts/check-keystone-native-entry.py" "$(CROSS_COMPILE)nm" "$@"
 $(OUT)/eapp-unavailable: eapp.c protocol.h Makefile $(EAPP_LIBS)
 	mkdir -p $(OUT)
-	$(CROSS_COMPILE)gcc $(CPPFLAGS) -DEXPECT_UNAVAILABLE -O2 -g -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-e,main -I$(SDK_DIR)/include $< $(EAPP_LIBS) -o $@
+	$(CROSS_COMPILE)gcc $(CPPFLAGS) -DEXPECT_UNAVAILABLE -O2 -g -Wall -Wextra -Werror -fno-stack-protector -static -nostdlib -Wl,-u,keystone_eapp_start,-e,keystone_eapp_start -I$(SDK_DIR)/include $< $(EAPP_LIBS) -o $@
+	python3 "$(ROOT)/scripts/check-keystone-native-entry.py" "$(CROSS_COMPILE)nm" "$@"
 $(OUT)/runner: host.cpp protocol.h Makefile $(HOST_LIBS)
 	mkdir -p $(OUT)
 	$(CROSS_COMPILE)g++ $(CPPFLAGS) -O2 -g -Wall -Wextra -Werror -std=c++17 -include cstdint -I$(SDK_DIR)/include -I$(SDK_DIR)/include/verifier $< $(HOST_LIBS) -o $@

@@ -51,6 +51,7 @@
 | KSB-023 | report未使用data末尾の未初期化 | SM取込コード | 修正済 |
 | KSB-024 | HKDF最大出力で8 bit loop counterがwrap | SM暗号ライブラリ | 修正済 |
 | KSB-025 | hosted verifierをnative eappへリンクしてcanary参照が未解決 | 今回のverification統合 | 修正済 |
+| KSB-026 | native入口でgp未初期化のまま緩和済み命令を実行 | SDK/native build統合 | 修正済 |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
 KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
@@ -333,6 +334,29 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
   QEMU試験より前のbuild問題であり、実行時PASSとは別に扱う。
 - 再実行：make cryptoでSDK・eapp・既知値を更新し、install-crypto/install-eyrie後にQEMU試験。
   本件の修正commitはこの報告項目とbuild設定の変更履歴を参照。
+
+## KSB-026: native main直入とglobal pointer未初期化
+
+- 登録日：2026-11-09。状態：修正済（本更新）。
+- 対象：native eappの入口、SDK起動コード、verificationのlink設定。
+- 症状：cryptoの両qemu-dev bootでload page fault、障害VA=0xfffffffffffffe28、
+  unavailableでstore page fault、障害VA=0xfffffffffffff808。report返却は0件。
+  同じログで3001の7ケースとhost側の3002/3003権限検査はPASS。
+- 原因：nostdlibでmainを入口にし、CRTによるgp初期化を行わない一方、
+  linker relaxationはgp相対アクセスを生成していた。
+- 根拠：実際のcrypto ELFにlw variant,-472(gp)、addi output,gp,-2040等を確認。
+  gp=0なら-472は報告のfe28と一致し、unavailableで出力VAが負になる症状にも一致する。
+- 対応：SDKに専用native startを追加し、norelaxのPC相対命令でgpを初期化してからmainへcallする。
+  検証用native eappの入口を変更し、ELF入口と実命令をbuild時に検査する。
+- 修正：SDKのcrt.Sにkeystone_eapp_startを追加。norelax/norvcのllaでgpを初期化する。
+  root build対象のhello-nativeと全native verificationのentryとarchive強制取り込みを指定。
+  libc付きeappは既存CRTのまま。旧nativeサンプルで独自linker scriptを使うものは未変更。
+- 検証：実ELF入口とAUIPC/ADDIの計算値が__global_pointer$に一致することをbuild時に検査。
+  QEMU user-modeのSDK起動probeでmain直入はgp不一致(41)、新入口は正常終了(0)を確認。
+  このprobeはLinux exitを使う独立CPUテストで、OpenSBI/SMの模擬試験や統合PASSではない。
+  SDK、hello-native、全guestパッケージと既知値の再生成は成功。ゲストsuite再実行は未確認。
+  ユーザー環境のELFの正確なPC対応はそのELFで再確認が必要。
+  上流最新版の発生状況は未照合で、今回のnative build統合問題として管理する。
 
 ## 要確認事項・対象外との境界
 

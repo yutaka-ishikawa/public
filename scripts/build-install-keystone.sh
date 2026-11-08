@@ -96,6 +96,10 @@ for name in hello hello-native; do
 done
 cmake --build "$BUILD_DIR/examples" --target hello-package hello-native-package --parallel "$JOBS"
 fi
+if [[ $ONLY != guest && $ONLY != overlay ]]; then
+ python3 "$ROOT/scripts/check-keystone-native-entry.py" \
+  "$(command -v "${CROSS_COMPILE:-riscv64-linux-gnu-}nm")" "$BUILD_DIR/examples/hello-native/hello-native"
+fi
 if [[ $ONLY == sdk ]]; then echo "SDK and examples built at $BUILD_DIR"; exit 0; fi
 if [[ $ONLY != guest && $ONLY != overlay ]]; then
 mkdir -p "$PREFIX"

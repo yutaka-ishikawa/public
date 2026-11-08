@@ -328,3 +328,12 @@ Linux/enclaveからの新SBI試験と新コードの全suite回帰は未実行�
 ユーザー環境で__stack_chk_guard/__stack_chk_failが未解決になりました（KSB-025）。
 C暗号部分だけのnative archiveを別buildし、ホスト側の保護設定を維持するよう修正しました。
 強制stack protector設定でのbuildとarchive/ELF参照検査を確認しています。
+
+## Native CRT入口の追加（KSB-026）
+
+mainへ直接入るnative eappでgpが未初期化となり、gp相対のglobal変数参照が
+負のVAへpage faultする問題を修正しました。SDKのkeystone_eapp_startがgpを
+初期化してmainへcallし、mainが戻った場合はEAPP_RETURNへ渡します。
+既存のlibc付きアプリは変更しません。hello-nativeと全native verificationのリンクを更新し、
+実ELFのentry/gp計算チェックを追加しました。QEMU user-modeの入口CPU probeでは
+旧main直入の失敗と新入口の成功を確認。新しいsystem guestでの再試験は未確認です。
