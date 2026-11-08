@@ -24,6 +24,28 @@ C関数の抽出実行、模擬PMP/CSR/IPI、模擬SBIの試験とその過去�
 `host.cpp` のhostは開発用PCではなく、QEMUゲストLinux上のrunnerを意味する。
 SBI 2004は定義済み機能ではなく、未定義番号を拒否する試験である。
 
+## ソースコードの配置と結果表示
+
+旧 `sbi-2001`〜`sbi-2005` の番号別ディレクトリにあったホスト模擬試験は削除済み。
+現行の実QEMU試験は複数SBIを通るため、次の機能別ディレクトリにまとめている。
+古い番号別ディレクトリが手元に残る場合、Git管理外のビルド生成物の可能性がある。
+
+| SBI番号 | 実試験のソース |
+| --- | --- |
+| 2001 CREATE、2002 DESTROY、2003 RUN、2005 RESUME、3004 STOP、3006 EXIT | `edgecall/guest/host.cpp`（ゲストLinux runner）、`edgecall/guest/eapp.c`（enclave）。ライフサイクル全体を通して検査する。 |
+| 2001〜2005、3001〜3003の不正引数・呼出権限 | `sbi-errors/kernel/keystone_sbi_verify.c`（実ecall）、`sbi-errors/test.c`（ioctlと結果判定）。2004は未定義番号の拒否を検査。 |
+| 3001 RANDOM | `random/eapp.c`、`random/env.c`（AT_RANDOM）、`random/host.cpp`。 |
+| 3002 ATTEST、3003 SEALING KEY | `crypto/eapp.c`、`crypto/host.cpp`。 |
+| EPMのPMP保護 | `edgecall/kernel/edgecall_pmp_probe.c`、`edgecall/guest/host.cpp`。CREATEで設定された保護を検査する。専用のSBI番号ではない。 |
+
+`host.cpp`も開発PCではなくQEMUゲストLinux上で動く。
+Makefileと `run-guest.sh` はそれぞれの機能別ディレクトリにある。
+
+自動runnerは `PASS/FAIL SBI ... 起動ケース名` を表示し、crypto runnerは
+ゲスト内のPASS/FAIL/SKIP行も表示する。`--all` の起動結果は表示されたSBIを
+含むsuite全体の結果であり、失敗したSBIの特定には続く個別判定とserialログを見る。
+ライフサイクルの複数番号表示も一連の経路の検査で、各SBIの全分岐を網羅した意味ではない。
+
 ## 1. 開発用ホスト：準備・ビルド
 
 リポジトリルートで実行する。まだ起動環境がなければ最初に

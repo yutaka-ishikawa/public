@@ -74,7 +74,7 @@ int main(int argc, char **argv)
     params.setUntrustedSize(256 * 1024);
     result = enclave.init(argv[1], argv[2], argv[3], params);
     if (result != Keystone::Error::Success) {
-	fprintf(stderr, "FAIL RNG CREATE: %d\n", static_cast<int>(result));
+	fprintf(stderr, "FAIL SBI 2001 RNG CREATE: %d\n", static_cast<int>(result));
 	return 1;
     }
     edge_call_init_internals(
@@ -89,12 +89,12 @@ int main(int argc, char **argv)
     if (env_test && expected_error) {
 	if (result != Keystone::Error::Success || retval != UINTPTR_MAX ||
 	    calls) {
-	    fprintf(stderr, "FAIL RNG AT_RANDOM: expected startup rejection\n");
+	    fprintf(stderr, "FAIL SBI 3001 AT_RANDOM: expected startup rejection\n");
 	    return 1;
 	}
     } else if (result != Keystone::Error::Success || retval || failed ||
 	       calls != (env_test || expected_error ? 1U : 10U)) {
-	fprintf(stderr, "FAIL RNG: SDK=%d exit=%lu calls=%u failed=%d\n",
+	fprintf(stderr, "FAIL SBI 3001 RNG: SDK=%d exit=%lu calls=%u failed=%d\n",
 		static_cast<int>(result), static_cast<unsigned long>(retval),
 		calls, failed);
 	return 1;

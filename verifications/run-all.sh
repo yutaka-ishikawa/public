@@ -34,7 +34,7 @@ for iteration in 1 2; do
     done
 done
 printf 'Crypto expectation: %s\n' "${KEYSTONE_CRYPTO_EXPECT:-unavailable}"
-printf 'PASS GUEST SUITE: real SBI errors and enclave lifecycle at 2/256 MiB free memory\n'
+printf 'PASS GUEST SUITE SBI 2001/2002/2003/2004(undefined)/2005/3001/3002/3003/3004/3006: real SBI errors and enclave lifecycle at 2/256 MiB free memory\n'
 if [[ ${1:-} == --data-only ]]; then
     printf 'PMP direct-access probe omitted by explicit --data-only option\n'
 fi

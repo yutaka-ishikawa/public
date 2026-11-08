@@ -74,14 +74,14 @@ static void host_handler(void *buffer)
 	    probe.shared_result || probe.shared_byte != expected ||
 	    probe.private_result != -EFAULT) {
 	    fprintf(stderr,
-		    "FAIL EPM protection: control=%d shared=%d private=%d\n",
+		    "FAIL SBI 2001 PMP protection: control=%d shared=%d private=%d\n",
 		    probe.control_result, probe.shared_result,
 		    probe.private_result);
 	    failed = true;
 	    return;
 	}
 	probe_passed = true;
-	printf("PASS GUEST: kernel direct-map EPM read denied; UTM/control "
+	printf("PASS GUEST SBI 2001 PMP: kernel direct-map EPM read denied; UTM/control "
 	       "readable\n");
     }
     response = request;
@@ -140,19 +140,21 @@ static int execute_guest(char **argv)
     result = instance.run(&retval);
     if (result != Keystone::Error::Success || retval || failed || calls != 8 ||
 	(require_probe && !probe_passed)) {
-	fprintf(stderr, "FAIL guest: SDK=%d exit=%lu callbacks=%lu failed=%d\n",
+	fprintf(stderr, "FAIL SBI 2001/2003/3004/2005/3006 edgecall: "
+		"SDK=%d exit=%lu callbacks=%lu failed=%d\n",
 		static_cast<int>(result), static_cast<unsigned long>(retval),
 		calls, failed);
 	return 1;
     }
     result = instance.destroy();
     if (result != Keystone::Error::Success) {
-	fprintf(stderr, "FAIL GUEST: explicit DESTROY failed: %d\n",
+	fprintf(stderr, "FAIL GUEST SBI 2002: explicit DESTROY failed: %d\n",
 		static_cast<int>(result));
 	return 1;
     }
-    printf("PASS GUEST: CREATE/RUN/STOP/RESUME/EXIT/DESTROY\n");
-    printf("PASS GUEST: 8 binary OCALL round trips and invalid return "
+    printf("PASS GUEST SBI 2001/2003/3004/2005/3006/2002: "
+	   "CREATE/RUN/STOP/RESUME/EXIT/DESTROY\n");
+    printf("PASS GUEST SBI 3004/2005: 8 binary OCALL round trips and invalid return "
 	   "rejection\n");
     return 0;
 }

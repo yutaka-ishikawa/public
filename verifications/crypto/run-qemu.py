@@ -104,7 +104,17 @@ def main():
                            ('unavailable', 'unavailable')]:
         result = run(args, name, provider)
         records.append(result)
-        print(('PASS' if result['pass'] else 'FAIL'), name, result.get('error', ''), flush=True)
+        scope = ('SBI 2001/2002/2003/2004(undefined)/2005/3001/3002/3003/3004/3006'
+                 if args.all else 'SBI 3002/3003')
+        print(('PASS' if result['pass'] else 'FAIL'), scope, name,
+              result.get('error', ''), flush=True)
+        # Show actual guest assertions, rather than treating a boot summary as
+        # a separate assertion for every SBI in the lifecycle.
+        serial = Path(result['log'])
+        if serial.is_file():
+            for line in serial.read_text(errors='replace').splitlines():
+                if line.startswith(('PASS ', 'FAIL ', 'SKIP ')):
+                    print('  ' + line, flush=True)
         if not result['pass']:
             print('Log:', result['log'], flush=True)
             path = Path(result['log'])

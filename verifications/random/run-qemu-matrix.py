@@ -144,7 +144,7 @@ def main():
             result = {"case": case[0], "pass": False, "error": str(exc),
                       "log": str(args.logs / f"{case[0]}.log")}
         results.append(result)
-        print(("PASS" if result["pass"] else "FAIL"), case[0], flush=True)
+        print(("PASS" if result["pass"] else "FAIL"), "SBI 3001", case[0], flush=True)
         if not result["pass"]:
             print("  Reason:", result.get("error", "unknown failure"), flush=True)
             print("  Log:", result.get("log"), flush=True)

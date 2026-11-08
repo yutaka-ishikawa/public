@@ -222,7 +222,7 @@ int main(int argc, char **argv)
     params.setUntrustedSize(256 * 1024);
     if (instance.init(argv[1], argv[2], argv[3], params) !=
 	Keystone::Error::Success) {
-	fprintf(stderr, "FAIL CRYPTO CREATE\n");
+	fprintf(stderr, "FAIL SBI 2001 CRYPTO CREATE\n");
 	return 1;
     }
     edge_call_init_internals(
@@ -238,7 +238,7 @@ int main(int argc, char **argv)
     retval = 99;
     result = instance.run(&retval);
     if (result != Keystone::Error::Success || retval || failed || !done) {
-	fprintf(stderr, "FAIL CRYPTO SDK=%d exit=%lu reports=%u failed=%d\n",
+	fprintf(stderr, "FAIL SBI 3002/3003 CRYPTO SDK=%d exit=%lu reports=%u failed=%d\n",
 		static_cast<int>(result), static_cast<unsigned long>(retval),
 		reports, failed);
 	return 1;
@@ -246,7 +246,7 @@ int main(int argc, char **argv)
     if (instance.destroy() != Keystone::Error::Success) {
 	return 1;
     }
-    printf("PASS GUEST CRYPTO: provider=%s reports=%u "
+    printf("PASS GUEST CRYPTO: SBI 3002/3003 provider=%s reports=%u "
 	   "CREATE/RUN/OCALL/RESUME/DESTROY; no keys exported\n",
 	   unavailable ? "unavailable" : "qemu-dev", reports);
     return 0;
