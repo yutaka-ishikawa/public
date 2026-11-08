@@ -1,0 +1,79 @@
+[
+  {
+    "case": "zkr",
+    "scope": "SM cold-boot initialization only; no Linux/enclave SBI integration",
+    "qemu_sha256": "a915a2c8cd98511adbe3adaab37bfd18581b9b59ce0f476912d8030749c458e9",
+    "firmware_sha256": "29129f64c1d7bbed5de4f1acd51b980eb4ebea4079f9cf128907c2b2453f42a9",
+    "machine": "jupiter2,wtm-rng=off",
+    "cpu": "rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16,zkr=on",
+    "expected_status": 0,
+    "banner": "[SM/RNG] selected=zkr quality=hardware-source status=0\r",
+    "pass": true
+  },
+  {
+    "case": "jupiter2",
+    "scope": "SM cold-boot initialization only; no Linux/enclave SBI integration",
+    "qemu_sha256": "a915a2c8cd98511adbe3adaab37bfd18581b9b59ce0f476912d8030749c458e9",
+    "firmware_sha256": "759cb537d33e96ec134a5be81d6f072e0cbf93367f2be46cab795a6ba0cc6771",
+    "machine": "jupiter2,wtm-rng=on",
+    "cpu": "rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16,zkr=off",
+    "expected_status": 0,
+    "banner": "[SM/RNG] selected=jupiter2 quality=hardware-prng status=0\r",
+    "pass": true
+  },
+  {
+    "case": "counter",
+    "scope": "SM cold-boot initialization only; no Linux/enclave SBI integration",
+    "qemu_sha256": "a915a2c8cd98511adbe3adaab37bfd18581b9b59ce0f476912d8030749c458e9",
+    "firmware_sha256": "886b10018e88d2e4a4d3816436c3a63dc6dbc304d7c1588623b05ba57d67894b",
+    "machine": "jupiter2,wtm-rng=off",
+    "cpu": "rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16,zkr=off",
+    "expected_status": 0,
+    "banner": "[SM/RNG] selected=counter quality=development status=0\r",
+    "pass": true
+  },
+  {
+    "case": "zkr-absent",
+    "scope": "SM cold-boot initialization only; no Linux/enclave SBI integration",
+    "qemu_sha256": "a915a2c8cd98511adbe3adaab37bfd18581b9b59ce0f476912d8030749c458e9",
+    "firmware_sha256": "29129f64c1d7bbed5de4f1acd51b980eb4ebea4079f9cf128907c2b2453f42a9",
+    "machine": "jupiter2,wtm-rng=off",
+    "cpu": "rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16,zkr=off",
+    "expected_status": 100100,
+    "banner": "[SM/RNG] selected=zkr quality=hardware-source status=100100\r",
+    "pass": true
+  },
+  {
+    "case": "jupiter2-absent",
+    "scope": "SM cold-boot initialization only; no Linux/enclave SBI integration",
+    "qemu_sha256": "a915a2c8cd98511adbe3adaab37bfd18581b9b59ce0f476912d8030749c458e9",
+    "firmware_sha256": "759cb537d33e96ec134a5be81d6f072e0cbf93367f2be46cab795a6ba0cc6771",
+    "machine": "jupiter2,wtm-rng=off",
+    "cpu": "rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16,zkr=off",
+    "expected_status": 100100,
+    "banner": "[SM/RNG] selected=jupiter2 quality=hardware-prng status=100100\r",
+    "pass": true
+  },
+  {
+    "case": "jupiter2-not-ready",
+    "scope": "SM cold-boot initialization only; no Linux/enclave SBI integration",
+    "qemu_sha256": "a915a2c8cd98511adbe3adaab37bfd18581b9b59ce0f476912d8030749c458e9",
+    "firmware_sha256": "759cb537d33e96ec134a5be81d6f072e0cbf93367f2be46cab795a6ba0cc6771",
+    "machine": "jupiter2,wtm-rng=on,wtm-rng-fault=not-ready",
+    "cpu": "rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16,zkr=off",
+    "expected_status": 100101,
+    "banner": "[SM/RNG] selected=jupiter2 quality=hardware-prng status=100101\r",
+    "pass": true
+  },
+  {
+    "case": "jupiter2-zero",
+    "scope": "SM cold-boot initialization only; no Linux/enclave SBI integration",
+    "qemu_sha256": "a915a2c8cd98511adbe3adaab37bfd18581b9b59ce0f476912d8030749c458e9",
+    "firmware_sha256": "759cb537d33e96ec134a5be81d6f072e0cbf93367f2be46cab795a6ba0cc6771",
+    "machine": "jupiter2,wtm-rng=on,wtm-rng-fault=zero",
+    "cpu": "rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16,zkr=off",
+    "expected_status": 0,
+    "banner": "[SM/RNG] selected=jupiter2 quality=hardware-prng status=0\r",
+    "pass": true
+  }
+]

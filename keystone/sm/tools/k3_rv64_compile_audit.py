@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 SOURCES = [
-    'attest.c', 'cpu.c', 'crypto.c', 'enclave.c', 'ipi.c',
+    'rng/rng.c', 'attest.c', 'cpu.c', 'crypto.c', 'enclave.c', 'ipi.c',
     'k3_pmp_ipi_transport.c', 'pmp.c', 'sm.c', 'sm-sbi.c',
     'sm-sbi-opensbi.c', 'sbi_trap_hack.c', 'thread.c',
     'plugins/multimem.c', 'plugins/plugins.c',
@@ -31,6 +31,7 @@ def main():
     p.add_argument('--dev-embedded-key', action='store_true',
                    help='Diagnostic only: compile with build-time-generated dev key. Never production.')
     p.add_argument("--trace", action="store_true", help="Enable SM progress markers for hang diagnosis")
+    p.add_argument("--rng", choices=["auto", "zkr", "jupiter2", "counter"], default="auto")
     a=p.parse_args()
     sm=pathlib.Path(__file__).resolve().parents[1]/'src'
     a.output.mkdir(parents=True,exist_ok=True)
@@ -42,8 +43,10 @@ def main():
            '-DK3_QEMU_PMP16=1',
            '-DTARGET_PLATFORM_HEADER="platform/spacemit_k3/platform.h"',
            '-I'+str(sm),'-I'+str(a.opensbi/'include'),
+           '-I'+str(a.opensbi/'lib/utils/libfdt'),
            '-I'+str(a.opensbi/'platform/generic/include'),
            '-I'+str(sm.parent/'../sdk/include'),'-I'+str(sm.parent.parent/'sdk/include/shared'),'-Wno-unused-function']
+    flags.append("-DKEYSTONE_RNG_BACKEND=" + str(["auto", "zkr", "jupiter2", "counter"].index(a.rng)))
     if a.trace:
         flags.append("-DKEYSTONE_SM_TRACE=1")
     if a.dev_embedded_key:

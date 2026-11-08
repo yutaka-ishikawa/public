@@ -1,7 +1,8 @@
 # SBI 3001の3方式設計とQEMU統合試験
 
 設計日：2026-11-08。ユーザー指定の3方式を実装するための設計。
-この文書のオプション・追加ファイル・試験スクリプトは実装予定であり、まだ使用できない。
+当初の設計に対する実装を追加済み。確定した操作方法と未検証範囲は
+[実装記録](keystone-sbi-3001-implementation.md) を参照。
 従来の共通DRBG中心の案に優先する。
 
 ## 1. 採用する3方式
@@ -203,16 +204,16 @@ QEMU仮想デバイスによるハードウェアのエミュレーションと�
 既存QEMUが実行で再現しないZkrのWAIT/DEAD分岐は、再現用CPUモデルの追加がなければ
 未検証と記録する。②の異常状態は追加するWTMデバイスモデルで再現する。
 
-## 8. ビルド・実行用スクリプト案
+## 8. ビルド・実行用スクリプト
 
-以下は将来追加するコマンドの案で、現行スクリプトの実装済みオプションではない。
+以下のコマンドを実装した。
 
 ```bash
 # 開発用ホスト：3方式のQEMU/firmwareと試験パッケージを準備
 bash scripts/build-verification-rng.sh --backend all
 
 # 開発用ホスト：方式ごとに別のQEMUゲストを起動して実行
-bash verifications/random/run-qemu-matrix.sh --backend all
+python3 verifications/random/run-qemu-matrix.py
 ```
 
 3方式で同じrootfsを同時に開かない。
@@ -223,7 +224,7 @@ guest試験ログ、終了コードを保存する。
 
 予定出力先：`.build-keystone/rng/{zkr,jupiter2,counter}`。
 firmware出力・manifest・ビルドキャッシュはbackendごとに分ける。
-既存の `install/keystone` とrootfsを上書きしない。
+方式別firmwareとQEMUを `install/keystone` に追加・更新する。rootfsは上書きしない。
 
 ## 9. 変更予定ファイルと実装順序
 
@@ -239,3 +240,9 @@ Zkr、counter、WTMの順に動作させ、最後に3起動を連続実行する
 共通DRBGやboot seed方式は今回の3方式の必須要件から外し、将来の追加候補として残す。
 完了判定は3方式それぞれで実3001/getrandom/AT_RANDOM/OCALL/DESTROYが完走し、
 結果がbackend別に保存されること。
+
+## 実装状況
+
+上記設計に基づく実装とQEMU検証環境を追加しました。
+現時点の仕様、実行手順、実施済み／未実施の範囲は
+[実装記録](keystone-sbi-3001-implementation.md) を参照してください。

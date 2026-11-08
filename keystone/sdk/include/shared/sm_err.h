@@ -20,6 +20,9 @@
 #define SBI_ERR_SM_ENCLAVE_ILLEGAL_PTE                 100015
 #define SBI_ERR_SM_ENCLAVE_NOT_FRESH                   100016
 #define SBI_ERR_SM_DEPRECATED                          100099
+#define SBI_ERR_SM_RNG_NOT_READY 100101
+#define SBI_ERR_SM_RNG_FAILURE 100102
+
 #define SBI_ERR_SM_NOT_IMPLEMENTED                     100100
 
 #define SBI_ERR_SM_PMP_SUCCESS                         0

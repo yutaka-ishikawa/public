@@ -7,29 +7,43 @@
 #include "util/printf.h"
 #include "uaccess.h"
 #include "mm/vm.h"
+#include "sm_err.h"
 
 // Statically allocated copy-buffer
 unsigned char rt_copy_buffer_1[RISCV_PAGE_SIZE];
 unsigned char rt_copy_buffer_2[RISCV_PAGE_SIZE];
 
-size_t rt_util_getrandom(void* vaddr, size_t buflen){
-  size_t remaining = buflen;
-  uintptr_t rnd;
-  uintptr_t* next = (uintptr_t*)vaddr;
-  // Get data
-  while(remaining > sizeof(uintptr_t)){
-    rnd = sbi_random();
-    ALLOW_USER_ACCESS( *next = rnd );
-    remaining -= sizeof(uintptr_t);
-    next++;
-  }
-  // Cleanup
-  if( remaining > 0 ){
-    rnd = sbi_random();
-    copy_to_user(next, &rnd, remaining);
-  }
-  size_t ret = buflen;
-  return ret;
+size_t rt_util_getrandom(void *vaddr, size_t buflen)
+{
+    size_t done;
+    size_t count;
+    uintptr_t random;
+    unsigned long status;
+    long error;
+
+    done = 0;
+    while (done < buflen) {
+	status = sbi_random_checked(&random);
+	if (status) {
+	    if (status == SBI_ERR_SM_NOT_IMPLEMENTED) {
+		error = -38;
+	    } else if (status == SBI_ERR_SM_RNG_NOT_READY) {
+		error = -11;
+	    } else {
+		error = -5;
+	    }
+	    return done ? done : (size_t)error;
+	}
+	count = buflen - done;
+	if (count > sizeof random) {
+	    count = sizeof random;
+	}
+	if (copy_to_user((unsigned char *)vaddr + done, &random, count)) {
+	    return done ? done : (size_t)-14;
+	}
+	done += count;
+    }
+    return done;
 }
 
 void rt_util_misc_fatal(){

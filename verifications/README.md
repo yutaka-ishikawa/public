@@ -16,7 +16,8 @@ C関数の抽出実行、模擬PMP/CSR/IPI、模擬SBIの試験とその過去�
 | --- | --- |
 | `edgecall` | CREATE 2001、RUN 2003、STOP 3004、RESUME 2005、EXIT 3006、DESTROY 2002の正常経路。8種類のバイナリ往復と不正return offsetの拒否。 |
 | `edgecall`の2種類のパッケージ | free memory 2 MiBと256 MiBで上記の正常経路。 |
-| `sbi-errors` | S-modeの検証モジュールから実ecall。CREATEの不正レイアウト、DESTROY/RUN/RESUMEの無効ID、未定義2004の応答。 |
+| `sbi-errors` | S-modeの検証モジュールから実ecall。CREATEの不正レイアウト、DESTROY/RUN/RESUMEの無効ID、未定義2004の応答、hostからの3001拒否とa1=0。 |
+| `random` | 実enclaveからSBI 3001/getrandom/AT_RANDOM。乱数データのOCALL往復とRESUME、異常伝播。 |
 | `edgecall/kernel` | OCALL中、Linuxの物理RAM direct mapからEPMを読むと拒否され、UTMと通常RAMは読めること。 |
 
 `host.cpp` のhostは開発用PCではなく、QEMUゲストLinux上のrunnerを意味する。
@@ -121,5 +122,7 @@ CIもビルド検査のみで、システムゲストの試験結果を代用し
 Eyrieの物理マップ修正を含む更新履歴と実ゲストでの到達段階は
 [累積修正記録](../doc/keystone-cumulative-changes.md)を参照。
 
-SBI 3001の [3方式の試験設計](../doc/keystone-sbi-3001-three-backends.md) は設計段階。
-現行のrun-all.shにはまだ乱数の3方式試験は含まれない。
+SBI 3001の [検証手順](random/README.md) を追加した。run-all.shは現在選択中の方式の
+正常系を実行する。3方式と異常系を別々に起動する試験は
+`python3 verifications/random/run-qemu-matrix.py` をホストから使う。
+[実装記録と実行状況](../doc/keystone-sbi-3001-implementation.md) も参照。

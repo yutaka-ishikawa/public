@@ -121,13 +121,18 @@ unsigned long sbi_sm_get_sealing_key(uintptr_t sealing_key, uintptr_t key_ident,
   return ret;
 }
 
-unsigned long sbi_sm_random(void)
+unsigned long sbi_sm_random(unsigned long *value)
 {
 #ifdef KEYSTONE_K3_PMP_N_REG
-  sbi_printf("[SM/K3] NOT IMPLEMENTED: secure randomness\n");
-  return SBI_ERR_SM_NOT_IMPLEMENTED;
+    uint64_t random;
+    int rc;
+
+    rc = k3_platform_random_checked(&random);
+    *value = rc ? 0 : random;
+    return rc;
 #else
-  return (unsigned long) platform_random();
+    *value = platform_random();
+    return 0;
 #endif
 }
 

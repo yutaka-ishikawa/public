@@ -35,6 +35,7 @@
 #include "hw/riscv/riscv-iommu-bits.h"
 #include "hw/riscv/virt.h"
 #include "hw/riscv/jupiter2.h"
+#include "hw/misc/k3-wtm-rng.h"
 #include "hw/riscv/boot.h"
 #include "hw/riscv/fdt-common.h"
 #include "hw/riscv/machines-qom.h"
@@ -1539,6 +1540,13 @@ static void virt_machine_init(MachineState *machine)
         }
     } else {
         create_fdt(s);
+    }
+
+    if (jupiter2_is_machine(machine)) {
+	Jupiter2State *k3 = (Jupiter2State *)machine;
+	if (k3->wtm_rng) {
+	    k3_wtm_rng_create(machine, k3->wtm_rng_fault);
+	}
     }
 
     if (virt_is_iommu_sys_enabled(s)) {

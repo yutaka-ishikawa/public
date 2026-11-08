@@ -46,6 +46,7 @@ MANIFEST="$PREFIX/share/k3/build-manifest.txt"
  printf 'prefix=%s\n' "$PREFIX"
  printf 'repository=%s\n' "$ROOT"
  printf 'build_dir=%s\n' "$BUILD_DIR"
+ printf 'keystone_rng_backend=%s\n' "${KEYSTONE_RNG_BACKEND:-auto}"
 } > "$MANIFEST"
 if [[ "$COMPONENT" == all || "$COMPONENT" == qemu ]]; then
  test -f "$ROOT/qemu/configure" || { echo 'Missing qemu/configure' >&2; exit 3; }

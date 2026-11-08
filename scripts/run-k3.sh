@@ -17,6 +17,11 @@ SMP=""
 MEM=2G
 CMDLINE=""
 APPEND_SET=0
+RNG=""
+ZKR=""
+WTM=""
+WTM_FAULT=none
+ROOTFS_FORMAT=raw
 usage() {
 cat <<'EOF'
 Usage: bash scripts/run-k3.sh [options]
@@ -26,6 +31,11 @@ Usage: bash scripts/run-k3.sh [options]
   --kernel FILE            Override Linux Image
   --bios FILE              Override firmware
   --rootfs FILE            Raw guest rootfs image (default: selected profile image)
+  --rng auto|zkr|jupiter2|counter  Select matching RNG firmware and devices
+  --zkr on|off             Override Zkr CPU extension for negative tests
+  --wtm-rng on|off         Override WTM MMIO peripheral
+  --wtm-rng-fault none|not-ready|zero  WTM fault injection (QEMU only)
+  --rootfs-format raw|qcow2 Rootfs disk format (default raw)
   --hostfs DIR             Host shared directory (default: repository root)
   --gdb                    Pause guest (-S) and listen on 127.0.0.1:1234
   --gdb-port N             GDB port, implies --gdb
@@ -43,9 +53,11 @@ EOF
 }
 while (($#)); do
  case "$1" in
-  --image|--prefix|--qemu|--kernel|--bios|--rootfs|--hostfs|--gdb-port|--monitor-port|--smp|--memory|--append)
+  --rng|--zkr|--wtm-rng|--wtm-rng-fault|--rootfs-format|--image|--prefix|--qemu|--kernel|--bios|--rootfs|--hostfs|--gdb-port|--monitor-port|--smp|--memory|--append)
    (($#>=2)) || { echo "Missing value for $1" >&2; exit 2; }
    case "$1" in
+    --rng) RNG=$2;; --zkr) ZKR=$2;; --wtm-rng) WTM=$2;;
+    --wtm-rng-fault) WTM_FAULT=$2;; --rootfs-format) ROOTFS_FORMAT=$2;;
     --image) IMAGE=$2;; --qemu) QEMU=$2;; --kernel) KERNEL=$2;; --bios) BIOS=$2;;
     --prefix) PREFIX=$2;; --rootfs) ROOTFS=$2;; --hostfs) HOSTFS=$2;;
     --gdb-port) GDB=1; GDB_PORT=$2;; --monitor-port) MONITOR=1; MONITOR_PORT=$2;;
@@ -67,6 +79,20 @@ if [[ -z $PREFIX ]]; then PREFIX="$ROOT/install/$IMAGE"; fi
 PREFIX=$(realpath -m "$PREFIX")
 if [[ -z $QEMU ]]; then QEMU="$PREFIX/bin/qemu-system-riscv64"; fi
 : "${SMP:=16}"
+case "$RNG" in
+ ""|auto) :;;
+ zkr|jupiter2|counter) : "${BIOS:=$PREFIX/firmware/k3/rng-$RNG/fw_dynamic.bin}";;
+ *) echo 'Invalid --rng' >&2; exit 2;;
+esac
+case "$ROOTFS_FORMAT" in raw|qcow2) :;; *) echo 'Invalid disk format' >&2; exit 2;; esac
+case "$WTM_FAULT" in none|not-ready|zero) :;; *) echo 'Invalid WTM fault' >&2; exit 2;; esac
+if [[ -n $RNG ]]; then
+ case "$RNG" in zkr|auto) : "${ZKR:=on}";; *) : "${ZKR:=off}";; esac
+ case "$RNG" in jupiter2) : "${WTM:=on}";; *) : "${WTM:=off}";; esac
+fi
+for value in "$ZKR" "$WTM"; do
+ case "$value" in ""|on|off) :;; *) echo 'Use on or off for device overrides' >&2; exit 2;; esac
+done
 : "${BIOS:=$PREFIX/firmware/k3/fw_dynamic.bin}"
 : "${KERNEL:=$PREFIX/boot/k3/Image}"
 if [[ $IMAGE == keystone ]]; then
@@ -97,11 +123,17 @@ test -d "$HOSTFS" || { echo "Host shared directory missing: $HOSTFS" >&2; exit 3
 ROOTFS="$(realpath -e "$ROOTFS")"
 HOSTFS="$(realpath -e "$HOSTFS")"
 args=(-accel tcg -smp "$SMP" -m "$MEM" -bios "$BIOS" -kernel "$KERNEL")
-args+=(-M jupiter2 -cpu rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16)
+machine=jupiter2
+cpu=rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16
+if [[ -n $ZKR ]]; then cpu+=",zkr=$ZKR"; fi
+if [[ -n $WTM || $WTM_FAULT != none ]]; then
+ machine+=",wtm-rng=${WTM:-on},wtm-rng-fault=$WTM_FAULT"
+fi
+args+=(-M "$machine" -cpu "$cpu")
 block_device=virtio-blk-pci
 net_device=virtio-net-pci
 args+=(
- -drive "file=$ROOTFS,format=raw,if=none,id=hd0"
+ -drive "file=$ROOTFS,format=$ROOTFS_FORMAT,if=none,id=hd0"
  -device "$block_device,drive=hd0"
  -fsdev "local,id=fs0,path=$HOSTFS,security_model=mapped-xattr"
  -device virtio-9p-pci,fsdev=fs0,mount_tag=hostshare

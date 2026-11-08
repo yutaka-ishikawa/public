@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
-/* Jupiter 2 platform adapter: fail closed until the root of trust and secure
- * randomness sources are explicitly integrated. No test keys or PRNG. */
+/* Jupiter 2 platform adapter. Trusted keys remain unavailable; RNG quality
+ * is selected and reported independently by rng/rng.c. */
 #include "../../platform-hook.h"
+#include "../../rng/rng.h"
 #include <sbi/sbi_hart.h>
 #include <sbi/sbi_console.h>
 #include "k3_b1_handoff.h"
@@ -27,9 +28,11 @@ int k3_sm_firmware_range(uintptr_t *base, size_t *size)
 }
 
 /* K3 PMP-only mode: neither root keys nor entropy nor DMA setup belongs
- * in the SM PMP bootstrap. The K3 SBI adapter rejects crypto operations. */
+ * in the SM PMP bootstrap. Attestation and sealing remain disabled. */
 unsigned long platform_init_global_once(void)
 {
+    /* RNG availability does not block the PMP-only enclave lifecycle. */
+    (void)keystone_rng_init();
     return 0;
 }
 
@@ -48,20 +51,19 @@ unsigned long platform_create_enclave(struct enclave *e)
 void platform_switch_to_enclave(struct enclave *e) { (void)e; }
 void platform_switch_from_enclave(struct enclave *e) { (void)e; }
 
-/* These functions cannot return insecure data, even if called accidentally. */
+/* K3 services use the checked API; the legacy hook must not hide failures. */
 int k3_platform_random_checked(uint64_t *value)
 {
-    if (value) *value = 0;
-    sbi_printf("[SM/K3] NOT IMPLEMENTED: secure entropy source unavailable\n");
-    return -1;
+    return keystone_rng_read64(value);
 }
-/* Keystone legacy hook cannot signal errors, so it must never provide bytes
- * to an enabled security service on K3. The SBI adapter returns ENOTSUP. */
 uint64_t platform_random(void)
 {
-    uint64_t unused;
-    (void)k3_platform_random_checked(&unused);
-    return 0;
+    uint64_t value;
+
+    if (k3_platform_random_checked(&value)) {
+	sbi_hart_hang();
+    }
+    return value;
 }
 
 int sm_copy_key(void)

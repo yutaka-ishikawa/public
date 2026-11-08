@@ -9,6 +9,12 @@
 #define JUPITER2_UART_IRQ 42
 #define JUPITER2_IMSIC_IDS 511
 #define JUPITER2_APLIC_SOURCES 512
+
+typedef struct Jupiter2State {
+    RISCVVirtState parent_obj;
+    bool wtm_rng;
+    char *wtm_rng_fault;
+} Jupiter2State;
 extern const MemMapEntry jupiter2_memmap[];
 static inline bool jupiter2_is_machine(const void *machine)
 {

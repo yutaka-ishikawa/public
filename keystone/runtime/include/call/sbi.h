@@ -18,8 +18,8 @@ uintptr_t
 sbi_stop_enclave(uint64_t request);
 void
 sbi_exit_enclave(uint64_t retval);
-uintptr_t
-sbi_random();
+unsigned long sbi_random_checked(uintptr_t *value);
+uintptr_t sbi_random(void);
 uintptr_t
 sbi_query_multimem(size_t *size);
 uintptr_t

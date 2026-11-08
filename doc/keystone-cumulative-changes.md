@@ -232,3 +232,12 @@ TOR修正前のファームウェアをまだ使っている場合は、それ�
 古いEyrie/loaderを内包した既存のhello.ke等は自動で置き換わらない。
 必要に応じて新しいパッケージをゲストへコピーする。
 SDK/Eyrieのビルド先を変えている場合は、試験のKEYSTONE_BUILD_DIRも合わせる。
+
+## SBI 3001: 3方式の実装と検証環境
+
+Zkr、Jupiter2 WTM CPU MMIO、他機種向けcounter hookを追加しました。
+Eyrieのstatus/value分離、getrandomの端数・非整列・引数検証、AT_RANDOMと
+page swapの乱数取得失敗伝播を変更しました。
+方式別firmwareのビルド、起動オプション、実ゲスト専用の検証コードと
+QEMUマトリクスを追加しています。実施済みのSM初期化確認と、未実施の
+enclave統合実行の区別は [実装記録](keystone-sbi-3001-implementation.md) を参照してください。

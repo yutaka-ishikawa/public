@@ -162,7 +162,7 @@ int sm_init(bool cold_boot)
 {
   if (cold_boot) SM_TRACE_STAGE("boot trace enabled; built " __DATE__ " " __TIME__);
 #if defined(KEYSTONE_K3_PMP_N_REG)
-  /* K3 PMP-only SM bootstrap. Keys, entropy and DMA are deliberately not
+  /* K3 PMP-only SM bootstrap. Keys and DMA are deliberately not
    * prerequisites, but no enclave is admitted until PMP ownership and the
    * protected SM physical placement have actually been established. */
   if (!k3_pmp_partition_is_prepared()) {
@@ -216,9 +216,9 @@ int sm_init(bool cold_boot)
 #ifndef KEYSTONE_K3_PMP_N_REG
     sm_copy_key();
 #else
-    /* Cryptographic services are separately rejected by the K3 SBI adapter.
+    /* Attestation and sealing are separately rejected by the K3 adapter.
      * Never derive an identity from zero-initialized SM key buffers. */
-    sbi_printf("[SM/K3] PMP-only mode: key/entropy initialization skipped\n");
+    sbi_printf("[SM/K3] PMP-only mode: trusted-key initialization skipped\n");
 #endif
 
     // Init the enclave metadata
@@ -260,7 +260,8 @@ int sm_init(bool cold_boot)
   /* The OpenSBI HSM finish path publishes STARTED only after this
    * local SM/PMP initialization returns successfully. */
 #endif
-  sbi_printf("[SM/K3] PMP-only SM initialized (no attestation, sealing, entropy or DMA proof)\n");
+  sbi_printf("[SM/K3] PMP-only SM initialized (no attestation, sealing or DMA "
+	     "proof; see SM/RNG quality)\n");
 
 #ifndef KEYSTONE_K3_PMP_N_REG
   sm_print_hash();

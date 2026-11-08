@@ -10,6 +10,7 @@
 
 #include "mm/freemem.h"
 #include "mm/mm.h"
+#include "mm/vm.h"
 #include "util/rt_util.h"
 #include "call/syscall.h"
 #include "uaccess.h"
@@ -58,11 +59,47 @@ uintptr_t linux_getpid(){
   return fakepid;
 }
 
-uintptr_t linux_getrandom(void *buf, size_t buflen, unsigned int flags){
+uintptr_t linux_getrandom(void *buf, size_t buflen, unsigned int flags)
+{
+    uintptr_t begin;
+    uintptr_t last;
+    uintptr_t page;
+    pte *entry;
 
-  uintptr_t ret = rt_util_getrandom(buf, buflen);
-  print_strace("[runtime] getrandom IGNORES FLAGS (size %lx), PLATFORM DEPENDENT IF SAFE = ret %lu\r\n", buflen, ret);
-  return ret;
+    /* GRND_NONBLOCK and GRND_RANDOM use the same bounded SM source. */
+    if (flags & ~3U) {
+	return (uintptr_t)-22;
+    }
+    if (!buflen) {
+	return 0;
+    }
+    begin = (uintptr_t)buf;
+    last = begin + buflen - 1;
+    if (last < begin || buflen > (SIZE_MAX >> 1)) {
+	return (uintptr_t)-14;
+    }
+#if __riscv_xlen == 64
+    if (last >= (1UL << 38)) {
+	return (uintptr_t)-14;
+    }
+#else
+    if (last >= EYRIE_LOAD_START) {
+	return (uintptr_t)-14;
+    }
+#endif
+    page = begin & ~(uintptr_t)(RISCV_PAGE_SIZE - 1);
+    while (page <= last) {
+	entry = pte_of_va(page);
+	if (!entry ||
+	    (*entry & (PTE_V | PTE_U | PTE_W)) != (PTE_V | PTE_U | PTE_W)) {
+	    return (uintptr_t)-14;
+	}
+	if (last - page < RISCV_PAGE_SIZE) {
+	    break;
+	}
+	page += RISCV_PAGE_SIZE;
+    }
+    return rt_util_getrandom(buf, buflen);
 }
 
 #define UNAME_SYSNAME "Linux\0"

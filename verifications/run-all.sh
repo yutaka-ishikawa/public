@@ -12,7 +12,8 @@ if (($# > 1)) || [[ ${1:-} != '' && ${1:-} != --data-only ]]; then
 fi
 # All builds must exist before beginning the test sequence.
 for file in sbi-errors/build/test sbi-errors/kernel/keystone_sbi_verify.ko \
-    edgecall/build/guest/edgecall.ke edgecall/build/guest-256/edgecall.ke; do
+    edgecall/build/guest/edgecall.ke edgecall/build/guest-256/edgecall.ke \
+    random/build/random.ke; do
     test -s "$file" || { echo "Missing integration artifact: $file" >&2; exit 3; }
 done
 if [[ ${1:-} != --data-only ]]; then
@@ -22,6 +23,7 @@ if [[ ${1:-} != --data-only ]]; then
     }
 fi
 bash sbi-errors/run-guest.sh
+bash random/run-guest.sh
 # Recreate both sizes after verified DESTROY to exercise TOR teardown/reuse.
 for iteration in 1 2; do
     for package in build/guest/edgecall.ke build/guest-256/edgecall.ke; do

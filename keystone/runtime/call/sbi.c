@@ -48,11 +48,30 @@ sbi_exit_enclave(uint64_t retval) {
   SBI_CALL_1(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_EXIT_ENCLAVE, retval);
 }
 
-uintptr_t
-sbi_random() {
-  SBI_CALL_0(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_RANDOM);
-  register uintptr_t a1 __asm__("a1");
-  return a1;
+unsigned long sbi_random_checked(uintptr_t *value)
+{
+    register uintptr_t a0 __asm__("a0") = 0;
+    register uintptr_t a1 __asm__("a1") = 0;
+    register uintptr_t a6 __asm__("a6") = SBI_SM_RANDOM;
+    register uintptr_t a7 __asm__("a7") = SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE;
+
+    __asm__ volatile("ecall"
+		     : "+r"(a0), "+r"(a1)
+		     : "r"(a6), "r"(a7)
+		     : "memory");
+    *value = a0 ? 0 : a1;
+    return a0;
+}
+
+uintptr_t sbi_random(void)
+{
+    uintptr_t value;
+
+    if (sbi_random_checked(&value)) {
+	sbi_exit_enclave(-1);
+	return 0;
+    }
+    return value;
 }
 
 uintptr_t

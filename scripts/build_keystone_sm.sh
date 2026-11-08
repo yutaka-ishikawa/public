@@ -9,10 +9,10 @@ W=$(realpath -m "$3")
 [ -f "$S/include/sbi/sbi_types.h" ] || { echo 'ERROR: OpenSBI source missing' >&2; exit 3; }
 [ -f "$K/sm/src/platform/spacemit_k3/platform.c" ] || { echo 'ERROR: K3 platform missing' >&2; exit 3; }
 for tool in python3 clang ld.lld readelf nm; do command -v "$tool" >/dev/null || { echo "ERROR missing $tool" >&2; exit 3; }; done
-trace_args=()
+trace_args=(--rng "${KEYSTONE_RNG_BACKEND:-auto}")
 case ${KEYSTONE_SM_TRACE:-0} in
  0) :;;
- 1) trace_args=(--trace);;
+ 1) trace_args+=(--trace);;
  *) echo 'KEYSTONE_SM_TRACE must be 0 or 1' >&2; exit 2;;
 esac
 mkdir -p "$W"

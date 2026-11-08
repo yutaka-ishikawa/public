@@ -86,7 +86,10 @@ pswap_pageout_ctr(uintptr_t page) {
   if (!ctr_indirect_ptrs[indirect_idx]) {
     ctr_indirect_ptrs[indirect_idx] = paging_alloc_backing_page();
     // Fill ptr pages with random values so our counters start unpredictable
-    rt_util_getrandom((void*)ctr_indirect_ptrs[indirect_idx], RISCV_PAGE_SIZE);
+    if (rt_util_getrandom((void *)ctr_indirect_ptrs[indirect_idx],
+			  RISCV_PAGE_SIZE) != RISCV_PAGE_SIZE) {
+	sbi_exit_enclave(-1);
+    }
   }
 
   return (uint64_t*)(ctr_indirect_ptrs[indirect_idx]) + interior_idx;
@@ -106,7 +109,9 @@ pswap_establish_boot_key(void) {
     return;
   }
 
-  rt_util_getrandom(boot_key_tmp, 32);
+  if (rt_util_getrandom(boot_key_tmp, 32) != 32) {
+      sbi_exit_enclave(-1);
+  }
 
   if (atomic_flag_test_and_set(&pswap_boot_key_reserved)) {
     // Lost the race; key already being set. Spin until finished.
