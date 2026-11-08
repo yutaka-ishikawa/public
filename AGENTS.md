@@ -28,3 +28,17 @@ Build with `make -C verifications guest` and `make -C verifications kernel-modul
 Run `bash verifications/run-all.sh` only inside the system guest. If a complete
 matching kernel or a running guest is unavailable, report integration execution
 as unverified; compilation alone is not a guest PASS.
+
+# Keystone bug report maintenance
+
+Maintain [doc/keystone-bug-report.md](doc/keystone-bug-report.md) as the ongoing
+Keystone-related bug register. When a new SDK, Eyrie, SM, driver or integration
+bug is discovered, add an entry even before fixing it. Use the next stable
+KSB-NNN ID; do not renumber or reuse existing IDs. Record affected sources,
+conditions, evidence, origin/attribution, impact, fix status and verification
+limits. Distinguish confirmed defects from portability constraints or open
+questions; do not attribute port-specific bugs to upstream without evidence.
+When fixing a registered bug or receiving new verification results, update the
+same entry with the fix commit and the actual scope of validation. Keep the
+summary table and related detail documents consistent. Do not claim a build or
+a host-side check as a QEMU integration PASS, and do not include secret key data.

@@ -1,0 +1,313 @@
+# Keystone関連不具合報告書・継続管理台帳
+
+登録・更新日：2026-11-09（日本時間）  
+初版対象：本リポジトリ `c6aa79100` までに確認・記録したSDK、Eyrie、SM、driverと移植接続部分。
+過去の発見日を新しく推測せず、下記IDの登録日は本書の作成日とする。
+
+## 取り扱いと状態
+
+本書の「Keystone関連」は対象システムの分類であり、すべてを上流Keystoneの責任と
+断定する意味ではない。元ソース、ビルド環境、K3/OpenSBI移植、周辺ツールを区別する。
+上流最新版との照合がない項目を「上流で現在も再現する」と報告しない。
+これはリポジトリ内の報告書であり、上流issue trackerへ提出済みではない。
+
+- **修正済**：修正コードがこのリポジトリにある。全条件の実機検証完了とは限らない。
+- **未修正**：ソースで問題を確認したが、修正は未実装。
+- **要確認**：契約・制約上の課題。単独で確定したバグとは扱わない。
+- 確認方法は「実ゲスト観測」「生成機械語」「ソース確認」「ユーザー報告」を区別する。
+
+ユーザーから既存verificationsの全PASS報告を受領済み。ただし3002/3003はまだ無効であり、
+その成功経路や異常系が試験済みという意味ではない。PMP失敗注入、競合、実機の全条件も
+全PASS報告から推定しない。過去のホスト模擬試験は削除済みで、現行試験の証拠には使わない。
+
+## 一覧
+
+| ID | 問題 | 主な対象・由来 | 状態 |
+| --- | --- | --- | --- |
+| KSB-001 | memset/strlenの自己再帰化 | SDK／ツールチェーン依存 | 修正済 |
+| KSB-002 | 1352-byte reportを2048 bytesコピー、失敗時もコピー | Eyrie取込コード | 未修正 |
+| KSB-003 | attestation入力の事前長検査・コピー結果検査不足 | Eyrie取込コード | 未修正 |
+| KSB-004 | sealing出力サイズ・コピー結果の検査不足 | Eyrie取込コード | 未修正 |
+| KSB-005 | sealing引数のSM検査・可変長作業領域 | SM取込コード | 未修正 |
+| KSB-006 | report検証前の入力長・data_len検査不足 | SDK verifier取込コード | 未修正 |
+| KSB-007 | random statusを未検査、getrandom成功数・flags等 | Eyrie取込コード | 修正済 |
+| KSB-008 | freestandingコードのstack protector依存 | build／移植環境依存 | 修正済 |
+| KSB-009 | raw loaderのPIE/GOT・再配置依存 | loader／移植環境依存 | 修正済 |
+| KSB-010 | Eyrie固定入口にbuild-id note | Eyrie／既知上流にも同じ前提 | 修正済 |
+| KSB-011 | CMA開始PAの2 MiB整列を仮定 | Eyrie／配置制約 | 修正済 |
+| KSB-012 | 明示DESTROY後の二重DESTROY | SDK取込コード | 修正済 |
+| KSB-013 | MAX_PAGE_ORDERの最大値を除外 | driver／Linux版互換 | 修正済 |
+| KSB-014 | 4 GiB超RAMに32 bit DMA制約 | driver／K3移植制約 | 修正済 |
+| KSB-015 | FINALIZE前EID=-1のunsigned判定 | driver取込コード | 修正済 |
+| KSB-016 | 64 bit EIDの切り詰め | SM取込・移植コード | 修正済 |
+| KSB-017 | DESTROYの所有・PMP失敗時の解放 | SM取込・移植コード | 修正済 |
+| KSB-018 | RUN/RESUMEでPMP失敗後も切替 | SM/OpenSBI移植 | 修正済 |
+| KSB-019 | trap frame/status/PCの二重更新 | SM/OpenSBI移植 | 修正済 |
+| KSB-020 | TOR PMPを読み戻し検査で拒否 | K3 PMP移植 | 修正済 |
+| KSB-021 | HSM停止禁止とshutdownの不整合 | K3/OpenSBI統合 | 修正済 |
+| KSB-022 | config変更でcarrayドライバ表が更新されない | OpenSBI build統合 | 修正済 |
+| KSB-023 | report未使用data末尾の未初期化 | SM取込コード | 未修正 |
+
+「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
+KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
+
+## KSB-001: SDK memset/strlenが自身を呼ぶ機械語になる
+
+- **対象**：[SDK app CMake](../keystone/sdk/src/app/CMakeLists.txt)、[string.c](../keystone/sdk/src/app/string.c)。
+- **症状・条件**：最適化buildの乱数eappがOCALL前に終了。store page faultの
+  障害VAは `0x3ffdfff0`、128 KiBユーザースタックの下端 `0x3ffe0000` より16 bytes低い。
+- **原因・影響**：自前のbyte loopをGCCがmemset/strlen呼び出しへ変換。
+  特に4098 bytesのstorage初期化はmemsetのbyte loop側へ入り、同じ引数の再帰でスタックを消費する。
+- **根拠**：実SDKの修正前string.c.oとリンク済みeappに自己呼び出しを確認。
+  ユーザーの厳密なPC→命令対応にはそのELFが必要だが、ログのスタック下端超過と整合する。
+- **修正**：`2c99fb066`。eapp archiveにfreestanding/no-builtin、GCCのstring.cへ
+  loop pattern変換禁止を設定。[機械語チェック](../scripts/check-keystone-eapp-string.py) をbuild時に追加。
+- **検証**：修正前objectはチェック失敗、修正後は成功。SDKとverification再build成功。
+  その後ユーザーから全verification PASS報告あり。標準的な全GCC/Clang版を網羅した結果ではない。
+- **詳細**：[停止原因と再試験](keystone-sdk-string-recursion.md)。
+
+## KSB-002: report出力の固定2048-byteコピー
+
+- **対象**：[Eyrie syscall](../keystone/runtime/call/syscall.c) のATTEST_ENCLAVE。
+- **確認**：SM/SDK reportは1352 bytesだが、`copy_to_user(..., 2048)` を固定実行している。
+  このコピーはSBIの成否にも依存しない。ソース確認、異常ケースのゲスト再現は未実施。
+- **影響**：仕様どおり1352 bytesを用意したアプリでは後続696 bytesへの書き込みになる。
+  作業バッファのreport外や以前の内容まで返す可能性がある。
+- **状態**：未修正。K3側で3002は無効だが、Eyrie側のコピー処理は別に存在する。
+  SMが未対応を返すことだけで、このコピーが実行されないとは扱わない。
+- **修正計画**：成功時だけ共通型の正確なsizeofをコピー。戻り値確認、buffer初期化・消去。
+- **受入試験**：1352 bytes前後のcanary、失敗status時の出力不変更、コピーfaultのerror伝播。
+  [同時実装計画C4](keystone-sbi-3002-3003-joint-plan.md) で対応する。
+
+## KSB-003: attestation入力コピー前の検査不足
+
+- **対象**：同じEyrieの3002経路。
+- **確認・影響**：arg2の1024上限等を検査する前にcopy_from_userを呼び、その結果も確認しない。
+  runtimeの作業bufferに対する過大入力、部分コピーや不正VAを正常な入力として処理し得る。
+  SM側の後段の長さ検査では、既に行ったEyrieのコピーを保護できない。
+- **状態**：未修正、ソース確認。SMで3002が無効でも前処理は別途修正が必要。
+- **対応・試験**：長さ・overflow・全VA範囲を先に検査し、copy結果を確認。
+  0/1024/1025、NULL、不正VA、境界跨ぎと後続正常要求の復帰を実QEMUで確認する。
+
+## KSB-004: sealing出力capacityとコピー結果の検査不足
+
+- **対象**：EyrieのGET_SEALING_KEY、[SDK型](../keystone/sdk/include/app/sealing.h)。
+- **確認**：必要出力は192 bytes。現行runtimeはcapacityの上限しか確認せず、小さい値も受け付け、
+  成功後に渡されたcapacityだけコピーする。入力・出力copyの戻り値も未確認。
+- **影響**：不完全なkey structを成功として返す、大きいcapacityでstruct外までコピーする、
+  copy失敗を呼び出し側へ伝えない。実際の残留内容・異常実行は未検証。
+- **状態**：未修正。現K3 SMでは3003が無効。
+- **対応・試験**：最低192のcapacity検査、成功時192だけコピー、copy error伝播と作業buffer消去。
+  capacity 0/191/192/193、末尾canary、不正VAを確認する。
+
+## KSB-005: SM sealingの引数検査とVLA
+
+- **対象**：[get_sealing_key](../keystone/sm/src/enclave.c)、[sm_derive_sealing_key](../keystone/sm/src/sm.c)。
+- **確認**：入力identifier長に応じて `info[MDSIZE + key_ident_size]` をSMスタックへ確保する。
+  helper内部には長さ・加算overflow・当該EPMの範囲を十分に検査する契約がない。
+  sealing経路は渡されたポインタを直接使って導出・出力する。
+- **影響**：無検査で有効化すると、過大な作業領域や契約外アドレスを処理する可能性。
+  3003有効版での異常入力実行は未実施。現行K3では手前で拒否される。
+- **状態**：未修正。Eyrieの制限だけをSM自体の引数保証とはしない。
+- **対応・試験**：4096-byte上限、EPM所有権、PA契約、overflow、固定上限workspaceを共通実装。
+  最大長・超過・UTM・他EPM・SM領域と後続要求の復帰を検証する。
+
+## KSB-006: report verifierの入力境界検査
+
+- **対象**：[Report.cpp](../keystone/sdk/src/verifier/Report.cpp) のfromBytes/checkSignaturesOnly等。
+- **確認**：fromBytesには入力byte数がなく固定sizeofを読む。署名検証でreportのdata_lenを
+  使う前に1024上限を確認する処理もない。stringfy側の検査は署名検証入口の検査とは異なる。
+- **影響**：不正な生reportやdata_lenを渡した場合の範囲外読み取りが懸念される。
+  fromBytesだけなら呼び出し元のcapacity契約も関係するため、APIの契約と検査の両方を整備する。
+- **状態**：未修正、ソース確認。クラッシュ等の実行再現は未実施。
+- **対応・試験**：長さ付きchecked入口、data_len上限、JSONの負数/過大値の検査。
+  短い入力・不正長は署名処理や表示前に拒否する。
+
+## KSB-007: random/getrandomの戻り値・引数処理
+
+- **対象**：Eyrieのcall/sbi.c、util/rt_util.c、call/linux_wrap.cとpage_swap利用箇所。
+- **修正前**：a0 statusを確認せずa1を乱数として取得し、asmのa1出力指定も不十分。
+  rt_util_getrandomはコピーやSMの成否を要求byte数へ反映しない。直接uintptr_t書き込みに
+  非整列への依存があり、linux_getrandomはflagsを無視していた。
+- **影響**：RNG失敗を成功値として扱う、書き込み失敗を成功扱いする等。
+  非整列が必ず全CPUでtrapになるという意味ではない。
+- **修正済**：`867a23e57`。checked a0/a1 API、端数コピー、status/errno伝播、flagsとVA検査。
+  AT_RANDOMとswap鍵取得も失敗を無視しない。
+- **検証**：実ゲストmatrixを含む全verification PASSのユーザー報告あり。
+  ソース未提供の全hardware RNGエラー・全partial-copy経路まで網羅したとはしない。
+  [3001実装記録](keystone-sbi-3001-implementation.md) を参照。
+
+## KSB-008: freestandingコードとstack protector
+
+- **由来**：通常Linuxコンパイラの既定設定への依存。すべての上流buildで発生するとは限らない。
+- **影響**：Eyrie/native app等が提供しないstack-canary/libc支援を要求してbuild/linkに失敗。
+- **修正済**：`fc7fe2044`。該当freestanding targetだけに-fno-stack-protectorを指定。
+- **根拠・確認**：[累積記録第1節](keystone-cumulative-changes.md)。後続のクロスbuild成功。
+  ホストrunner全体の保護を無効にする対応ではない。
+
+## KSB-009: raw loaderのPIE/GOT依存
+
+- **条件・影響**：raw imageはELF再配置を受けず任意EPMへコピーされるが、GOT経由の
+  stack取得や絶対アドレス依存が残り、正しいstackを設定できない。
+- **由来**：loaderと移植ツールチェーンの組み合わせ。上流最新版との再照合なし。
+- **修正済**：`f1c0678e5`。PC相対lla、PIE/PIC/GP relaxation依存の除去、no-relax/GOT ASSERT。
+- **確認**：入口配置チェックと後続build。詳細は[累積記録第2節](keystone-cumulative-changes.md)。
+
+## KSB-010: 固定入口でbuild-idを実行
+
+- **観測**：GDBでmepc=0xffffffffc0000000、mcause=2、mtval=4。
+  入口にはGNU build-id noteのヘッダーが置かれていた。
+- **原因**：固定入口へ飛ぶloaderと、開始コードを先頭へ保証しないlink配置の組み合わせ。
+  上流 `b8c2385355b2afb5b94a4e5dc503936f1502b972` にも同じ前提があったことは過去に確認済み。
+  build-id生成条件によるため、上流の全環境で常時発生するとはしない。
+- **修正済**：`345f9d2bd`。専用entry section、先頭配置・ENTRY・ASSERT、note除去。
+- **確認**：実ゲストhello成功報告、リンク検査。[詳細とGDB証拠](keystone-eyrie-entry-build-id.md)。
+
+## KSB-011: CMA開始位置と2 MiB leafの整列制約
+
+- **観測**：256 MiB級EPMのPA=0x104f00000でmm.cの整列assert、OCALL前に終了。
+- **原因**：大きいEPMで2 MiB leafを選ぶが、CMAはその開始整列を保証しない。
+- **由来**：Eyrieの既存配置制約が新しいCMA確保方法で表面化した互換性問題。
+- **修正済**：`87efe630c`。非整列部は4 KiB leaf、必要なpage tableの確保とfree_base更新。
+- **確認**：build/入口検査。後の全verification PASS報告には256 MiB正常系を含むが、
+  すべてのPA配置・大きさを検証した意味ではない。[累積記録第9節](keystone-cumulative-changes.md)。
+
+## KSB-012: SDK DESTROY後のEID残存
+
+- **対象**：[KeystoneDevice.cpp](../keystone/sdk/src/host/KeystoneDevice.cpp)。
+- **原因・影響**：明示destroy成功後もeidが有効なままで、destructor等が同じDESTROY ioctlを再発行する。
+- **修正済**：`0977df6be`。成功後だけeid=-1にし、失敗時はIDを保持する。
+- **確認**：実guestの明示DESTROYを使う正常系。詳細は累積記録第7節。
+
+## KSB-013: 最大buddy orderの境界判定
+
+- **対象**：[keystone-page.c](../keystone/linux-keystone-driver/keystone-page.c)。
+- **原因**：Linux 6.8以降のMAX_PAGE_ORDERはinclusiveだが、旧MAX_ORDER同様に `<` で判定していた。
+- **影響**：確保可能な最大orderを試さず、4 MiB級EPMの確保に失敗し得る。
+- **修正済**：`6c32be5b3`。版ごとにinclusive/exclusiveを区別する。
+- **確認**：4 MiB buddy確保の実ログと後続試験。[大容量EPM](keystone-large-epm.md)。
+
+## KSB-014: K3高位RAMとDMA制約
+
+- **原因・影響**：K3 RAMは4 GiB以上だが、32 bit DMA mask/DMA32前提の領域確保では
+  CMA予約があっても使用できない。CPU PAとDMA handleも別の概念として扱う必要がある。
+- **由来**：既存driverのplatform制約で、全platformでの上流不具合とはしない。
+- **修正済**：`6c32be5b3`。64 bit DMA、dma_alloc_pages、CPU PA/解放handleの分離。
+  確保・解放の状態初期化も同時整備。CMAの明示予約は起動側の設定要件。
+- **確認**：256 MiB級CMA確保の実ログ。[大容量EPM](keystone-large-epm.md)。
+
+## KSB-015: FINALIZE前のunsigned EID sentinel
+
+- **対象**：[keystone-ioctl.c](../keystone/linux-keystone-driver/keystone-ioctl.c)。
+- **原因**：未作成のeid=-1をunsignedへ格納しているのに、`eid >= 0` でSM DESTROYの要否を判定。
+- **影響**：FINALIZE前のcleanupでもSMへ不正EIDを渡し、driver資源解放を妨げ得る。
+- **修正済**：`6c32be5b3`。unsigned -1との明示比較。
+- **検証範囲**：ソースと修正差分で確認。全初期化失敗位置の実guest網羅は未確認。
+
+## KSB-016: EID全幅検査前の32 bit切り詰め
+
+- **対象**：SM DESTROY/RUN/RESUME helper。
+- **影響**：64 bit SBI引数を狭いenclave_idへ変換すると、範囲外の値が別の有効IDになり得る。
+- **修正済**：`cc885e6ad`。型変換前に元の値全体で検査しINVALID_IDを返す。
+- **確認**：ソース・修正差分、現行実ecallの無効ID試験。
+  高位bitを変えた全値が現行guest試験に含まれるとはしない。
+
+## KSB-017: DESTROYの所有権とPMP解除失敗
+
+- **原因**：ALLOCATED/DESTROYINGも破棄対象に含め、global PMP解除失敗後でも資源解放・成功復帰し得た。
+- **影響**：破棄処理の重複と、不明な保護状態の物理ページ再利用。
+- **修正済**：`cc885e6ad`。許可状態とDESTROYINGへの移行を同じlockで管理し、
+  PMP解除失敗時は未解放資源を保持してerrorを返す。
+- **確認**：現行guestでは正常CREATE/DESTROYと再作成を実行。失敗注入・競合の網羅は未確認。
+  [2002/2003修正報告](keystone-sbi-2002-2003-fixes.md)。
+
+## KSB-018: PMP失敗を無視したcontext切替
+
+- **原因・影響**：host context等を交換した後にPMP設定し、失敗でも切替を完了し得る。
+- **由来**：SMとOpenSBI接続・PMP APIの失敗契約を含むため、上流への一括帰属はしない。
+- **修正済**：`cc885e6ad`。設定成功後だけcontextを交換し、失敗時はstate/thread予約を復旧。
+  権限復旧不能なら不明な状態でhostへ戻らず停止する。
+- **確認**：正常RUN/STOP/RESUME/EXITは現行guest試験。PMP失敗・復旧失敗の全注入は未確認。
+
+## KSB-019: OpenSBIの復帰フレームとKeystone ABI
+
+- **条件・影響**：RUN/STOP/RESUME/EXITで交換したフレームを共通dispatcherが再更新すると、
+  PC二重加算やa0/a1破壊になる。正のKeystone statusも標準SBI error処理へそのまま渡せない。
+- **由来**：今回のOpenSBI移植接続部分。
+- **修正済**：`75f5c0377`。skip_regs_update等で復帰処理を一元化しstatus ABIを保持。
+  同時のK3タイマーポリシー調整は全実タイマーケースの証明ではない。
+- **確認**：後続正常lifecycle/OCALL試験。詳細は累積記録第4節。
+
+## KSB-020: K3のTOR読み戻し検証が無条件拒否
+
+- **観測**：CMA確保成功後、CREATEが100003(PMP_FAILURE)で失敗。
+- **原因**：K3移植のverified PMP設定がTORを明示拒否。OpenSBI pmp_getのNAPOT向け
+  比較をTOR区間の検証へそのまま使えなかった。
+- **修正済**：`59a848b72`。実CSRの上下境界・mode/権限・UNSET状態を検証する。
+- **確認**：後続CREATE到達と全verification PASS報告。全hartの全CSR異常注入は未確認。
+  [TOR原因と修正](keystone-tor-pmp.md)。
+
+## KSB-021: HSM停止禁止とsystem resetの衝突
+
+- **観測**：Keystoneを実行していなくてもshutdownでhart invalid stateとFailed stop hart。
+- **原因**：全hart維持のK3ポリシーとOpenSBI終了順序が不整合。QEMU syscon reset driverも未設定。
+- **修正済**：`4011d1c9d`。reset許可判定後platform resetへ直接委譲し、sysconを有効化。
+- **確認**：buildとdriver収録を確認。現行run-allはshutdown/rebootの成功を検査するsuiteではない。
+  実際の電源断・再起動は別に確認する。[reset報告](keystone-system-reset.md)。
+
+## KSB-022: carray生成とconfig依存関係
+
+- **観測**：defconfigを更新しても既存buildのdriver一覧が更新されずsysconが登録されなかった。
+- **対象・由来**：OpenSBIのcarray生成規則。Keystone SM自体の不具合とは分類しない。
+- **修正済**：`4011d1c9d`。生成規則にKCONFIG_AUTOHEADER依存を追加。
+- **確認**：過去のbuild調査と修正差分。[reset報告](keystone-system-reset.md) に詳細。
+
+## KSB-023: SM reportの未使用data末尾が未初期化
+
+- **対象**：[attest_enclave](../keystone/sm/src/enclave.c)。
+- **確認**：ローカルstruct reportを初期化せず、入力size bytesだけdataへコピーしている。
+  出力はstruct全体なので、size<1024では未使用data末尾の内容も渡される。
+- **影響**：SMスタックの残留内容をreportへ含める可能性。未使用末尾は署名対象でもない。
+  Eyrie側の2048-byteコピーKSB-002とは別で、SM内で1352-byte reportを完成させる段階の問題。
+- **状態**：未修正、ソース確認。現行K3では3002が無効のため実際の漏出内容は未観測。
+- **対応・試験**：reportを全体ゼロ初期化し、入力sizeだけを署名する既存形式を維持。
+  0/短いdata/1024の取得、連続要求での未使用末尾0を実QEMUで確認する。
+
+## 要確認事項・対象外との境界
+
+- **PA/VA契約**：3002の既存copyはMPRVでVAを扱える場合があるため、
+  「PAへ変換していない」という事実だけでは単独の確定バグとしない。
+  3002/3003をEPM内PAへ統一する移植計画に対する適合性課題として管理する。
+  satp/MPRV/PMPの意味と復帰を実QEMUで確認してから共通化する。
+- 3002/3003の未実装provider、実機endorsement、paging追加機能、CMA容量不足、
+  未マウント/procや古いdriverのロードは、それだけでKeystoneコードのバグとはしない。
+- matrixがFAILの理由を表示しなかった点は試験ツールの診断不足で、`e1cbdabca`で改善済み。
+  乱数eapp本体の停止原因KSB-001とは区別する。
+- 本書は既知の発見と修正記録の整理。新たな網羅的な不具合調査を完了したものではない。
+
+## 今後の必須更新手順
+
+新たに同様の不具合を発見したら、修正前でも本書へ登録する。
+連番を末尾へ追加し、既存IDは変更・再利用しない。調査途中なら未確認事項を明示する。
+修正時はそのIDの状態、修正コミット、検証結果と残る未確認範囲を更新する。
+ユーザーから結果を受領した場合も、報告範囲を超えてPASSを広げず追記する。
+
+再利用する記入様式:
+
+```markdown
+## KSB-NNN: 短い題名
+
+- 登録日・最終更新日：YYYY-MM-DD（日本時間）
+- 状態：未修正／修正済／要確認
+- 対象：component、source、影響版またはcommit
+- 由来：取込コード／上流比較済（commit指定）／移植／build環境／未確認
+- 症状・再現条件：実行手順、必要な設定
+- 原因・影響：確認できた事実と推測を分ける
+- 根拠：ログ、機械語、source差分、関連報告
+- 修正：方針と実際のcommit。未修正なら予定・対応計画
+- 検証：build／バイナリ検査／実QEMU／実機／ユーザー報告を区別
+- 未確認：未実施の条件・残る制約
+```
+
+秘密鍵やsealing keyを報告書へ掲載しない。既存の累積変更記録と個別解析文書は根拠として
+リンクし、本書を不具合ID・現在の状態を確認する入口にする。

@@ -34,7 +34,9 @@ SDK attest_enclave(report, data, length)
 
 SBI引数はa0=report出力PA、a1=入力dataのPA、a2=入力長。
 正のKeystone statusをa0で返し、a1の返り値は0に統一する。
-現行Eyrieは3002に作業バッファVAを渡しているが、3003と同じEPM内PA契約へ修正する。
+現行Eyrieは3002に作業バッファVAを渡しているが、3003と同じEPM内PA契約へ統一する。
+旧経路はMPRVでVAを扱える場合があり、VAを渡すことだけを単独の確定バグとはしない。
+PA統一後のsatp/MPRV/PMP適合性を確認する。
 アプリのVAを扱う層はEyrie、enclaveの識別とEPM所有権を扱う層はSMとする。
 Linuxホストから両FIDへの直接呼び出しはPROHIBITED。
 

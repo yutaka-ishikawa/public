@@ -272,3 +272,6 @@ SBI 3003（sealing key取得）の調査結果、OpenSBIの再利用判断、実
 
 SBI 3002/3003の同時実装と共通基盤の先行順は
 [共通実装計画](doc/keystone-sbi-3002-3003-joint-plan.md) を参照してください。
+
+既知の不具合、修正状態、今後の登録ルールは
+[Keystone関連不具合報告書](doc/keystone-bug-report.md) にまとめています。
