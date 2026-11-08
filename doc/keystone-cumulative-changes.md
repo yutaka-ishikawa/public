@@ -279,3 +279,12 @@ eappライブラリのfreestanding設定とGCC loop最適化設定を修正し�
 SDK build時のアーカイブ機械語チェックも追加しています。修正前の検出、修正後の非再帰化、
 SDKと検証パッケージの再ビルドは確認済みです。報告者のQEMUでの再試験は未確認です。
 [停止原因と再実行手順](keystone-sdk-string-recursion.md) を参照してください。
+
+## SBI 3003の調査・実装計画
+
+ユーザーから既存verificationsの全PASSを受領しました。
+同梱OpenSBIにsealing APIとHKDF/HMAC/SHA3/署名ライブラリがないことを確認し、
+Keystone SMの既存HKDF-SHA3-512とSHA3版Ed25519系署名を再利用する計画を作成しました。
+OpenSBIのdispatcher・trap対応アクセス・domain判定等を優先して活用し、
+鍵provider、EPM/PA検査、Eyrieの入出力処理、実QEMUでの専用verificationを段階実装します。
+この変更では3003の有効化は行っていません。[詳細計画](keystone-sbi-3003-plan.md) を参照。
