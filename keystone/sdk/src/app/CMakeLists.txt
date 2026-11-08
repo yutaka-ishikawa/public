@@ -19,7 +19,12 @@ include_directories(${INCLUDE_DIRS})
 
 add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
 # These archives are linked into freestanding Eyrie/native enclave binaries.
-target_compile_options(${PROJECT_NAME} PRIVATE -fno-stack-protector)
+target_compile_options(${PROJECT_NAME} PRIVATE
+  -fno-stack-protector -ffreestanding -fno-builtin)
+# GCC must not lower our libc implementation's byte loops to libc calls:
+# an unaligned memset loop would otherwise become a recursive memset call.
+set_source_files_properties(string.c PROPERTIES COMPILE_OPTIONS
+  "$<$<C_COMPILER_ID:GNU>:-fno-tree-loop-distribute-patterns>")
 set_target_properties(${PROJECT_NAME} PROPERTIES DEFINE_SYMBOL "")
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${out_dir}/lib)

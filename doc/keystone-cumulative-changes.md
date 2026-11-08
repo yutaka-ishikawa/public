@@ -270,3 +270,12 @@ FAILだけを表示していた処理を変更し、失敗理由・ログパス�
 CRCRLFとbash-/sh-形式のプロンプトにも対応しました。
 ログ判定の5件の単体試験は確認済みです。報告された全FAILの停止原因は、
 実際のゲストログを確認するまで未特定です。
+
+## SDK string primitiveの自己再帰防止
+
+乱数matrixの実ゲストログで、OCALL前のstore page faultと128 KiBスタック下端超過が
+報告されました。実SDKの逆アセンブルでGCCによるmemset/strlenの自己呼び出し生成を確認し、
+eappライブラリのfreestanding設定とGCC loop最適化設定を修正しました。
+SDK build時のアーカイブ機械語チェックも追加しています。修正前の検出、修正後の非再帰化、
+SDKと検証パッケージの再ビルドは確認済みです。報告者のQEMUでの再試験は未確認です。
+[停止原因と再実行手順](keystone-sdk-string-recursion.md) を参照してください。

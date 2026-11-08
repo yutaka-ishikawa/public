@@ -83,6 +83,8 @@ CMAKE_ARGS=(-DKEYSTONE_BITS=64 -DKEYSTONE_SDK_DIR="$SDK" -DCMAKE_BUILD_TYPE=Rele
 (cd "$BUILD_DIR"; cmake -S "$ROOT/keystone/sdk" -B "$BUILD_DIR/sdk" "${CMAKE_ARGS[@]}")
 cmake --build "$BUILD_DIR/sdk" --parallel "$JOBS"
 cmake --install "$BUILD_DIR/sdk"
+python3 "$ROOT/scripts/check-keystone-eapp-string.py" \
+ "$(command -v riscv64-buildroot-linux-gnu-objdump)" "$SDK/lib/libkeystone-eapp.a"
 (cd "$BUILD_DIR"; cmake -S "$ROOT/keystone/examples" -B "$BUILD_DIR/examples" "${CMAKE_ARGS[@]}" -DKEYSTONE_EYRIE_RUNTIME="$ROOT/keystone/runtime")
 # ExternalProject copies Eyrie only once. Refresh existing generated copies so
 # source fixes are not silently hidden by a cached download stamp.

@@ -123,3 +123,7 @@ FAILだけではSMの実装不具合とは断定できません。
 `SM reports ... expected ...` はfirmware方式/statusの不一致を表します。
 出力判定の単体チェックは `python3 scripts/tests/test-rng-matrix-output.py` で実行できますが、
 これはログパーサーだけの試験であり、QEMU/SM統合試験の代用にはしません。
+
+`scause=0xf`、障害アドレス `0x3ffdfff0`、callbacks=0で停止する場合は、
+[SDK memsetの自己再帰修正](../../doc/keystone-sdk-string-recursion.md) を参照し、
+SDKとrandom.keを再ビルドしてください。
