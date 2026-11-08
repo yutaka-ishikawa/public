@@ -8,6 +8,7 @@
 | 2002 | DESTROY | [内容](sbi-2002/source-review.md) | [結果](sbi-2002/results.md) |
 | 2003 | RUN | [内容](sbi-2003/source-review.md) | [結果](sbi-2003/results.md) |
 | 2004 | 未定義 | [内容](sbi-2004/source-review.md) | [結果](sbi-2004/results.md) |
+| 2005 | RESUME | [内容](sbi-2005/source-review.md) | [結果](sbi-2005/results.md) |
 
 これらはextension ID `0x08424b45`のfunction IDであり、独立したSBI extension IDではありません。2004は上流・現在のコードともに未定義です。RESUMEは2005なので、2004をRESUMEへ読み替えていません。
 
@@ -107,3 +108,7 @@ Cソースは、承認されたK&Rスタイル（1段4文字、タブ幅8。1段
 [edgecall/](edgecall/README.md)に、データ往復・offset/長さ・privateポインタ拒否の10グループと、OCALLのSTOP/RESUMEの2グループを追加しました。`run-all.sh`は既存48グループと合わせてホスト試験60グループを実行します。
 
 同ディレクトリには、KeystoneゲストでEPMの物理ページへのLinux側の参照が拒否されることを確認するアプリ・runner・カーネルprobeもあります。こちらはクロスビルド／オブジェクトコンパイルまで確認済みで、実PMPの試験実行は未確認です。ホスト試験のPASSと区別してください。
+
+## RESUME（2005）の専用検証
+
+[sbi-2005/](sbi-2005/source-review.md)へ、保存レジスタ・CSR・a0/PC、中断理由、状態、PMP失敗時の復旧等の専用17グループを追加しました。現在の`run-all.sh`は既存60グループと合わせて**77グループ**を実行します。すべてホスト上のソース試験であり、実CPUのecall/mretや実タイマーを検証した結果ではありません。

@@ -73,7 +73,7 @@ jobs:
           python3 scripts/tests/test-keystone-system-reset.py
           python3 scripts/tests/test-keystone-sm-port.py
           python3 scripts/tests/test-keystone-timer-policy.py
-      - name: Verify SBI 2001 through 2004 source paths
+      - name: Verify SBI 2001 through 2005 and edgecall source paths
         run: bash verifications/run-all.sh
       - name: Verify image creation and Keystone overlay
         run: python3 scripts/tests/test-build-rootfs-k3.py

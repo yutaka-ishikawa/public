@@ -1,0 +1,13 @@
+{
+  "date_jst": "2026-11-08",
+  "production_revision": "705e9dbd0",
+  "resume_groups": 17,
+  "all_groups": 77,
+  "result": "PASS",
+  "sanitizers": [
+    "address",
+    "undefined"
+  ],
+  "guest_execution": "NOT RUN",
+  "product_code_changed": false
+}

@@ -1,0 +1,19 @@
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ./build/test
+PASS 01 STOPPED resume restores saved registers/CSRs and exact PC, not RUN boot parameters
+PASS 02 timer interruption marker preserves saved a0; PC bias adjusted exactly once
+PASS 03 OCALL marker returns success in a0 without overwriting other restored registers
+PASS 04 INVALID/DESTROYING/ALLOCATED/FRESH states cannot resume
+PASS 05 STOPPED/RUNNING with full thread count rejected without extra reservation
+PASS 06 source predicate accepts synthetic RUNNING with zero active threads
+PASS 07 full-width EID bounds reject all aliases before 32-bit conversion
+PASS 08 enclave context cannot issue host RESUME
+PASS 09 unready SM rejects RESUME before state changes
+PASS 10 EPM/UTM setup failure restores STOPPED context/permissions and allows retry
+PASS 11 rollback restores original RUNNING state, not unconditionally STOPPED
+PASS 12 OS PMP setup failure restores saved context and thread reservation
+PASS 13 failed permission rollback halts before S-mode return
+PASS 14 failed OS mapping restore halts before S-mode return
+PASS 15 PMP/HSM guard prevents any context/permission switch
+PASS 16 actual timer-reason STOP helper and RESUME preserve interrupted a0 and PC
+PASS 17 100 OCALL STOP/RESUME cycles preserve shared data and release resources after EXIT
+SUMMARY SBI 2005: 17 groups completed, 0 known findings reproduced (hardware mocked)

@@ -1,0 +1,7 @@
+Date: 2026-11-08 JST
+Production revision: 705e9dbd0
+Compiler: cc (Debian 14.2.0-19) 14.2.0
+Host: x86_64 Linux
+CFLAGS: -O2 -g
+Sanitizers: address,undefined
+Execution: bash verifications/sbi-2005/run-tests.sh
