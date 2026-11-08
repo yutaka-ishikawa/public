@@ -13,7 +13,7 @@ fi
 # All builds must exist before beginning the test sequence.
 for file in sbi-errors/build/test sbi-errors/kernel/keystone_sbi_verify.ko \
     edgecall/build/guest/edgecall.ke edgecall/build/guest-256/edgecall.ke \
-    random/build/random.ke; do
+    random/build/random.ke crypto/build/crypto.ke; do
     test -s "$file" || { echo "Missing integration artifact: $file" >&2; exit 3; }
 done
 if [[ ${1:-} != --data-only ]]; then
@@ -24,6 +24,8 @@ if [[ ${1:-} != --data-only ]]; then
 fi
 bash sbi-errors/run-guest.sh
 bash random/run-guest.sh
+# Select the expected provider explicitly; default firmware has no key service.
+bash crypto/run-guest.sh "${KEYSTONE_CRYPTO_EXPECT:-unavailable}"
 # Recreate both sizes after verified DESTROY to exercise TOR teardown/reuse.
 for iteration in 1 2; do
     for package in build/guest/edgecall.ke build/guest-256/edgecall.ke; do
@@ -31,6 +33,7 @@ for iteration in 1 2; do
         EDGE_VERIFY_PACKAGE="$package" bash edgecall/run-guest.sh "$@"
     done
 done
+printf 'Crypto expectation: %s\n' "${KEYSTONE_CRYPTO_EXPECT:-unavailable}"
 printf 'PASS GUEST SUITE: real SBI errors and enclave lifecycle at 2/256 MiB free memory\n'
 if [[ ${1:-} == --data-only ]]; then
     printf 'PMP direct-access probe omitted by explicit --data-only option\n'

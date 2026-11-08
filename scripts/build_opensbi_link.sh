@@ -18,3 +18,9 @@ readelf -h "$O/platform/generic/firmware/fw_dynamic.elf" | grep -E 'Class:|Machi
 nm "$O/platform/generic/firmware/fw_dynamic.elf" | grep -E ' (sm_init|sbi_sm_create_enclave)$' || true
 sha256sum "$O/platform/generic/firmware/fw_dynamic.elf" "$O/platform/generic/firmware/fw_dynamic.bin" | tee "$W/fw-sha256.txt"
 echo 'NOTE: successful link does not validate PMP/IOPMP or enclave operation.'
+
+if [[ ${KEYSTONE_CRYPTO_PROVIDER:-unavailable} == qemu-dev ]]; then
+ python3 "$(dirname "$0")/keystone-crypto-manifest.py" \
+  "$O/platform/generic/firmware/fw_dynamic.elf" "$W/crypto-public" \
+  "$W/keystone-sm-objects/device-public-key.bin"
+fi

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Compile all real Keystone SM translation units against a chosen K3 OpenSBI.
 
-Diagnostic-only: no firmware image, no emulated platform, no crypto keys,
-no claim of valid physical addresses. Supply _build-only_ parameters in an
-isolated compiler invocation. Failure is intentional until integration lands.
+Compile/link checking is not an enclave integration test. The unavailable
+provider has no keys; explicit qemu-dev builds include extractable development
+material and do not provide hardware endorsement.
 """
 import argparse
 import pathlib
@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 SOURCES = [
-    'rng/rng.c', 'attest.c', 'cpu.c', 'crypto.c', 'enclave.c', 'ipi.c',
+    'security/security.c', 'rng/rng.c', 'attest.c', 'cpu.c', 'crypto.c', 'enclave.c', 'ipi.c',
     'k3_pmp_ipi_transport.c', 'pmp.c', 'sm.c', 'sm-sbi.c',
     'sm-sbi-opensbi.c', 'sbi_trap_hack.c', 'thread.c',
     'plugins/multimem.c', 'plugins/plugins.c',
@@ -32,6 +32,7 @@ def main():
                    help='Diagnostic only: compile with build-time-generated dev key. Never production.')
     p.add_argument("--trace", action="store_true", help="Enable SM progress markers for hang diagnosis")
     p.add_argument("--rng", choices=["auto", "zkr", "jupiter2", "counter"], default="auto")
+    p.add_argument("--crypto", choices=["unavailable", "qemu-dev"], default="unavailable")
     a=p.parse_args()
     sm=pathlib.Path(__file__).resolve().parents[1]/'src'
     a.output.mkdir(parents=True,exist_ok=True)
@@ -47,6 +48,9 @@ def main():
            '-I'+str(a.opensbi/'platform/generic/include'),
            '-I'+str(sm.parent/'../sdk/include'),'-I'+str(sm.parent.parent/'sdk/include/shared'),'-Wno-unused-function']
     flags.append("-DKEYSTONE_RNG_BACKEND=" + str(["auto", "zkr", "jupiter2", "counter"].index(a.rng)))
+    flags.append("-I" + str(a.output))
+    if a.crypto == "qemu-dev":
+        flags.append("-DKEYSTONE_CRYPTO_QEMU_DEV=1")
     if a.trace:
         flags.append("-DKEYSTONE_SM_TRACE=1")
     if a.dev_embedded_key:

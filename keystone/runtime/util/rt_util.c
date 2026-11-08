@@ -10,8 +10,10 @@
 #include "sm_err.h"
 
 // Statically allocated copy-buffer
-unsigned char rt_copy_buffer_1[RISCV_PAGE_SIZE];
-unsigned char rt_copy_buffer_2[RISCV_PAGE_SIZE];
+unsigned char rt_copy_buffer_1[RISCV_PAGE_SIZE]
+    __attribute__((aligned(RISCV_PAGE_SIZE)));
+unsigned char rt_copy_buffer_2[RISCV_PAGE_SIZE]
+    __attribute__((aligned(RISCV_PAGE_SIZE)));
 
 size_t rt_util_getrandom(void *vaddr, size_t buflen)
 {

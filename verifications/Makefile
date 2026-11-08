@@ -5,6 +5,7 @@ all guest:
 	$(MAKE) -C edgecall guest OUT=build/guest-256 FREE_MEM_MIB=256
 	$(MAKE) -C sbi-errors guest
 	$(MAKE) -C random guest
+	$(MAKE) -C crypto guest
 test:
 	bash run-all.sh
 kernel-modules:
@@ -17,3 +18,4 @@ clean:
 	$(MAKE) -C edgecall clean
 	$(MAKE) -C sbi-errors clean
 	$(MAKE) -C random clean
+	$(MAKE) -C crypto clean

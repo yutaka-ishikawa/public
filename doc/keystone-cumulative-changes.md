@@ -307,3 +307,17 @@ memset/strlenの自己再帰、reportコピー、既知のSM/SDK/driver/移植�
 [不具合台帳](keystone-bug-report.md) に整理しました。上流由来の確認範囲、修正済/未修正、
 実ゲスト観測とsource確認を区別し、今後の発見・修正時に更新するルールをAGENTS.mdへ追加しました。
 本変更は報告書と運用ルールであり、未修正の3002/3003コードの修正は含みません。
+
+## SBI 3002/3003の共通基盤とQEMU開発用実装
+
+共通provider、immutable text/rodata測定、device→SM証明書、EPM内PAコピー、
+bounded workspace、KDF/署名、Eyrie/SDK/verifier検査を実装しました。
+通常profileはunavailableのまま、別firmwareを `--crypto qemu-dev` で選択します。
+KSB-002/003/004/006/023をコード修正、KSB-005はK3の新経路のみ修正し旧汎用helperが残ります。
+新たにHKDF最大長での8 bit counter wrapをKSB-024として登録・修正しました。
+
+実QEMU cold bootでSM measurementの独立値との一致、device→SM署名、2起動のidentity一致、
+証明書改変拒否とunavailable初期化を確認しています。SDK/Eyrieと全guestパッケージはbuild済み。
+Linux/enclaveからの新SBI試験と新コードの全suite回帰は未実行です。
+[実装記録](keystone-sbi-3002-3003-implementation.md) と
+[専用verification手順](../verifications/crypto/README.md) を参照してください。

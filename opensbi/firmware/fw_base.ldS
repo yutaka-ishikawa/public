@@ -37,6 +37,7 @@
 	{
 		*(.rodata .rodata.*)
 		. = ALIGN(8);
+		PROVIDE(_keystone_rodata_hash_end = .);
 	}
 
 	.dynsym :

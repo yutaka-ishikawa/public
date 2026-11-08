@@ -10,9 +10,10 @@ int main(void)
     static const long expected[KEYSTONE_VERIFY_SBI_COUNT] = {
 	SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT, SBI_ERR_SM_ENCLAVE_INVALID_ID,
 	SBI_ERR_SM_ENCLAVE_INVALID_ID,	     SBI_ERR_SM_NOT_IMPLEMENTED,
-	SBI_ERR_SM_ENCLAVE_INVALID_ID,	     SBI_ERR_SM_ENCLAVE_SBI_PROHIBITED};
+	SBI_ERR_SM_ENCLAVE_INVALID_ID,	     SBI_ERR_SM_ENCLAVE_SBI_PROHIBITED,
+	SBI_ERR_SM_ENCLAVE_SBI_PROHIBITED,   SBI_ERR_SM_ENCLAVE_SBI_PROHIBITED};
     static const unsigned int fids[KEYSTONE_VERIFY_SBI_COUNT] = {
-	2001, 2002, 2003, 2004, 2005, 3001};
+	2001, 2002, 2003, 2004, 2005, 3001, 3002, 3003};
     struct keystone_verify_sbi result;
     unsigned int i;
     int fd;
@@ -35,7 +36,7 @@ int main(void)
 	       result.error[i] == expected[i] ? "PASS" : "FAIL", fids[i],
 	       (long)result.error[i], expected[i], (long)result.value[i]);
 	if (result.error[i] != expected[i] ||
-	    (fids[i] == 3001 && result.value[i] != 0)) {
+	    (fids[i] >= 3001 && result.value[i] != 0)) {
 	    failed = 1;
 	}
     }

@@ -36,34 +36,90 @@ Report::HexToBytes(byte* bytes, size_t len, std::string hexstr) {
   }
 }
 
-void
-Report::fromJson(std::string jsonstr) {
-  std::string err;
-  const auto json = Json::parse(jsonstr, err);
+bool Report::fromJsonChecked(const std::string &jsonstr)
+{
+    std::string error;
+    Json json;
+    double length;
+    std::string value;
+    size_t expected;
+    const char *fields[] = {"device_pubkey",	"sm_hash",	"sm_pubkey",
+			    "sm_signature",	"enclave_hash", "enclave_data",
+			    "enclave_signature"};
+    size_t sizes[] = {32, 64, 32, 64, 64, 0, 64};
+    size_t i;
+    size_t j;
+    unsigned char c;
 
-  std::string device_pubkey = json["device_pubkey"].string_value();
-  HexToBytes(report.dev_public_key, PUBLIC_KEY_SIZE, device_pubkey);
-
-  std::string sm_hash = json["security_monitor"]["hash"].string_value();
-  HexToBytes(report.sm.hash, MDSIZE, sm_hash);
-  std::string sm_pubkey = json["security_monitor"]["pubkey"].string_value();
-  HexToBytes(report.sm.public_key, PUBLIC_KEY_SIZE, sm_pubkey);
-  std::string sm_signature =
-      json["security_monitor"]["signature"].string_value();
-  HexToBytes(report.sm.signature, SIGNATURE_SIZE, sm_signature);
-
-  std::string enclave_hash = json["enclave"]["hash"].string_value();
-  HexToBytes(report.enclave.hash, MDSIZE, enclave_hash);
-  report.enclave.data_len  = json["enclave"]["datalen"].int_value();
-  std::string enclave_data = json["enclave"]["data"].string_value();
-  HexToBytes(report.enclave.data, report.enclave.data_len, enclave_data);
-  std::string enclave_signature = json["enclave"]["signature"].string_value();
-  HexToBytes(report.enclave.signature, SIGNATURE_SIZE, enclave_signature);
+    memset(&report, 0, sizeof report);
+    report.enclave.data_len = UINT64_MAX;
+    json = Json::parse(jsonstr, error);
+    if (!error.empty() || !json["enclave"]["datalen"].is_number()) {
+	return false;
+    }
+    length = json["enclave"]["datalen"].number_value();
+    if (!(length >= 0 && length <= ATTEST_DATA_MAXLEN) ||
+	length != static_cast<uint64_t>(length)) {
+	return false;
+    }
+    sizes[5] = static_cast<size_t>(length);
+    for (i = 0; i < 7; i++) {
+	if (i == 0) {
+	    value = json[fields[i]].string_value();
+	} else if (i < 4) {
+	    const char *names[] = {"", "hash", "pubkey", "signature"};
+	    value = json["security_monitor"][names[i]].string_value();
+	} else {
+	    const char *names[] = {"hash", "data", "signature"};
+	    value = json["enclave"][names[i - 4]].string_value();
+	}
+	expected = sizes[i] * 2;
+	if (value.size() != expected) {
+	    return false;
+	}
+	for (j = 0; j < value.size(); j++) {
+	    c = value[j];
+	    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+		  (c >= 'A' && c <= 'F'))) {
+		return false;
+	    }
+	}
+    }
+    HexToBytes(report.dev_public_key, 32, json["device_pubkey"].string_value());
+    HexToBytes(report.sm.hash, 64,
+	       json["security_monitor"]["hash"].string_value());
+    HexToBytes(report.sm.public_key, 32,
+	       json["security_monitor"]["pubkey"].string_value());
+    HexToBytes(report.sm.signature, 64,
+	       json["security_monitor"]["signature"].string_value());
+    HexToBytes(report.enclave.hash, 64, json["enclave"]["hash"].string_value());
+    report.enclave.data_len = static_cast<uint64_t>(length);
+    HexToBytes(report.enclave.data, report.enclave.data_len,
+	       json["enclave"]["data"].string_value());
+    HexToBytes(report.enclave.signature, 64,
+	       json["enclave"]["signature"].string_value());
+    return true;
 }
 
-void
-Report::fromBytes(byte* bin) {
-  std::memcpy(&report, bin, sizeof(struct report_t));
+void Report::fromJson(std::string jsonstr)
+{
+    (void)fromJsonChecked(jsonstr);
+}
+
+bool Report::fromBytesChecked(const byte *bin, size_t size)
+{
+    memset(&report, 0, sizeof report);
+    report.enclave.data_len = UINT64_MAX;
+    if (!bin || size != sizeof report) {
+	return false;
+    }
+    memcpy(&report, bin, sizeof report);
+    return report.enclave.data_len <= ATTEST_DATA_MAXLEN;
+}
+
+void Report::fromBytes(byte *bin)
+{
+    (void)fromBytesChecked(bin, sizeof report);
 }
 
 std::string
@@ -103,6 +159,10 @@ Report::printJson() {
 
 void
 Report::printPretty() {
+    if (report.enclave.data_len > ATTEST_DATA_MAXLEN) {
+	std::cout << "invalid report data length" << std::endl;
+	return;
+    }
   std::cout << "\t\t=== Security Monitor ===" << std::endl;
   std::cout << "Hash: " << BytesToHex(report.sm.hash, MDSIZE) << std::endl;
   std::cout << "Pubkey: " << BytesToHex(report.sm.public_key, PUBLIC_KEY_SIZE)
@@ -147,8 +207,13 @@ Report::verify(
 
 int
 Report::checkSignaturesOnly(const byte* dev_public_key) {
-  int sm_valid      = 0;
-  int enclave_valid = 0;
+    int sm_valid = 0;
+    int enclave_valid = 0;
+
+    if (!dev_public_key || report.enclave.data_len > ATTEST_DATA_MAXLEN ||
+	memcmp(report.dev_public_key, dev_public_key, PUBLIC_KEY_SIZE)) {
+	return 0;
+    }
 
   /* verify SM report */
   sm_valid = ed25519_verify(

@@ -45,10 +45,7 @@ static int sbi_ecall_keystone_enclave_handler(unsigned long extid,
 		   funcid);
 	return keystone_ecall_return(regs, out, SBI_ERR_SM_NOT_IMPLEMENTED);
     }
-    if (funcid == SBI_SM_ATTEST_ENCLAVE || funcid == SBI_SM_GET_SEALING_KEY) {
-	sbi_printf("[SM/K3] secure key provider not implemented\n");
-	return keystone_ecall_return(regs, out, SBI_ERR_SM_NOT_IMPLEMENTED);
-    }
+
 #endif
     if (funcid <= FID_RANGE_DEPRECATED) {
 	return keystone_ecall_return(regs, out, SBI_ERR_SM_DEPRECATED);

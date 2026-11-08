@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include "Keys.hpp"
+#include "shared/crypto_abi.h"
 #include "common/sha3.h"
 #include "ed25519/ed25519.h"
 #include "verifier/json11.h"
@@ -30,6 +31,8 @@ struct report_t {
   byte dev_public_key[PUBLIC_KEY_SIZE];
 };
 
+static_assert(sizeof(report_t) == KEYSTONE_REPORT_BYTES, "verifier report ABI");
+
 class Report {
  private:
   struct report_t report;
@@ -39,6 +42,8 @@ class Report {
   void HexToBytes(byte* bytes, size_t len, std::string hexstr);
   void fromJson(std::string json);
   void fromBytes(byte* bin);
+  bool fromBytesChecked(const byte* bin, size_t size);
+  bool fromJsonChecked(const std::string& json);
   std::string stringfy();
   void printJson();
   void printPretty();

@@ -1,3 +1,4 @@
+#include "security/security.h"
 #include "sm_trace.h"
 //******************************************************************************
 // Copyright (c) 2018, The Regents of the University of California (Regents).
@@ -101,8 +102,7 @@ unsigned long sbi_sm_attest_enclave(uintptr_t report, uintptr_t data, uintptr_t 
 {
   unsigned long ret;
 #ifdef KEYSTONE_K3_PMP_N_REG
-  sbi_printf("[SM/K3] NOT IMPLEMENTED: attestation key provider\n");
-  return SBI_ERR_SM_NOT_IMPLEMENTED;
+  return keystone_security_call(SBI_SM_ATTEST_ENCLAVE, report, data, size);
 #endif
   ret = attest_enclave(report, data, size, cpu_get_enclave_id());
   return ret;
@@ -113,8 +113,8 @@ unsigned long sbi_sm_get_sealing_key(uintptr_t sealing_key, uintptr_t key_ident,
 {
   unsigned long ret;
 #ifdef KEYSTONE_K3_PMP_N_REG
-  sbi_printf("[SM/K3] NOT IMPLEMENTED: sealing key provider\n");
-  return SBI_ERR_SM_NOT_IMPLEMENTED;
+  return keystone_security_call(SBI_SM_GET_SEALING_KEY, sealing_key, key_ident,
+				key_ident_size);
 #endif
   ret = get_sealing_key(sealing_key, key_ident, key_ident_size,
                          cpu_get_enclave_id());

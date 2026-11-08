@@ -275,3 +275,7 @@ SBI 3002/3003の同時実装と共通基盤の先行順は
 
 既知の不具合、修正状態、今後の登録ルールは
 [Keystone関連不具合報告書](doc/keystone-bug-report.md) にまとめています。
+
+SBI 3002/3003のQEMU開発用実装と試験方法は
+[実装記録](doc/keystone-sbi-3002-3003-implementation.md)、
+[専用verification](verifications/crypto/README.md) を参照してください。

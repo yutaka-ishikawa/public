@@ -9,7 +9,7 @@ W=$(realpath -m "$3")
 [ -f "$S/include/sbi/sbi_types.h" ] || { echo 'ERROR: OpenSBI source missing' >&2; exit 3; }
 [ -f "$K/sm/src/platform/spacemit_k3/platform.c" ] || { echo 'ERROR: K3 platform missing' >&2; exit 3; }
 for tool in python3 clang ld.lld readelf nm; do command -v "$tool" >/dev/null || { echo "ERROR missing $tool" >&2; exit 3; }; done
-trace_args=(--rng "${KEYSTONE_RNG_BACKEND:-auto}")
+trace_args=(--rng "${KEYSTONE_RNG_BACKEND:-auto}" --crypto "${KEYSTONE_CRYPTO_PROVIDER:-unavailable}")
 case ${KEYSTONE_SM_TRACE:-0} in
  0) :;;
  1) trace_args+=(--trace);;
@@ -20,6 +20,10 @@ W=$(realpath -e "$W")
 OBJDIR="$W/keystone-sm-objects"
 SM_OBJ="$W/sm-combined.o"
 mkdir -p "$OBJDIR"
+if [[ ${KEYSTONE_CRYPTO_PROVIDER:-unavailable} == qemu-dev ]]; then
+ seed=${KEYSTONE_CRYPTO_SEED_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/keystone-k3/qemu-dev.seed}
+ python3 "$(dirname "$0")/prepare-keystone-dev-root.py" "$seed" "$OBJDIR"
+fi
 find "$OBJDIR" -maxdepth 1 -type f -name '*.o' -delete
 rm -f "$SM_OBJ"
 

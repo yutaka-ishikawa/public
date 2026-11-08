@@ -1,0 +1,35 @@
+{
+  "records": [
+    {
+      "boot": 1,
+      "scope": "real QEMU cold boot, no Linux/enclave SBI execution",
+      "provider": "qemu-dev",
+      "sm_measurement_matches_independent_elf": true,
+      "device_to_sm_signature_valid": true,
+      "qemu_sha256": "39c91dd7ddeb1385d487fd39075b7b565c7fd149323dd213966b35bd12fbfaee",
+      "firmware_sha256": "d804b65245934da87543e27ce32e722d0237fcbe3753a3062bcb2f0eed5f301d",
+      "sm_hash": "0e05fbb20140321cfe9a0623825ed81374333a3c82b267f74218628eed411ea927af510e370ca58513e7636a53f718b7ccf4d7272810343866080c1df4719a50",
+      "certificate_sha256": "496cad351c8d281d394070ec25757f0b4f5ebf5e79e5f54bce5eb107d412ee82"
+    },
+    {
+      "boot": 2,
+      "scope": "real QEMU cold boot, no Linux/enclave SBI execution",
+      "provider": "qemu-dev",
+      "sm_measurement_matches_independent_elf": true,
+      "device_to_sm_signature_valid": true,
+      "qemu_sha256": "39c91dd7ddeb1385d487fd39075b7b565c7fd149323dd213966b35bd12fbfaee",
+      "firmware_sha256": "d804b65245934da87543e27ce32e722d0237fcbe3753a3062bcb2f0eed5f301d",
+      "sm_hash": "0e05fbb20140321cfe9a0623825ed81374333a3c82b267f74218628eed411ea927af510e370ca58513e7636a53f718b7ccf4d7272810343866080c1df4719a50",
+      "certificate_sha256": "496cad351c8d281d394070ec25757f0b4f5ebf5e79e5f54bce5eb107d412ee82"
+    },
+    {
+      "scope": "real QEMU cold boot, no Linux/enclave SBI execution",
+      "provider": "unavailable",
+      "disabled_capabilities_confirmed": true,
+      "firmware_sha256": "e31c4e6f795cc0c8a19b2f63e3ea23beb3d5edd097481e656f9806896568b448"
+    }
+  ],
+  "two_boot_identity_equal": true,
+  "mutated_certificate_rejected": true,
+  "guest_sbi_integration_executed": false
+}

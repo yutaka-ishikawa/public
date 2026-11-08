@@ -3,6 +3,7 @@
 // All Rights Reserved. See LICENSE for license details.
 //------------------------------------------------------------------------------
 #include "syscall.h"
+#include "shared/crypto_abi.h"
 
 /* this implementes basic system calls for the enclave */
 
@@ -32,4 +33,13 @@ get_sealing_key(
   return SYSCALL_4(RUNTIME_SYSCALL_GET_SEALING_KEY,
       sealing_key_struct, sealing_key_struct_size,
       key_ident, key_ident_size);
+}
+
+int attest_enclave_checked(void *report, size_t capacity, void *data,
+			   size_t length)
+{
+    if (capacity < KEYSTONE_REPORT_BYTES || length > KEYSTONE_ATTEST_DATA_MAX) {
+	return -22;
+    }
+    return attest_enclave(report, data, length);
 }

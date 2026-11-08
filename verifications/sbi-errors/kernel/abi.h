@@ -2,7 +2,7 @@
 #define KEYSTONE_VERIFY_SBI_ABI_H
 #include <linux/ioctl.h>
 #include <linux/types.h>
-#define KEYSTONE_VERIFY_SBI_COUNT 6
+#define KEYSTONE_VERIFY_SBI_COUNT 8
 
 struct keystone_verify_sbi {
     __s64 error[KEYSTONE_VERIFY_SBI_COUNT];

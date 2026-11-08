@@ -53,4 +53,8 @@ get_sealing_key(
     struct sealing_key* sealing_key_struct, size_t sealing_key_struct_size,
     void* key_ident, size_t key_ident_size);
 
+/* Checked capacity wrapper; the legacy SBI retains its fixed report ABI. */
+int attest_enclave_checked(void *report, size_t capacity, void *data,
+			   size_t length);
+
 #endif /* syscall.h */

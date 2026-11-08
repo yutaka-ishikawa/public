@@ -36,6 +36,7 @@ rt_option(NET_SYSCALL "Wrap Linux net syscalls" OFF)
 
 # System options
 rt_option(ENV_SETUP "Set up stack environments like glibc expects" OFF)
+rt_option(CRYPTO_VERIFY "Verification-only raw crypto PA probes" OFF)
 
 # Debugging options
 rt_option(INTERNAL_STRACE "Debug syscalls" OFF)

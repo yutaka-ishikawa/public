@@ -32,6 +32,7 @@ installは古い成果物の鮮度まで判定しません。ソース変更後�
 | Eyrie＋SDK | `make eyrie` | `make install-eyrie` | SDK、Eyrie、hello/hello-nativeのruntimeとパッケージ |
 | Keystone | `make keystone` | `make install-keystone` | SM、SDK/Eyrie、対応Linuxを準備し、ドライバとゲストツールをビルド。installでrootfsに反映 |
 | 乱数3方式 | `make rng` | `make install-rng` | Zkr/Jupiter2/counter版firmware。build時に乱数検証パッケージも作る |
+| 3002/3003開発profile | `make crypto` | `make install-crypto` | QEMU開発鍵firmware、公開pin/measurement、専用verification |
 | verifications | `make verifications` | `make install-verifications` | ゲスト検証プログラムと検証用カーネルモジュール |
 | samples | `make samples` | `make install-samples` | `samples/*/Makefile` を持つサンプルをビルド |
 
@@ -68,6 +69,9 @@ rootfsへの反映を拒否します。
 ## build成果物とinstall先
 
 buildは最終インストール先や既存rootfsを更新しません。
+cryptoの開発device rootだけは、再build間で保存し9p共有を避けるため、
+ホストのprivate stateディレクトリに保存します。詳細は
+[crypto verification](../verifications/crypto/README.md) を参照してください。
 既存のbuild-installスクリプトの出力も、build用のstageへ向けています。
 SDKの `cmake --install` は開発用SDKをbuildディレクトリ内へ配置する処理です。
 

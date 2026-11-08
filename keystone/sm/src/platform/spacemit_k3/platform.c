@@ -3,6 +3,7 @@
  * is selected and reported independently by rng/rng.c. */
 #include "../../platform-hook.h"
 #include "../../rng/rng.h"
+#include "../../security/security.h"
 #include <sbi/sbi_hart.h>
 #include <sbi/sbi_console.h>
 #include "k3_b1_handoff.h"
@@ -33,6 +34,7 @@ unsigned long platform_init_global_once(void)
 {
     /* RNG availability does not block the PMP-only enclave lifecycle. */
     (void)keystone_rng_init();
+    (void)keystone_security_init();
     return 0;
 }
 

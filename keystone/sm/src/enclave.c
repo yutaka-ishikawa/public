@@ -10,6 +10,7 @@
 #include <sbi/sbi_hart.h>
 #include "page.h"
 #include "cpu.h"
+#include "security/security.h"
 #include "platform-hook.h"
 #include <sbi/sbi_string.h>
 #include <sbi/riscv_asm.h>
@@ -696,7 +697,7 @@ unsigned long resume_enclave(struct sbi_trap_regs *regs, enclave_id eid)
 unsigned long attest_enclave(uintptr_t report_ptr, uintptr_t data, uintptr_t size, enclave_id eid)
 {
   int attestable;
-  struct report report;
+  struct report report = {0};
   int ret;
 
   if (size > ATTEST_DATA_MAXLEN)
@@ -771,4 +772,29 @@ unsigned long get_sealing_key(uintptr_t sealing_key, uintptr_t key_ident,
           SEALING_KEY_SIZE);
 
   return SBI_ERR_SM_ENCLAVE_SUCCESS;
+}
+
+/* The currently running thread pins its enclave against host DESTROY. */
+int keystone_security_snapshot(unsigned int eid, unsigned char hash[64],
+			       uintptr_t *base, uint64_t *size)
+{
+    int i;
+    int rc;
+
+    rc = -1;
+    spin_lock(&encl_lock);
+    if (ENCLAVE_EXISTS(eid) && enclaves[eid].state == RUNNING &&
+	cpu_is_enclave_context() && cpu_get_enclave_id() == eid) {
+	for (i = 0; i < ENCLAVE_REGIONS_MAX; i++) {
+	    if (enclaves[eid].regions[i].type == REGION_EPM) {
+		*base = pmp_region_get_addr(enclaves[eid].regions[i].pmp_rid);
+		*size = pmp_region_get_size(enclaves[eid].regions[i].pmp_rid);
+		sbi_memcpy(hash, enclaves[eid].hash, 64);
+		rc = 0;
+		break;
+	    }
+	}
+    }
+    spin_unlock(&encl_lock);
+    return rc;
 }

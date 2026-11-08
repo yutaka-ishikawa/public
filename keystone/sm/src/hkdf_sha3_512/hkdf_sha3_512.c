@@ -13,6 +13,7 @@
  */
 
 #include "hkdf_sha3_512.h"
+#include "../security/erase.h"
 #include "../hmac_sha3/hmac_sha3.h"
 #include <sbi/sbi_string.h>
 
@@ -56,6 +57,7 @@ int hkdf_sha3_512(const unsigned char *salt, int salt_len,
                   unsigned char *okm, int okm_len)
 {
     unsigned char prk[SHA3_512_HASH_LEN];
+    int rc;
 
     if (okm_len > 255 * SHA3_512_HASH_LEN) {
         return -1;
@@ -63,7 +65,9 @@ int hkdf_sha3_512(const unsigned char *salt, int salt_len,
 
     hkdf_extract(salt, salt_len, ikm, ikm_len, prk);
 
-    return hkdf_expand(prk, SHA3_512_HASH_LEN, info, info_len, okm, okm_len);
+    rc = hkdf_expand(prk, SHA3_512_HASH_LEN, info, info_len, okm, okm_len);
+    keystone_secret_erase(prk, sizeof prk);
+    return rc;
 }
 
 /*
@@ -94,6 +98,7 @@ void hkdf_extract(const unsigned char *salt, int salt_len,
     }
 
     hmac_sha3(salt, salt_len, ikm, ikm_len, prk);
+    keystone_secret_erase(nullsalt, sizeof nullsalt);
 }
 
 /*
@@ -123,6 +128,8 @@ int hkdf_expand(const unsigned char *prk, int prk_len,
     int n = div_ceil(okm_len, SHA3_512_HASH_LEN);
     unsigned char t[SHA3_512_HASH_LEN];
     hmac_sha3_ctx_t ctx;
+    int i;
+    unsigned char counter;
 
     if (prk_len < SHA3_512_HASH_LEN) {
         return -1;
@@ -132,22 +139,27 @@ int hkdf_expand(const unsigned char *prk, int prk_len,
     }
 
     // Compute T(1) - T(n) and copy resulting key to okm
-    for (unsigned char i = 1; i <= n; i++) {
-        hmac_sha3_init(&ctx, prk, prk_len);
+    for (i = 1; i <= n; i++) {
+	hmac_sha3_init(&ctx, prk, prk_len);
 
-        if (i > 1)
-            hmac_sha3_update(&ctx, t, SHA3_512_HASH_LEN);
+	if (i > 1) {
+	    hmac_sha3_update(&ctx, t, SHA3_512_HASH_LEN);
+	}
 
-        hmac_sha3_update(&ctx, info, info_len);
-        hmac_sha3_update(&ctx, &i, 1);
-        hmac_sha3_final(&ctx, t);
+	hmac_sha3_update(&ctx, info, info_len);
+	counter = (unsigned char)i;
+	hmac_sha3_update(&ctx, &counter, 1);
+	hmac_sha3_final(&ctx, t);
 
-        if (i < n)
-            sbi_memcpy(okm + (i - 1) * SHA3_512_HASH_LEN, t, SHA3_512_HASH_LEN);
-        else
-            sbi_memcpy(okm + (i - 1) * SHA3_512_HASH_LEN, t,
-                   okm_len - (i - 1) * SHA3_512_HASH_LEN);
+	if (i < n) {
+	    sbi_memcpy(okm + (i - 1) * SHA3_512_HASH_LEN, t, SHA3_512_HASH_LEN);
+	} else {
+	    sbi_memcpy(okm + (i - 1) * SHA3_512_HASH_LEN, t,
+		       okm_len - (i - 1) * SHA3_512_HASH_LEN);
+	}
     }
 
+    keystone_secret_erase(t, sizeof t);
+    keystone_secret_erase(&ctx, sizeof ctx);
     return 0;
 }

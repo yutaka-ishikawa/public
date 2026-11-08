@@ -58,8 +58,12 @@ case "$component" in
    test -s "$stage/firmware/k3/rng-$name/fw_dynamic.bin"
    copy_tree "$stage/firmware/k3/rng-$name" "$prefix/firmware/k3/rng-$name"
   done;;
+ crypto)
+  test -s "$stage/firmware/k3/crypto-qemu-dev/fw_dynamic.bin"
+  copy_tree "$stage/firmware/k3/crypto-qemu-dev" "$prefix/firmware/k3/crypto-qemu-dev"
+  copy_tree "$stage/share/keystone/crypto" "$prefix/share/keystone/crypto";;
  verifications)
-  for file in random/build/random.ke sbi-errors/build/test \
+  for file in crypto/build/crypto.ke random/build/random.ke sbi-errors/build/test \
    sbi-errors/kernel/keystone_sbi_verify.ko edgecall/kernel/edgecall_pmp_probe.ko \
    edgecall/build/guest/edgecall.ke edgecall/build/guest-256/edgecall.ke; do
    test -s "$root/verifications/$file" || { echo "Missing verification output: $file" >&2; exit 3; }

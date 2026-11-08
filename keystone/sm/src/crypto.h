@@ -22,6 +22,7 @@ typedef unsigned char byte;
 extern byte sm_hash[MDSIZE];
 extern byte sm_signature[SIGNATURE_SIZE];
 extern byte sm_public_key[PUBLIC_KEY_SIZE];
+extern byte dev_public_key[PUBLIC_KEY_SIZE];
 extern byte sm_private_key[PRIVATE_KEY_SIZE];
 
 void hash_init(hash_ctx* hash_ctx);

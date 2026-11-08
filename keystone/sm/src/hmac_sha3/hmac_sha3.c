@@ -12,6 +12,7 @@
  *  All Rights Reserved. See LICENSE for license details.
  */
 
+#include "../security/erase.h"
 #include "hmac_sha3.h"
 #include <sbi/sbi_string.h>
 
@@ -49,6 +50,7 @@ static void prepare_key(const unsigned char *key, int key_len,
     }
 
     sbi_memset(new_key + key_len, 0x00, SHA3_512_BLOCK_LEN - key_len);
+    keystone_secret_erase(&ctx, sizeof ctx);
 }
 
 /*
@@ -92,16 +94,18 @@ void hmac_sha3_init(hmac_sha3_ctx_t *ctx,
                     const unsigned char *key, int key_len)
 {
     unsigned char temp_key[SHA3_512_BLOCK_LEN];
+    int i;
 
     prepare_key(key, key_len, ctx->key);
 
     // XOR with ipad
-    for (int i = 0; i < SHA3_512_BLOCK_LEN; i++) {
-        temp_key[i] = ctx->key[i] ^ 0x36;
+    for (i = 0; i < SHA3_512_BLOCK_LEN; i++) {
+	temp_key[i] = ctx->key[i] ^ 0x36;
     }
 
     sha3_init(&(ctx->sha3_ctx), SHA3_512_HASH_LEN);
     sha3_update(&(ctx->sha3_ctx), temp_key, SHA3_512_BLOCK_LEN);
+    keystone_secret_erase(temp_key, sizeof temp_key);
 }
 
 /*
@@ -137,17 +141,21 @@ void hmac_sha3_update(hmac_sha3_ctx_t *ctx,
 void hmac_sha3_final(hmac_sha3_ctx_t *ctx, unsigned char *hash)
 {
     unsigned char temp_key[SHA3_512_BLOCK_LEN];
+    int i;
     unsigned char inner_hash[SHA3_512_HASH_LEN];
 
     sha3_final(inner_hash, &(ctx->sha3_ctx));
 
     // XOR with opad
-    for (int i = 0; i < SHA3_512_BLOCK_LEN; i++) {
-        temp_key[i] = ctx->key[i] ^ 0x5C;
+    for (i = 0; i < SHA3_512_BLOCK_LEN; i++) {
+	temp_key[i] = ctx->key[i] ^ 0x5C;
     }
 
     sha3_init(&(ctx->sha3_ctx), SHA3_512_HASH_LEN);
     sha3_update(&(ctx->sha3_ctx), temp_key, SHA3_512_BLOCK_LEN);
+    keystone_secret_erase(temp_key, sizeof temp_key);
     sha3_update(&(ctx->sha3_ctx), inner_hash, SHA3_512_HASH_LEN);
     sha3_final(hash, &(ctx->sha3_ctx));
+    keystone_secret_erase(inner_hash, sizeof inner_hash);
+    keystone_secret_erase(ctx, sizeof *ctx);
 }

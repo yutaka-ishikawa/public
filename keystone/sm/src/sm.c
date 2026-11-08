@@ -218,7 +218,8 @@ int sm_init(bool cold_boot)
 #else
     /* Attestation and sealing are separately rejected by the K3 adapter.
      * Never derive an identity from zero-initialized SM key buffers. */
-    sbi_printf("[SM/K3] PMP-only mode: trusted-key initialization skipped\n");
+    sbi_printf(
+	"[SM/K3] legacy trusted-key initialization skipped; see SM/CRYPTO\n");
 #endif
 
     // Init the enclave metadata
@@ -260,8 +261,8 @@ int sm_init(bool cold_boot)
   /* The OpenSBI HSM finish path publishes STARTED only after this
    * local SM/PMP initialization returns successfully. */
 #endif
-  sbi_printf("[SM/K3] PMP-only SM initialized (no attestation, sealing or DMA "
-	     "proof; see SM/RNG quality)\n");
+  sbi_printf("[SM/K3] SM initialized (see SM/CRYPTO capabilities; no hardware "
+	     "attestation or DMA proof; see SM/RNG quality)\n");
 
 #ifndef KEYSTONE_K3_PMP_N_REG
   sm_print_hash();

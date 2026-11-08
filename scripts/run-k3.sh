@@ -17,6 +17,7 @@ SMP=""
 MEM=2G
 CMDLINE=""
 APPEND_SET=0
+CRYPTO=""
 RNG=""
 ZKR=""
 WTM=""
@@ -31,6 +32,7 @@ Usage: bash scripts/run-k3.sh [options]
   --kernel FILE            Override Linux Image
   --bios FILE              Override firmware
   --rootfs FILE            Raw guest rootfs image (default: selected profile image)
+  --crypto unavailable|qemu-dev  Choose normal or explicit development crypto firmware
   --rng auto|zkr|jupiter2|counter  Select matching RNG firmware and devices
   --zkr on|off             Override Zkr CPU extension for negative tests
   --wtm-rng on|off         Override WTM MMIO peripheral
@@ -53,10 +55,10 @@ EOF
 }
 while (($#)); do
  case "$1" in
-  --rng|--zkr|--wtm-rng|--wtm-rng-fault|--rootfs-format|--image|--prefix|--qemu|--kernel|--bios|--rootfs|--hostfs|--gdb-port|--monitor-port|--smp|--memory|--append)
+  --crypto|--rng|--zkr|--wtm-rng|--wtm-rng-fault|--rootfs-format|--image|--prefix|--qemu|--kernel|--bios|--rootfs|--hostfs|--gdb-port|--monitor-port|--smp|--memory|--append)
    (($#>=2)) || { echo "Missing value for $1" >&2; exit 2; }
    case "$1" in
-    --rng) RNG=$2;; --zkr) ZKR=$2;; --wtm-rng) WTM=$2;;
+    --crypto) CRYPTO=$2;; --rng) RNG=$2;; --zkr) ZKR=$2;; --wtm-rng) WTM=$2;;
     --wtm-rng-fault) WTM_FAULT=$2;; --rootfs-format) ROOTFS_FORMAT=$2;;
     --image) IMAGE=$2;; --qemu) QEMU=$2;; --kernel) KERNEL=$2;; --bios) BIOS=$2;;
     --prefix) PREFIX=$2;; --rootfs) ROOTFS=$2;; --hostfs) HOSTFS=$2;;
@@ -79,6 +81,13 @@ if [[ -z $PREFIX ]]; then PREFIX="$ROOT/install/$IMAGE"; fi
 PREFIX=$(realpath -m "$PREFIX")
 if [[ -z $QEMU ]]; then QEMU="$PREFIX/bin/qemu-system-riscv64"; fi
 : "${SMP:=16}"
+case "$CRYPTO" in
+ ""|unavailable) :;;
+ qemu-dev)
+  [[ -z $RNG || $RNG == auto ]] || { echo 'Use --crypto qemu-dev with --rng auto (or omit --rng).' >&2; exit 2; }
+  : "${BIOS:=$PREFIX/firmware/k3/crypto-qemu-dev/fw_dynamic.bin}";;
+ *) echo 'Invalid --crypto' >&2; exit 2;;
+esac
 case "$RNG" in
  ""|auto) :;;
  zkr|jupiter2|counter) : "${BIOS:=$PREFIX/firmware/k3/rng-$RNG/fw_dynamic.bin}";;

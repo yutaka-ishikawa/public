@@ -17,6 +17,7 @@ C関数の抽出実行、模擬PMP/CSR/IPI、模擬SBIの試験とその過去�
 | `edgecall` | CREATE 2001、RUN 2003、STOP 3004、RESUME 2005、EXIT 3006、DESTROY 2002の正常経路。8種類のバイナリ往復と不正return offsetの拒否。 |
 | `edgecall`の2種類のパッケージ | free memory 2 MiBと256 MiBで上記の正常経路。 |
 | `sbi-errors` | S-modeの検証モジュールから実ecall。CREATEの不正レイアウト、DESTROY/RUN/RESUMEの無効ID、未定義2004の応答、hostからの3001拒否とa1=0。 |
+| `crypto` | 3002/3003の署名チェーン・鍵導出・コピー境界等。通常起動では未対応、qemu-dev起動では正常系を検査。 |
 | `random` | 実enclaveからSBI 3001/getrandom/AT_RANDOM。乱数データのOCALL往復とRESUME、異常伝播。 |
 | `edgecall/kernel` | OCALL中、Linuxの物理RAM direct mapからEPMを読むと拒否され、UTMと通常RAMは読めること。 |
 
@@ -126,3 +127,6 @@ SBI 3001の [検証手順](random/README.md) を追加した。run-all.shは現�
 正常系を実行する。3方式と異常系を別々に起動する試験は
 `python3 verifications/random/run-qemu-matrix.py` をホストから使う。
 [実装記録と実行状況](../doc/keystone-sbi-3001-implementation.md) も参照。
+
+3002/3003正常系と再起動の試験は [crypto手順](crypto/README.md) に従い、
+`--crypto qemu-dev` で明示的に起動します。既定unavailable試験のPASSと区別してください。

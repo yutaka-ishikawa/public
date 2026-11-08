@@ -28,6 +28,167 @@
 
 extern void exit_enclave(uintptr_t arg0);
 
+#include "crypto_abi.h"
+#include "mm/vm.h"
+
+static int crypto_user_range(uintptr_t begin, size_t length, int write)
+{
+    uintptr_t last;
+    uintptr_t page;
+    pte *entry;
+    uintptr_t flags;
+
+    if (!length) {
+	return 1;
+    }
+    last = begin + length - 1;
+    if (last < begin) {
+	return 0;
+    }
+#if __riscv_xlen == 64
+    if (last >= (1UL << 38)) {
+#else
+    if (last >= EYRIE_USER_STACK_START) {
+#endif
+	return 0;
+    }
+    flags = PTE_V | PTE_U | (write ? PTE_W : PTE_R);
+    page = begin & ~(uintptr_t)(RISCV_PAGE_SIZE - 1);
+    for (;;) {
+	entry = pte_of_va(page);
+	if (!entry || (*entry & flags) != flags) {
+	    return 0;
+	}
+	if (last - page < RISCV_PAGE_SIZE) {
+	    return 1;
+	}
+	page += RISCV_PAGE_SIZE;
+    }
+}
+
+static void crypto_erase(void *buffer, size_t size)
+{
+    volatile unsigned char *p;
+
+    p = buffer;
+    while (size--) {
+	*p++ = 0;
+    }
+}
+
+static uintptr_t runtime_crypto(unsigned long call, uintptr_t output,
+				uintptr_t arg1, uintptr_t arg2, uintptr_t arg3)
+{
+    uintptr_t input;
+    size_t length;
+    size_t result_size;
+    size_t limit;
+    uintptr_t rc;
+
+    if (call == RUNTIME_SYSCALL_ATTEST_ENCLAVE) {
+	input = arg1;
+	length = arg2;
+	limit = KEYSTONE_ATTEST_DATA_MAX;
+	result_size = KEYSTONE_REPORT_BYTES;
+    } else {
+	input = arg2;
+	length = arg3;
+	limit = KEYSTONE_KEY_IDENTIFIER_MAX;
+	result_size = KEYSTONE_SEAL_BYTES;
+	if (arg1 < result_size) {
+	    return (uintptr_t)-22;
+	}
+    }
+    if (length > limit) {
+	return (uintptr_t)-22;
+    }
+    if (!crypto_user_range(input, length, 0) ||
+	!crypto_user_range(output, result_size, 1)) {
+	return (uintptr_t)-14;
+    }
+    memset(rt_copy_buffer_1, 0, RISCV_PAGE_SIZE);
+    memset(rt_copy_buffer_2, 0, RISCV_PAGE_SIZE);
+    rc = (uintptr_t)-14;
+    if (copy_from_user(rt_copy_buffer_2, (void *)input, length)) {
+	goto out;
+    }
+    if (call == RUNTIME_SYSCALL_ATTEST_ENCLAVE) {
+	rc = sbi_attest_enclave((void *)translate((uintptr_t)rt_copy_buffer_1),
+				(void *)translate((uintptr_t)rt_copy_buffer_2),
+				length);
+    } else {
+	rc =
+	    sbi_get_sealing_key(translate((uintptr_t)rt_copy_buffer_1),
+				translate((uintptr_t)rt_copy_buffer_2), length);
+    }
+    if (!rc && copy_to_user((void *)output, rt_copy_buffer_1, result_size)) {
+	rc = (uintptr_t)-14;
+    }
+out:
+    crypto_erase(rt_copy_buffer_1, RISCV_PAGE_SIZE);
+    crypto_erase(rt_copy_buffer_2, RISCV_PAGE_SIZE);
+    return rc;
+}
+
+#ifdef USE_CRYPTO_VERIFY
+/* Only the dedicated verification runtime has this syscall. No production
+ * interface is changed. The SM still checks all supplied physical ranges. */
+static uintptr_t crypto_raw_probe(unsigned long fid, unsigned long probe)
+{
+    uintptr_t output;
+    uintptr_t input;
+    size_t length;
+
+    output = translate((uintptr_t)rt_copy_buffer_1);
+    input = translate((uintptr_t)rt_copy_buffer_2);
+    length = 16;
+    memset(rt_copy_buffer_1, 0x5a, RISCV_PAGE_SIZE);
+    memset(rt_copy_buffer_2, 0x6b, RISCV_PAGE_SIZE);
+    switch (probe) {
+    case 0:
+	output = 0;
+	break;
+    case 1:
+	input = 0;
+	break;
+    case 2:
+	output = UINTPTR_MAX - 16;
+	break;
+    case 3:
+	input = UINTPTR_MAX - 16;
+	length = 64;
+	break;
+    case 4:
+	output = translate(shared_buffer);
+	break;
+    case 5:
+	input = translate(shared_buffer);
+	break;
+    case 6:
+	output = 0x102000000UL;
+	break;
+    case 7:
+	input = 0x102000000UL;
+	break;
+    case 8:
+	length = fid == 3002 ? 1025 : 4097;
+	break;
+    case 9:
+	input = output;
+	break;
+    default:
+	return (uintptr_t)-22;
+    }
+    if (fid == 3002) {
+	return sbi_attest_enclave((void *)output, (void *)input, length);
+    }
+    if (fid == 3003) {
+	return sbi_get_sealing_key(output, input, length);
+    }
+    return (uintptr_t)-22;
+}
+#endif
+
 uintptr_t dispatch_edgecall_syscall(struct edge_syscall* syscall_data_ptr, size_t data_len){
   int ret;
 
@@ -165,6 +326,11 @@ void handle_syscall(struct encl_ctx* ctx)
   ctx->regs.sepc += 4;
 
   switch (n) {
+#ifdef USE_CRYPTO_VERIFY
+  case 1099:
+      ret = crypto_raw_probe(arg0, arg1);
+      break;
+#endif
   case(RUNTIME_SYSCALL_EXIT):
     sbi_exit_enclave(arg0);
     break;
@@ -174,40 +340,10 @@ void handle_syscall(struct encl_ctx* ctx)
   case(RUNTIME_SYSCALL_SHAREDCOPY):
     ret = handle_copy_from_shared((void*)arg0, arg1, arg2);
     break;
-  case(RUNTIME_SYSCALL_ATTEST_ENCLAVE):;
-    copy_from_user((void*)rt_copy_buffer_2, (void*)arg1, arg2);
-
-    ret = sbi_attest_enclave(rt_copy_buffer_1, rt_copy_buffer_2, arg2);
-
-    /* TODO we consistently don't have report size when we need it */
-    copy_to_user((void*)arg0, (void*)rt_copy_buffer_1, 2048);
-    //print_strace("[ATTEST] p1 0x%p->0x%p p2 0x%p->0x%p sz %lx = %lu\r\n",arg0,arg0_trans,arg1,arg1_trans,arg2,ret);
-    break;
-  case(RUNTIME_SYSCALL_GET_SEALING_KEY):;
-    /* Stores the key receive structure */
-    uintptr_t buffer_1_pa = translate((uintptr_t) rt_copy_buffer_1);
-
-    /* Stores the key identifier */
-    uintptr_t buffer_2_pa = translate((uintptr_t) rt_copy_buffer_2);
-
-    if (arg1 > sizeof(rt_copy_buffer_1) ||
-        arg3 > sizeof(rt_copy_buffer_2)) {
-      ret = -1;
+  case RUNTIME_SYSCALL_ATTEST_ENCLAVE:
+  case RUNTIME_SYSCALL_GET_SEALING_KEY:
+      ret = runtime_crypto(n, arg0, arg1, arg2, arg3);
       break;
-    }
-
-    copy_from_user(rt_copy_buffer_2, (void *)arg2, arg3);
-
-    ret = sbi_get_sealing_key(buffer_1_pa, buffer_2_pa, arg3);
-
-    if (!ret) {
-      copy_to_user((void *)arg0, (void *)rt_copy_buffer_1, arg1);
-    }
-
-    /* Delete key from copy buffer */
-    memset(rt_copy_buffer_1, 0x00, sizeof(rt_copy_buffer_1));
-
-    break;
 
 
 #ifdef USE_LINUX_SYSCALL
