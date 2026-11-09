@@ -635,3 +635,5 @@ samples統合時に、元attestorの1〜10000のループと5000/10000での値O
 OCALL失敗時の非0終了は維持する。時間計測は元にもなく、最適化後の命令数や一定負荷を
 保証するループとは扱わない。Sstc on/offで5000/10000の出力が正確に2回あり、その後のreport検証と全sample成功を確認。
 証跡は[samples/evidence/loop-restored.json](../samples/evidence/loop-restored.json)。
+
+復元・差分評価のcommit：[715228dcf](https://github.com/yutaka-ishikawa/public/commit/715228dcf7ca4aeb3b1694fb4e69f58dde4cab74)。

@@ -92,5 +92,6 @@
     "Loop is not a calibrated benchmark",
     "Other documented capability reductions are not restored in this change",
     "QEMU results do not establish real hardware behavior"
-  ]
+  ],
+  "implementation_commit": "715228dcf7ca4aeb3b1694fb4e69f58dde4cab74"
 }

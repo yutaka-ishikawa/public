@@ -25,6 +25,8 @@
 
 ## attestorのループは復元した
 
+復元と本評価のcommit：[715228dcf](https://github.com/yutaka-ishikawa/public/commit/715228dcf7ca4aeb3b1694fb4e69f58dde4cab74)。
+
 初回統合のループ削除は、report ABIや鍵の適合に必要な変更ではなかった。
 1〜10000のループ、5000/10000での2回のOCALL、続く共有nonceコピーを復元した。
 これにより正常経路の追加2回のhost復帰/RESUMEも戻す。
