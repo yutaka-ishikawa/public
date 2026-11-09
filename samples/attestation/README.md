@@ -24,3 +24,8 @@ runnerはLinux getrandomでchallengeを生成し、返却reportの署名、独�
 ローカルの期待enclave測定値、challenge一致を検査する。
 通常firmwareは3002無効なので成功しない。旧`--sm-bin fw_jump.bin`方式は使用しない。
 reportは正規1352 bytesのみを送信し、API失敗時にはreportをhostへ送らない。
+
+元のKeystoneソースからの変更理由と改善／劣化の評価は[CHANGES.md](CHANGES.md)を参照。
+
+元と同じ1〜10000のループを実行し、5000と10000で値をOCALLしてからnonceをコピーする。
+負荷と追加2回のhost復帰/RESUMEは維持するが、時計を読んで計測する処理ではない。

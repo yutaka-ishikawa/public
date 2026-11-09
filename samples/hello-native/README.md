@@ -16,3 +16,5 @@
 
 末尾の0は期待するenclave終了値。SDKエラーや不一致はrunnerも非0で終了する。
 全体実行は`bash /mnt/host/samples/run-guest.sh --basic`。
+
+元のKeystoneソースからの変更理由と改善／劣化の評価は[CHANGES.md](CHANGES.md)を参照。

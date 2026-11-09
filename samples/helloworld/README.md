@@ -44,3 +44,5 @@ host runnerはQEMU内のRISC-V Linuxで動くプログラムであり、開発PC
 通常の鍵サービス無効profileでもこのサンプルは実行できる。
 動的リンクしたrunner用のRISC-V libc・C++ libraryはBianbu rootfs側のものを使う。
 利用条件は[LICENSE](LICENSE)を参照。
+
+元のKeystoneソースからの変更理由と改善／劣化の評価は[CHANGES.md](CHANGES.md)を参照。

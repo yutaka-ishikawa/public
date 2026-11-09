@@ -1,0 +1,96 @@
+{
+  "tested_at": "2026-11-09T14:08:20.277523+09:00",
+  "worktree_base": "3054460c43c4d0dc2b3ace1855928c64ee501a9a",
+  "tested_before_commit": true,
+  "change": "Restore i=1..10000 loop and OCALL at 5000/10000 before nonce copy",
+  "source_sha256": {
+    "samples/attestation/eapp/attestor.c": "df06ba61e712c48c4155aa73bc5f7a207a7a66bcc37faa7c0ec102eaa737a767",
+    "samples/common/runner.hpp": "7fcd3e056207a3dde754e3b7d1436c83ad9d90ff7b31b61191b23ae83005ca92",
+    "samples/attestation/Makefile": "67f6afed8408cac08ffb7a2ea0218a22276806e22cd67daabcb0f4428fb77251"
+  },
+  "cases": [
+    {
+      "sstc": "on",
+      "pass": true,
+      "log": "loop-restored-on.log",
+      "source_revision": "3054460c43c4d0dc2b3ace1855928c64ee501a9a",
+      "source_dirty": true,
+      "sha256": {
+        "/workspace/public/install/keystone/firmware/k3/crypto-qemu-dev/fw_dynamic.bin": "0472cc99ebb0588267a8a2bc495b817c98267b8a133610d2d87be463fbf985df",
+        "/workspace/public/install/keystone/boot/k3/Image": "0a4f142c939de321041d29bf9b2449ccd9515f5f79182a3810cbdb4cfb428d3c",
+        "/workspace/public/install/keystone/bin/qemu-system-riscv64": "39c91dd7ddeb1385d487fd39075b7b565c7fd149323dd213966b35bd12fbfaee",
+        "/workspace/public/samples/helloworld/build/hello.ke": "b62cd28ec1dbcd5758ad0dd2a1d6215b5b9552e58429cb75b3b4a488d40de68f",
+        "/workspace/public/samples/hello-native/build/hello-native.ke": "8546e1aa115311ce3defc7aac597fc00ac5f7380271a790f3f9274581dc59bc5",
+        "/workspace/public/samples/attestation/build/attestor.ke": "2384de243749f79aba1969f3cec2091a8f513ce7adeed2bd35201c486a218bbe",
+        "/workspace/public/samples/tests/build/tests.ke": "1777e5cf3713ea9359c18e716b164219fb4834a623a3cf69429a5dd7fa278e5e"
+      },
+      "basic": false,
+      "crypto": "qemu-dev",
+      "command": [
+        "bash",
+        "/workspace/public/scripts/run-k3.sh",
+        "--prefix",
+        "/workspace/public/install/keystone",
+        "--crypto",
+        "qemu-dev",
+        "--sstc",
+        "on",
+        "--rootfs",
+        "/tmp/samples-qemu-0cxskjim/rootfs.qcow2",
+        "--rootfs-format",
+        "qcow2"
+      ],
+      "guest_exit": 0,
+      "serial_sha256": "6b16d3d5afed0a50ae87947f0b9601c43313abb397167a8af7e702c528868d92",
+      "attestor_value_calls": [
+        "Enclave value: 5000",
+        "Enclave value: 10000"
+      ],
+      "nonce_report_valid_after_value_calls": true
+    },
+    {
+      "sstc": "off",
+      "pass": true,
+      "log": "loop-restored-off.log",
+      "source_revision": "3054460c43c4d0dc2b3ace1855928c64ee501a9a",
+      "source_dirty": true,
+      "sha256": {
+        "/workspace/public/install/keystone/firmware/k3/crypto-qemu-dev/fw_dynamic.bin": "0472cc99ebb0588267a8a2bc495b817c98267b8a133610d2d87be463fbf985df",
+        "/workspace/public/install/keystone/boot/k3/Image": "0a4f142c939de321041d29bf9b2449ccd9515f5f79182a3810cbdb4cfb428d3c",
+        "/workspace/public/install/keystone/bin/qemu-system-riscv64": "39c91dd7ddeb1385d487fd39075b7b565c7fd149323dd213966b35bd12fbfaee",
+        "/workspace/public/samples/helloworld/build/hello.ke": "b62cd28ec1dbcd5758ad0dd2a1d6215b5b9552e58429cb75b3b4a488d40de68f",
+        "/workspace/public/samples/hello-native/build/hello-native.ke": "8546e1aa115311ce3defc7aac597fc00ac5f7380271a790f3f9274581dc59bc5",
+        "/workspace/public/samples/attestation/build/attestor.ke": "2384de243749f79aba1969f3cec2091a8f513ce7adeed2bd35201c486a218bbe",
+        "/workspace/public/samples/tests/build/tests.ke": "1777e5cf3713ea9359c18e716b164219fb4834a623a3cf69429a5dd7fa278e5e"
+      },
+      "basic": false,
+      "crypto": "qemu-dev",
+      "command": [
+        "bash",
+        "/workspace/public/scripts/run-k3.sh",
+        "--prefix",
+        "/workspace/public/install/keystone",
+        "--crypto",
+        "qemu-dev",
+        "--sstc",
+        "off",
+        "--rootfs",
+        "/tmp/samples-qemu-_mll7apb/rootfs.qcow2",
+        "--rootfs-format",
+        "qcow2"
+      ],
+      "guest_exit": 0,
+      "serial_sha256": "4bb9dc9f0529d41487caf896cfbe67f95cdc1f191ee60ba2b0c1f77f16326ac5",
+      "attestor_value_calls": [
+        "Enclave value: 5000",
+        "Enclave value: 10000"
+      ],
+      "nonce_report_valid_after_value_calls": true
+    }
+  ],
+  "limits": [
+    "Loop is not a calibrated benchmark",
+    "Other documented capability reductions are not restored in this change",
+    "QEMU results do not establish real hardware behavior"
+  ]
+}

@@ -66,6 +66,7 @@
 | KSB-038 | fib-benchのrdcycleがillegal instruction | hostのcounter許可に依存 | samplesをrdtimeへ適合・実QEMU PASS |
 | KSB-039 | 新共通runnerがLinux syscall OCALLを配送しない | 本作業の草稿 | 修正済・実QEMU PASS |
 | KSB-040 | attestor自身の2048-byte転送・status未検査 | 上流examples/attestation | samples側修正済・実QEMU PASS（元版保持） |
+| KSB-041 | attestor統合時に負荷・2 OCALLのループを削除 | samples統合の変更 | 復元済・Sstc on/off実QEMU PASS |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
 KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
@@ -624,3 +625,13 @@ samples版では上限1024、checked API、sizeof共通report型、成功時だ�
 KSB-036/037/040はsamplesコピー側の修正で、元のkeystone/examplesは変更していない。
 KSB-038はcounterアクセス方針への適合、KSB-039は本作業の草稿に限定した不具合。
 修正commit：[8d8fd5b9c](https://github.com/yutaka-ishikawa/public/commit/8d8fd5b9c8e52f54169064548dad074e20ac5186)。元のexamplesは保持したままで、変更対象はsamples統合側。
+
+## KSB-041: attestor統合時のループ削除による動作範囲の減少
+
+samples統合時に、元attestorの1〜10000のループと5000/10000での値OCALLを削除した。
+互換性修正に必要な削除ではなく、追加2回のhost復帰/RESUMEと、nonceコピー前の
+処理経路を失っていた。上流の不具合ではなく本リポジトリの統合作業による後退。
+ユーザー指摘を受けて、GET_STRING → ループ/2 OCALL → nonceコピー → attestの順で復元。
+OCALL失敗時の非0終了は維持する。時間計測は元にもなく、最適化後の命令数や一定負荷を
+保証するループとは扱わない。Sstc on/offで5000/10000の出力が正確に2回あり、その後のreport検証と全sample成功を確認。
+証跡は[samples/evidence/loop-restored.json](../samples/evidence/loop-restored.json)。

@@ -1,0 +1,25 @@
+PASS PACKAGE: hello.ke; size=1043774 md5=2d7cef29135c4224c0df4bbdc9c63e19
+PASS SAMPLE hello: enclave exit=0 DESTROY
+PASS PACKAGE: hello-native.ke; size=747368 md5=2c87977f39a4dba85a39d17402a3292b
+PASS SAMPLE hello-native: enclave exit=0 DESTROY
+PASS PACKAGE: attestor.ke; size=745614 md5=239bcb4d72de00b4d4f18286678bbcb7
+Enclave value: 5000
+Enclave value: 10000
+PASS SAMPLE ATTESTATION: signature, enclave/SM pins and nonce
+PASS SAMPLE attestor: enclave exit=0 DESTROY
+PASS PACKAGE: tests.ke; size=776152 md5=ca65b6dd66db7e2d758b21f947483810
+PASS SAMPLE test-stack: enclave exit=12345 DESTROY
+PASS SAMPLE test-loop: enclave exit=54321 DESTROY
+PASS SAMPLE test-malloc: enclave exit=11411 DESTROY
+PASS SAMPLE test-long-nop: enclave exit=12345 DESTROY
+PASS SAMPLE test-fibonacci: enclave exit=14930352 DESTROY
+PASS SAMPLE test-fib-bench: enclave exit=3046780 DESTROY
+Enclave value: 13
+Enclave value: 20
+PASS SAMPLE test-untrusted: enclave exit=13 DESTROY
+PASS SAMPLE ATTESTATION: signature, enclave/SM pins and nonce
+PASS SAMPLE test-attestation: enclave exit=0 DESTROY
+PASS SAMPLE test-data-sealing: enclave exit=0 DESTROY
+PASS SAMPLE tests: selected cases completed (basic=0)
+PASS SAMPLE SUITE: selected examples completed (basic=0)
+SAMPLE_CASE_EXIT=0

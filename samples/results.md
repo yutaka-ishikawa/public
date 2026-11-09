@@ -44,3 +44,12 @@ SDKのhost資源寿命（KSB-035）はこの統合では変更していない。
 
 試験後、共通runnerの2行は8 spacesからtabへインデントを整え、assembly参照ファイルの行末空白も除去した。
 処理と行番号は変更しておらず、manifestには試験時と最終版の両SHAを記録した。
+
+## attestorループ復元後の再試験（2026-11-09）
+
+初回統合で削除した1〜10000のループと値OCALLをnonceコピー前に復元した。
+modified attestorを再ビルドし、snapshot/checksum検査後、実QEMUで全12アプリを再実行。
+Sstc on/offの両方で全PASS、attestorの値OCALLは5000と10000の正確な2回で、
+その後のnonce・署名・enclave/SM pin検証もPASSした。
+[証跡](evidence/loop-restored.json)と[各ソースの評価](../doc/keystone-samples-change-review.md)を参照。
+この結果はループの実行時間や機械語命令数を測定したものではない。

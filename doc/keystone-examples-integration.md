@@ -70,3 +70,10 @@ keystone/examplesのCMakeによるアプリビルドは通常workflowから外�
 rootのmake samplesとinstall-samplesも統合先を使う。上流ファイルは保持する。
 
 [使い方](../samples/README.md)、[検証結果](../samples/results.md)を参照。
+
+## 変更の優劣とattestorループの復元
+
+この文書は適合方法の説明であり、変更全てが元より優れているという意味ではない。
+[差分評価](keystone-samples-change-review.md)に各sampleの理由・改善・劣化・未復元項目を記載した。
+初回統合で削除したattestorの1〜10000のループと5000/10000の値OCALLは、
+nonceコピー前という元の順序で復元した。削除は互換性修正に不要な動作範囲の減少だった。

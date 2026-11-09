@@ -90,3 +90,5 @@ bash /mnt/host/samples/run-guest.sh
 `KEYSTONE_PUBLIC_DIR`で指定する。パッケージ内の自己申告鍵を信頼する方式にはしない。
 
 これらは開発例。移植機能のverification一式は引き続き`verifications/`に置く。
+
+各ソースの変更理由と改善／劣化を比較した[差分評価](../doc/keystone-samples-change-review.md)を追加した。

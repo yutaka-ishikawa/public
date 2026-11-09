@@ -28,3 +28,5 @@ fib-benchはLinuxから継承したscounterenでcycleが不許可だったため
 戻り値はCPU cycle数ではなくtimebase tick数。volatile結果により計算の削除を防ぐ。
 上流の別案`data-sealing_with_output.c`も参照用に保持するが、CMakeの9対象にも含まれず、
 このMakefileの既定パッケージにも含めない。
+
+元のKeystoneソースからの変更理由と改善／劣化の評価は[CHANGES.md](CHANGES.md)を参照。
