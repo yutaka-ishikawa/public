@@ -171,3 +171,6 @@ FID 4000（multimem）の登録・照会・解放と拡張CREATE 2006は
 今後作成する単一機能異常・同FID競合・複数機能間競合・障害注入コードは
 [異常系・競合検証計画](../doc/keystone-abnormal-concurrency-verification-plan.md)を参照。
 将来の配置/targetは計画であり、現在実装済みの実行コマンドとは区別する。
+
+上記の新規異常・競合clientはCで作成し、C++ SDK classを直接使わず既存driver ABIとC libraryを利用する計画。
+C++ SDK固有の資源寿命の検証とは区別する。

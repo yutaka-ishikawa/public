@@ -2,7 +2,8 @@
 
 作成：2026-11-09（日本時間）。**計画書であり、新規試験コードはまだ実装・実行していない。**
 対象ソースの基準commitは`6ac052bc1`。以後の実装では対象commitと成果物hashを更新する。
-対象はK3 QEMU上の実Linux → driver/SDK → OpenSBI → SM → Eyrie/enclave。
+対象はK3 QEMU上の実LinuxのC検証client → driver → OpenSBI → SM → Eyrie/enclave。
+既存SDK経由の回帰結果は基礎資料として使うが、新規clientはC++ SDK classを直接呼ばない。
 SM/PMP/CSR/暗号処理を置き換える模擬試験や、製品C関数をPC上で直接呼ぶ試験は追加しない。
 
 ## 1. 対象機能と既存試験の位置付け
@@ -222,12 +223,14 @@ CmaFreeはLinux他処理でも変動するため補助指標とし、厳密な�
 | S-01 | 2001/2006→2003→3004→2005→3006→2002 | 複数worker・大小領域を有限回反復。各周期に資源台帳と正常再作成を照合 |
 | S-02 | 3001/3002/3003/4000 × 2003/3004/2005/3006 | A/B/Cで別serviceを併走。nonce/commitment/sequenceの所有者と各workerの進行回数を検査 |
 | S-03 | S-01/02 × F-ALLOC/PMP/IPI等 | 最初は1故障だけ発火させ、注入解除後の回復または隔離を確認。複合故障は単発caseの完了後 |
-| S-04 | SDK init/destroy × driver open/close | 同一processのFD/host資源を反復観測しKSB-035を切り分ける。既知不具合が再現すれば既知FAILとして記録し、黙ってSKIPにしない |
+| S-04 | C clientのinit/destroy × driver open/close | 同一processでC client自身のFD/資源とdriverの回収を反復観測する。C++ SDK固有のKSB-035の直接検証には数えない |
 
-SM/driverを測るS-01等はraw driver workerや短命workerと、SDKの長寿命workerを区別する。
-SDKの既知資源増加をSMのCMA/PMP leakと誤認せず、逆にprocess終了による回収だけで
-SDKの反復destroyが全資源を解放したとも扱わない。反復数・最大資源量・wall-clock上限を指定し、
-無期限の「負荷をかけ続ける」コードにはしない。
+SM/driverを測るS-01等はraw driver workerや短命workerと、C clientの長寿命workerを区別する。
+反復数・最大資源量・wall-clock上限を指定し、無期限の負荷コードにはしない。
+既存C++ SDKの資源問題KSB-035をC clientの成功で解消扱いしない。
+SDK固有の反復init/destroy検証には既存SDKを呼ぶ経路が必要で、C-onlyの新規clientとは別範囲に残す。
+既存C++実行ファイルをC coordinatorから回帰実行することは可能だが、それだけでSDK内部の
+長寿命反復や新しい競合を網羅したとはしない。既知不具合が観測されたら既知FAILとして記録する。
 
 ## 8. 作成するコードと配置案
 
@@ -236,11 +239,13 @@ SDKの反復destroyが全資源を解放したとも扱わない。反復数・�
 ```text
 verifications/robustness/
   README.md                  対象、実行、必要profile、既存caseとの対応
-  Makefile                   guest/kernel-module、既存SDK/runtimeを再利用
+  Makefile                   guest/kernel-module、C用SDK資産/runtimeを再利用
   cases.yaml                 A/R/X/F/Sのcase台帳と期待status・資源条件
-  coordinator.cpp            process起動、barrier、affinity、deadline、結果照合
-  workers/lifecycle.cpp      driver経由のCREATE/RUN/RESUME/DESTROY
-  workers/services.cpp       別enclaveのRNG/crypto/multimem/edgecall
+  coordinator.c              process起動、barrier、affinity、deadline、結果照合
+  workers/lifecycle.c         driver経由のCREATE/RUN/RESUME/DESTROY
+  workers/services.c         別enclaveのRNG/crypto/multimem/edgecall
+  common/client.c            ioctl、file配置、mmap、RUN/RESUME、明示cleanup
+  common/report_check.c      共通report型と既存C暗号primitiveで検査
   enclave/workload.c         pattern、nonce、commitment、yield、bounded computation
   runtime/probes.c           raw引数・不正文脈・page table境界の専用hook
   kernel/probe.c             制御されたSM直接競合、所有権/寿命観測
@@ -253,18 +258,45 @@ verifications/robustness/
 
 one-shot hookは必要最小限をSM/driver/QEMUに置き、case台帳から位置を参照する。
 既存testプログラムを丸ごと複製せず、4000等の正常packageや共通extractorを再利用する。
-C/C++は既存K&R・4-column/tab8・単文でもbracesの規約を踏襲する。
+新規のcoordinator、worker、client、report検査、enclave/runtime hook、kernel moduleは全てC。
+Cは既存K&R・4-column/tab8・単文でもbracesの規約を踏襲する。
 
 通常の有限・回復可能caseは将来`make -C verifications guest kernel-modules`と
 `run-all.sh`へ組み込む。fail-stop、長時間stress、fault-profile必須caseは別実行とし、
 標準suiteが勝手にguestを停止する構成にはしない。buildとinstallを分け、
 通常成果物へfault profileを上書きしない。
 
+### 8.1 Cで実装する際の境界
+
+初案の.cppは既存host SDKのEnclave/Params APIをそのまま使う便宜上の選択であり、
+process起動、barrier、affinity、deadline、競合制御にC++が必要だったわけではない。
+ユーザー指定に従い新規検証コードはCとし、C++ wrapperを隠して追加する方式にはしない。
+PythonはQEMU起動・ログ集計、shellはbuild/guest操作に使い、機能を検証するclient本体はCとする。
+
+- coordinatorはfork/waitpid、pipe/eventfd、sched_setaffinity、clock_gettime等のC APIを使う。
+- lifecycle clientはshared/keystone_user.h、sm_call.hの既存ABIからopen/ioctl/mmap/closeを呼ぶ。
+  libkeystone-host.aやEnclave.hppには依存しない。version/size、予約引数、errno/SM statusを検査する。
+- C clientにはloader/runtime/eappのfile読込み、page丸め、領域配置、FINALIZE、RUN/RESUME、
+  OCALL配送、cleanupが必要。既存SDKの実配置契約を参照して最小限を実装する。
+  Eyrie側の本物のELF loaderを置き換えず、正常測定・データ往復・破棄を先に実QEMUで照合する。
+  新clientの配置不具合をSMの不具合として誤認しない。
+- edgecallは既存Cライブラリと共通structを再利用する。process-globalな共有領域設定は
+  C実装でも残るため、独立enclaveのworkerをprocess分離する設計は維持する。
+- report検査はshared/crypto_abi.hの正規型、既存CのSHA3/Ed25519実装を再利用する。
+  C++のReport.hpp/Report.cpp/json11.cppを新clientへリンクしない。C++ verifierと同じ
+  署名対象・chain・pins・nonce・長さ条件をsource-reviewで照合し、正規/改変reportを試験する。
+  純C archiveの利用または同じCソースからのC専用library作成をP0で確定し、暗号方式は新設しない。
+- Makefileは新clientを$(CROSS_COMPILE)gccでbuild/linkする。GNU C11と必要なLinux拡張を
+  明示し、g++やlibstdc++を新clientの必須依存にしない。symbol/link結果も確認する。
+
+既存のC++ SDK・samples・verification実装は、この言語指定だけを理由に全てCへ書き直さない。
+新規Cコードが直接試験するdriver/SM/Eyrieと、既存C++ SDK自身の挙動を明確に区別する。
+
 ## 9. 実装順序と完了条件
 
 | 段階 | 作業 | 成果物・完了条件 |
 | --- | --- | --- |
-| P0：契約/観測設計 | 全11 FID、driver、標準SBIの状態/lock順序/資源/期待statusを調査。既存caseと未実装分を分離 | cases台帳、source-review、合法順序、観測方法、hook位置が確定。未確定契約を既存実装に合わせて黙認しない |
+| P0：契約/観測設計 | C clientの正常配置/測定・C verifierの契約確認、全11 FID、driver、標準SBIの状態/lock順序/資源/期待statusを調査。既存caseと未実装分を分離 | cases台帳、source-review、合法順序、観測方法、hook位置が確定。未確定契約を既存実装に合わせて黙認しない |
 | P1：lifecycle/driver | A-2001/2002/2003/2005/2006/3004/3006/4000の各群、Rのlifecycle、X-01〜08/14〜17を優先。まずdriver直列化、次にSM競合 | 一度だけ実行/回収、所有者拒否、通常再作成、実際の重なりの証跡。新たな不具合はKSBへ記録して修正後再試験 |
 | P2：障害注入とservice競合 | F-ALLOC/COPY/PMP/IPI、R-3001/02/03、X-09〜12/18/20、RNG/provider faultを実装 | 実際の発火、bounded failure、workspace分離、回復/隔離。別guestのfail-stopも観測可能 |
 | P3：混合・拡充 | X-13/19、全hart組合せ、有限stressと複合faultを段階追加 | 再現seed・反復回数・coverage、資源の傾向、最終通常suite回帰を保存 |
