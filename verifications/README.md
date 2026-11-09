@@ -160,3 +160,7 @@ STOPの追加試験・source確認・未実行範囲は [SBI 3004](sbi-3004/READ
 Linux SstcとSM M_TIMERの共存試験は [設計・手順](../doc/keystone-sstc-coexistence.md) を参照。
 自動runnerは `--sstc on`（既定）／`--sstc off` を指定できる。3004の現在の専用試験は
 11 OCALL、通常timer区間とguest timer取消し区間、host sleep/wakeupを含む。
+
+package展開は `extract-package.sh` がlocal snapshotの長さ・checksum・gzipを検査して実施する。
+makeselfのpipe/dd短読取り経路を避ける。SMの模擬処理ではない。
+[offログ調査と実Linux on/off結果](../doc/keystone-verification-off-log-followup.md) を参照。

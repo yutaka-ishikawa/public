@@ -130,3 +130,10 @@ Linuxを含む全suite・11 OCALL試験の成功をユーザー確認済みと�
 今回の申告にコマンド／ログの添付はなく、両profileの実行有無は未明示。
 `--sstc off`を含む両profileのLinux全suite成功や、複数enclaveの競合・実機のPASSへは広げない。
 上記2 profileのHEAD・manifest・serialログを保存し、対象profileを記録する。
+
+## 追加のLinux実行確認
+
+提供された明示offログではtimer区間と展開で失敗したため、旧全PASS申告とは分けた。
+展開readerを修正した新規クラウドLinuxでon/off各3 boot全suiteと乱数7ケースが全PASS。
+通常trace=0版のon/off全suiteも確認した。元のtimer失敗は再現せず、artifact照合は未完了。
+[調査と実行結果](keystone-verification-off-log-followup.md) を参照。実機は未確認。

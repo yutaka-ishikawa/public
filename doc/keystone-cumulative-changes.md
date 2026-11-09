@@ -381,3 +381,11 @@ Linux全suiteの実行と実機動作は未確認。[設計・手順](keystone-s
 Linux全suite・11 OCALLのSTOP専用試験をユーザー成功確認済みへ更新した。
 実行コマンド／ログは今回未添付で、on/off両profileの実行有無は未明示。
 実機や競合の網羅試験は未確認。[移植状況](keystone-porting-plan.md)を参照。
+
+## 明示offログの調査・展開reader修正と実Linux on/off確認
+
+snapshot後も発生するmakeselfのpipe短読取りを専用readerで除去（KSB-029）。
+長さ・checksum・gzipの検査は維持する。firmware事前検査とboot情報表示も追加。
+新規クラウドLinuxでon/off各3 boot全suite・乱数7ケース、通常trace=0版の追加全suiteがPASS。
+SM timer自体は今回変更しておらず、提供環境の取消し後0回は再現しないため
+artifact照合をKSB-031に残す。[調査・結果](keystone-verification-off-log-followup.md)。

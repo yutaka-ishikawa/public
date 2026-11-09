@@ -62,12 +62,19 @@ def evaluate_output(captured, backend, error):
 def run_case(args, case):
     name, backend, error, overrides = case
     prefix = args.prefix.resolve()
+    logpath = args.logs / f"{name}.log"
+    logpath.write_text('')
     bios = prefix / f"firmware/k3/rng-{backend}/fw_dynamic.bin"
+    firmware_data = bios.read_bytes()
+    firmware_hash = hashlib.sha256(firmware_data).hexdigest()
+    if b'host=%s enclave=mtimer slice-us=10000' not in firmware_data:
+        raise RuntimeError('Selected RNG firmware lacks Sstc/SM timer coexistence: '
+                           + str(bios) + ' sha256=' + firmware_hash
+                           + '; run make rng and make install-rng')
     qemu = prefix / "bin/qemu-system-riscv64"
     kernel = prefix / "boot/k3/Image"
     record = {"case": name, "expected_errno": error, "pass": False,
               "sha256": {str(p): sha256(p) for p in (bios, qemu, kernel)}}
-    logpath = args.logs / f"{name}.log"
     record["log"] = str(logpath)
     with tempfile.TemporaryDirectory(prefix="rng-qemu-") as tmp:
         disk = Path(tmp) / "rootfs.qcow2"

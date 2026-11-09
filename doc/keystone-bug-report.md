@@ -54,8 +54,9 @@
 | KSB-026 | native入口でgp未初期化のまま緩和済み命令を実行 | SDK/native build統合 | 修正済 |
 | KSB-027 | STOPの要求検査前の状態変更・未使用a1の不定値 | SM取込／OpenSBI移植契約 | 修正済 |
 | KSB-028 | QEMUでM_TIMER方針のplatform hookが未適用 | OpenSBI移植 | 修正済 |
-| KSB-029 | 共有上のmakeselfパッケージで断続的MD5不一致 | 試験環境・原因未確定 | 要確認 |
+| KSB-029 | makeselfの短いpipe readでchecksum誤判定・展開切断 | 外部展開tool／試験経路 | 修正済 |
 | KSB-030 | trap_vector_enclaveが4-byte未整列でmtvecへ設定されない | SM/OpenSBIリンク移植 | 修正済 |
+| KSB-031 | Sstc offのLinux経路でtimer取消し後の中断0 | 共存経路・artifact一致を調査中 | 要確認 |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
 KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
@@ -422,17 +423,21 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
 - 2026-11-09追記：Sstc共存対応後の現行Linux全verification PASSをユーザーから受領。
   両Sstc profileの実行有無は未明示。実機・競合の網羅成功は含めない。
 
-## KSB-029: 共有パッケージの断続的MD5不一致
+## KSB-029: makeselfのpipe短読取りでpayloadを切断
 
-- 状態：要確認。対象はゲストのmakeself展開と9p共有。
-- 根拠：最新ユーザーlogの乱数7ケース中wtm-not-readyだけが、SBI実行前のMD5不一致で終了2。
-  他6ケースは同じrandom.keでPASS。ホスト側ファイルの同時更新や読み取り条件は不明。
-- 原因：未確定。makeselfのMS_ddはpipe上のddに固定block数を指定しfullblockを指定しない。
-  短いreadの扱いや共有上の変更を調べる必要があり、MD5不一致だけでSM故障とはしない。
-- 対策実装済み：4つのguest runnerでパッケージをゲストローカルへsnapshotし、
-  既存checksum検査を維持して展開する。共有からのコピー後も不一致なら失敗する。
-  不一致を無視したり、成功へ置き換えたりしない。
-- 未確認：元の断続的現象の再現と解消。ローカルsnapshotだけで全原因を解消したとはしない。
+- 状態：修正済（専用readerへ置換）。
+- 対象：4種類のguest runnerとmakeself生成scriptのMS_dd経路。
+- 根拠：追加のoffログではsnapshot対策後もMD5不一致と、MD5成功後のgzip途中終了が発生。
+  MS_ddのpipe内ddは短いreadもcount=1に数えるため、指定バイト数の前に終了できる。
+  実ddへfragmentを順次渡す試験で、32 readが32KiBではなく3104 bytesで終了することを確認。
+- 由来：確認したmakeself生成scriptの読取り契約。SMや乱数backendの失敗ではない。
+- 修正：`verifications/extract-package.sh`でsnapshotからpayloadをEOFまで取り出し、
+  長さ・MD5・任意SHA256・gzipを検査後、その同じlocal fileをtar展開する。
+  checksumを無視せず、不一致は失敗とする。単一gzip payload以外は拒否する。
+- 検証：4つのtool regression成功。実packageの内容hash一致を確認。
+  新しいLinuxゲストでSstc on/offそれぞれ3 boot全suite＋乱数7ケースを実行し全PASS。
+- 限界：元の環境での全ての破損要因を独立に特定した意味ではなく、実ファイルが壊れていれば
+  引き続き失敗する。[調査・結果](keystone-verification-off-log-followup.md)。
 
 ## KSB-030: enclave trap vectorの4-byte整列不足
 
@@ -454,15 +459,31 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
 - 2026-11-09追記：Sstc共存対応後の現行Linux全verification PASSをユーザーから受領。
   両Sstc profileの実行有無は未明示。実機・競合の網羅成功は含めない。
 
-## 追加のユーザー検証報告（2026-11-09）
+## 以前の構成未指定のユーザー検証報告（2026-11-09）
 
 Sstc共存実装 `bff3e8dcb` の対応後、現行verification全PASSとのユーザー報告を受領。
 KSB-027／028／030に関連するSTOP・timer共存の現行Linux suiteについて、
 従来の実行待ちをユーザー成功確認済みへ更新する。
 KSB-029のchecksum不一致も現行試験での再発報告はないが、根本原因は未確定のため
-要確認の分類は維持する。全PASSだけを根本原因の解消証明とは扱わない。
+この時点では要確認の分類を維持した。後続ログと短読取り修正はKSB-029／031に記録する。
 今回の報告にはコマンド／ログ添付がなく、Sstc on/off両profileの実行有無は未明示。
 実機・競合の網羅試験やクラウド側での独立再実行の成功へは広げない。
+
+## KSB-031: Sstc offのLinux統合試験で中断不足
+
+- 状態：要確認。今回のユーザー添付log.txtは明示的な `--all --sstc off`。
+- 観測：qemu-dev 2 bootはarmed区間43回、cancel区間0回（exit20）。
+  unavailableはarmed区間0回（exit18）。後続crypto/edgecallは未到達。
+- 別件：乱数zkrとzkr-absentは展開時のgzip途中終了／MD5不一致で、SBI実行前に失敗。
+- 原因：未確定。独立MTIMERの実行経路と、インストール済みfirmwareの一致を確認する。
+  最小S-mode runnerのoff成功だけをLinux経路の成功へ広げない。
+- 対応：選択BINの共存実装文字列を事前検査し、不一致時にpath/SHA256と再build案内を表示。
+  bootのtimer情報を表示し、事前検査失敗時に古いserialログを再表示しない。
+- 検証：新しいLinux環境でon/offの3 boot全suite＋乱数7ケース、さらに通常trace=0版で
+  on/off全suiteがPASS。SM timerコードは今回変更していない。元の環境の失敗は再現せず。
+- 未確認：提供された環境のboot情報・artifact hashとの一致。古いfirmwareが原因と
+  断定せず、要確認を維持する。[調査・結果](keystone-verification-off-log-followup.md)。
+- 検証範囲：前回の構成未指定の全PASS申告は履歴として維持するが、今回の明示off失敗を含む成功とはしない。
 
 ## 今後の必須更新手順
 

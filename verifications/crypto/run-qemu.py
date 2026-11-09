@@ -18,12 +18,19 @@ def run(args, name, provider):
     record = {'case': name, 'provider': provider, 'sstc': args.sstc, 'pass': False}
     log = args.logs / (name + '.log')
     record['log'] = str(log)
+    log.write_text('')
     prefix = args.prefix.resolve()
     bios = prefix / ('firmware/k3/crypto-qemu-dev/fw_dynamic.bin' if provider == 'qemu-dev'
                      else 'firmware/k3/fw_dynamic.bin')
     paths = [bios, prefix / 'bin/qemu-system-riscv64', prefix / 'boot/k3/Image',
              ROOT / 'verifications/crypto/build/crypto.ke']
     try:
+        firmware_data = bios.read_bytes()
+        record['firmware_sha256'] = hashlib.sha256(firmware_data).hexdigest()
+        if b'host=%s enclave=mtimer slice-us=10000' not in firmware_data:
+            raise RuntimeError('Selected firmware lacks Sstc/SM timer coexistence: '
+                               + str(bios) + ' sha256=' + record['firmware_sha256']
+                               + '; run make build and make install')
         record['sha256'] = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
         with tempfile.TemporaryDirectory(prefix='crypto-qemu-') as tmp:
             overlay = Path(tmp) / 'rootfs.qcow2'
@@ -123,7 +130,8 @@ def main():
         serial = Path(result['log'])
         if serial.is_file():
             for line in serial.read_text(errors='replace').splitlines():
-                if line.startswith(('PASS ', 'FAIL ', 'SKIP ')):
+                if line.startswith(('PASS ', 'FAIL ', 'SKIP ', 'INFO HOST TIMER:',
+                                    '[SM/TIMER]', '[SM/CRYPTO] provider=', 'Boot HART ISA Extensions')):
                     print('  ' + line, flush=True)
         if not result['pass']:
             print('Log:', result['log'], flush=True)

@@ -75,3 +75,11 @@ snapshotしてからchecksum検査・展開する。checksum不一致は引き�
 RUN/RESUMEで独立MTIMERを設定し、STOP/EXITでhost timerを復元する。
 最初の9 OCALL試験は、guest timerキャンセル後の中断とhost sleep/wakeupを含む11 OCALLへ拡張。
 QEMU最小実行のon/off確認と、未実行のLinux全suiteを区別して記録する。
+
+## 明示offログの追加調査と実Linuxでの確認
+
+提供されたoffログでは通常timer区間または取消し後区間で失敗した。
+新規クラウドLinuxでon/off各3 boot全suite・乱数7ケースと、通常trace=0版のon/off全suiteがPASS。
+SM timerコードは変更しておらず、元の失敗は再現しないためartifact照合をKSB-031に残す。
+展開時の短読取りはKSB-029として専用readerへ変更した。
+[調査・結果](keystone-verification-off-log-followup.md)を参照。

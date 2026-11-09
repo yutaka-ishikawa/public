@@ -1,0 +1,174 @@
+{
+  "scope": "Actual K3 QEMU Linux, driver, OpenSBI, SM and enclaves; no SM emulation",
+  "date_utc": "2026-11-09",
+  "source_base": "79affb718 with archive-reader and firmware-diagnostic changes",
+  "kernel_symbols": "matching vmlinux.symvers via KBUILD_EXTRA_SYMBOLS; no unresolved-symbol bypass",
+  "kernel_sha256": "0a4f142c939de321041d29bf9b2449ccd9515f5f79182a3810cbdb4cfb428d3c",
+  "driver_sha256": "f58f30b29958c50eb3f597de78eb6fcd39986d5b5c179c9775ef358f6faddd0c",
+  "profiles": {
+    "off": {
+      "guest_suite": [
+        {
+          "case": "qemu-dev-boot1",
+          "pass": true,
+          "guest_exit": 0,
+          "sm_trace": false,
+          "timer_interruptions": {
+            "armed": 16,
+            "cancelled": 15
+          },
+          "count_note": "null means the debug trace interleaved the serial count; exit=0 verifies guest assertions",
+          "firmware_sha256": "9cc3c9d386633d22cd34595d0e60c93be1f790ac8cff92f29ba9463609d5d5f8"
+        },
+        {
+          "case": "qemu-dev-boot2",
+          "pass": true,
+          "guest_exit": 0,
+          "sm_trace": false,
+          "timer_interruptions": {
+            "armed": 16,
+            "cancelled": 15
+          },
+          "count_note": "null means the debug trace interleaved the serial count; exit=0 verifies guest assertions",
+          "firmware_sha256": "9cc3c9d386633d22cd34595d0e60c93be1f790ac8cff92f29ba9463609d5d5f8"
+        },
+        {
+          "case": "unavailable",
+          "pass": true,
+          "guest_exit": 0,
+          "sm_trace": true,
+          "timer_interruptions": {
+            "armed": null,
+            "cancelled": null
+          },
+          "count_note": "null means the debug trace interleaved the serial count; exit=0 verifies guest assertions",
+          "firmware_sha256": "71143028c1b264c30d14126d8c22c4c229d5bb3c7db784cfca74392a88db5fb7"
+        }
+      ],
+      "rng_cases": [
+        {
+          "case": "zkr",
+          "pass": true
+        },
+        {
+          "case": "jupiter2",
+          "pass": true
+        },
+        {
+          "case": "counter",
+          "pass": true
+        },
+        {
+          "case": "zkr-absent",
+          "pass": true
+        },
+        {
+          "case": "wtm-absent",
+          "pass": true
+        },
+        {
+          "case": "wtm-not-ready",
+          "pass": true
+        },
+        {
+          "case": "wtm-zero",
+          "pass": true
+        }
+      ],
+      "additional_normal_trace0": {
+        "case": "unavailable",
+        "pass": true,
+        "guest_exit": 0,
+        "sm_trace": false,
+        "timer_interruptions": {
+          "armed": 16,
+          "cancelled": 16
+        },
+        "count_note": "null means the debug trace interleaved the serial count; exit=0 verifies guest assertions",
+        "firmware_sha256": "0baf1572313706d4e40dd45cea28c0f8fb9101e4b7ac8b0e4caec082b8e26091"
+      }
+    },
+    "on": {
+      "guest_suite": [
+        {
+          "case": "qemu-dev-boot1",
+          "pass": true,
+          "guest_exit": 0,
+          "sm_trace": false,
+          "timer_interruptions": {
+            "armed": 17,
+            "cancelled": 16
+          },
+          "count_note": "null means the debug trace interleaved the serial count; exit=0 verifies guest assertions",
+          "firmware_sha256": "9cc3c9d386633d22cd34595d0e60c93be1f790ac8cff92f29ba9463609d5d5f8"
+        },
+        {
+          "case": "qemu-dev-boot2",
+          "pass": true,
+          "guest_exit": 0,
+          "sm_trace": false,
+          "timer_interruptions": {
+            "armed": 16,
+            "cancelled": 15
+          },
+          "count_note": "null means the debug trace interleaved the serial count; exit=0 verifies guest assertions",
+          "firmware_sha256": "9cc3c9d386633d22cd34595d0e60c93be1f790ac8cff92f29ba9463609d5d5f8"
+        },
+        {
+          "case": "unavailable",
+          "pass": true,
+          "guest_exit": 0,
+          "sm_trace": true,
+          "timer_interruptions": {
+            "armed": null,
+            "cancelled": null
+          },
+          "count_note": "null means the debug trace interleaved the serial count; exit=0 verifies guest assertions",
+          "firmware_sha256": "71143028c1b264c30d14126d8c22c4c229d5bb3c7db784cfca74392a88db5fb7"
+        }
+      ],
+      "rng_cases": [
+        {
+          "case": "zkr",
+          "pass": true
+        },
+        {
+          "case": "jupiter2",
+          "pass": true
+        },
+        {
+          "case": "counter",
+          "pass": true
+        },
+        {
+          "case": "zkr-absent",
+          "pass": true
+        },
+        {
+          "case": "wtm-absent",
+          "pass": true
+        },
+        {
+          "case": "wtm-not-ready",
+          "pass": true
+        },
+        {
+          "case": "wtm-zero",
+          "pass": true
+        }
+      ],
+      "additional_normal_trace0": {
+        "case": "unavailable",
+        "pass": true,
+        "guest_exit": 0,
+        "sm_trace": false,
+        "timer_interruptions": {
+          "armed": 16,
+          "cancelled": 15
+        },
+        "count_note": "null means the debug trace interleaved the serial count; exit=0 verifies guest assertions",
+        "firmware_sha256": "0baf1572313706d4e40dd45cea28c0f8fb9101e4b7ac8b0e4caec082b8e26091"
+      }
+    }
+  }
+}

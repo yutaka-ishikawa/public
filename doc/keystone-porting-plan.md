@@ -82,6 +82,15 @@ python3 verifications/crypto/run-qemu.py --all
 Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり、SMの模擬実行ではない。
 ただしQEMU成功をMilk-V Jupiter2実機の成功とは扱わない。
 
+### 明示的なSstc offログとクラウドでの追加実行
+
+その後、ユーザーの `--all --sstc off` ログではSTOP timer区間とpackage展開で失敗した。
+従来の全PASS申告を、このoff実行の成功へは広げない。
+展開のpipe短読取りを修正し、新規Linux環境でon/offそれぞれ3 boot全suite＋乱数7ケースを
+全PASS確認した。通常trace=0版のon/off全suiteも確認済み。
+元の環境のtimer取消し後0回は再現せず、artifact照合は継続事項（KSB-031）。
+[調査・hash付き結果](keystone-verification-off-log-followup.md)を参照。
+
 ## 3. 再利用方針：KeystoneとOpenSBI
 
 今後も最初に同梱OpenSBIを調べ、同じ契約で利用できる機能を優先する。
@@ -111,7 +120,7 @@ Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり�
 | samples/sealing・samples/attestation | 未追加 | 現在のsamplesはhelloworldのみ。 |
 | IO／LINUX／NET syscallオプション | optional・範囲確認待ち | Eyrieに既存実装あり。全Linux syscallの移植という要求とは分け、必要なAPIを選ぶ。 |
 | CPU hotplug／suspend | 現在の固定オンライン方針の対象外 | 拒否解除だけではPMP状態とHSMの整合が保証されない。 |
-| Linux Sstc／SM M_TIMER共存 | [bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)で実装済み、現行QEMU全verificationはユーザーPASS確認済み | [共存実装](keystone-sstc-coexistence.md)。最小実行でon/offを確認し、その後Linux全suiteの全PASS報告を受領。両profileのLinux全suite実行有無は未明示。実機とenclaveへのSstc直接公開は対象外。 |
+| Linux Sstc／SM M_TIMER共存 | [bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)で実装済み、現行QEMU全verificationはユーザーPASS確認済み | [共存実装](keystone-sstc-coexistence.md)。最小実行でon/offを確認し、その後Linux全suiteの全PASS報告を受領。追加のクラウドLinux実行でon/off全suiteを確認済み。提供offログの失敗はartifact照合待ち。実機とenclaveへのSstc直接公開は対象外。 |
 | FPU／Vectorの状態管理 | 対応範囲の調査・拡張待ち | 汎用整数contextの動作からFP/Vectorの保存・復元成功は推定しない。 |
 | DMA／IOPMP | 実機向け未整備 | CPU PMPの試験ではデバイスDMA隔離を検証できない。 |
 | 単一enclaveの多スレッド | 上流にもある制約 | `MAX_ENCL_THREADS=1`。複数enclaveの実行と別の拡張で、K3だけの移植漏れとはしない。 |
@@ -126,7 +135,7 @@ QEMU作業列と実機作業列は並行可能だが、実機資料がない部�
 
 1. 現在の全suiteを基準として、HEADとartifact manifestを保存する。
 2. 現行3004／Sstc共存suiteはユーザー全PASS確認済み。
-   `--sstc off`を含む両profileのLinux実行記録を揃え、全hart・migration等の範囲を拡充する。
+   クラウドで両profileのLinux実行記録を追加済み。提供off失敗のartifact照合と、全hart・migration等の範囲拡充を進める。
    続いて非0 EXIT、複数enclaveの交互実行、RUN中DESTROY拒否、資源枯渇後の回収を追加する。
 3. 暗号providerの片側ready・初期化失敗、鍵/root変更・SM更新時の鍵導出の期待動作、
    Zkr WAIT/DEAD等、既存matrixが通さない異常経路を専用profileで確認する。
