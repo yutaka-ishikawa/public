@@ -138,3 +138,10 @@ Linuxを含む全suite・11 OCALL試験の成功をユーザー確認済みと�
 展開readerを修正した新規クラウドLinuxでon/off各3 boot全suiteと乱数7ケースが全PASS。
 通常trace=0版のon/off全suiteも確認した。元のtimer失敗は再現せず、artifact照合は未完了。
 [調査と実行結果](keystone-verification-off-log-followup.md) を参照。実機は未確認。
+
+## 修正後のユーザー再実行結果（2026-11-09）
+
+`bb84fa987`の対応後、直前の `--all --sstc off` 再確認手順に対してユーザーから全PASSを受領。
+現行環境での実行失敗は再発しておらず、移植作業の実行待ち項目から外す。
+過去のtimer失敗の原因と当時のartifact一致は未確定の履歴として残す。
+実機・全hart固定実行・競合の網羅検証の完了を意味しない。

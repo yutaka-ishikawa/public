@@ -102,3 +102,10 @@ python3 verifications/crypto/run-qemu.py --all --sstc on \
 
 失敗が続く場合は、新表示の `[SM/TIMER]` 行と各manifestのfirmware SHA256で
 今回の実行結果と照合する。test中にpackageやfirmwareをbuild/installして書き換えない。
+
+## 修正後のユーザー再実行結果（2026-11-09）
+
+`bb84fa987`の対応後、直前の `--all --sstc off` 再確認手順に対してユーザーから全PASSを受領。
+現行環境での実行失敗は再発しておらず、移植作業の実行待ち項目から外す。
+過去のtimer失敗の原因と当時のartifact一致は未確定の履歴として残す。
+実機・全hart固定実行・競合の網羅検証の完了を意味しない。

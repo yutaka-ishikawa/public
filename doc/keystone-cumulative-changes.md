@@ -389,3 +389,10 @@ snapshot後も発生するmakeselfのpipe短読取りを専用readerで除去（
 新規クラウドLinuxでon/off各3 boot全suite・乱数7ケース、通常trace=0版の追加全suiteがPASS。
 SM timer自体は今回変更しておらず、提供環境の取消し後0回は再現しないため
 artifact照合をKSB-031に残す。[調査・結果](keystone-verification-off-log-followup.md)。
+
+## 修正後のユーザー再実行結果（2026-11-09）
+
+`bb84fa987`の対応後、直前の `--all --sstc off` 再確認手順に対してユーザーから全PASSを受領。
+現行環境での実行失敗は再発しておらず、移植作業の実行待ち項目から外す。
+過去のtimer失敗の原因と当時のartifact一致は未確定の履歴として残す。
+実機・全hart固定実行・競合の網羅検証の完了を意味しない。

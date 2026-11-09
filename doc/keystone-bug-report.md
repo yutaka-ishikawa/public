@@ -56,7 +56,7 @@
 | KSB-028 | QEMUでM_TIMER方針のplatform hookが未適用 | OpenSBI移植 | 修正済 |
 | KSB-029 | makeselfの短いpipe readでchecksum誤判定・展開切断 | 外部展開tool／試験経路 | 修正済 |
 | KSB-030 | trap_vector_enclaveが4-byte未整列でmtvecへ設定されない | SM/OpenSBIリンク移植 | 修正済 |
-| KSB-031 | Sstc offのLinux経路でtimer取消し後の中断0 | 共存経路・artifact一致を調査中 | 要確認 |
+| KSB-031 | 過去のSstc offでtimer取消し後の中断0 | 現行は再実行全PASS・過去原因未確定 | 要確認（履歴のみ） |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
 KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
@@ -471,19 +471,23 @@ KSB-029のchecksum不一致も現行試験での再発報告はないが、根�
 
 ## KSB-031: Sstc offのLinux統合試験で中断不足
 
-- 状態：要確認。今回のユーザー添付log.txtは明示的な `--all --sstc off`。
+- 状態：過去原因のみ要確認。`bb84fa987`対応後の再実行はユーザー全PASS確認済み。
+  当初の添付log.txtは明示的な `--all --sstc off`。
 - 観測：qemu-dev 2 bootはarmed区間43回、cancel区間0回（exit20）。
   unavailableはarmed区間0回（exit18）。後続crypto/edgecallは未到達。
 - 別件：乱数zkrとzkr-absentは展開時のgzip途中終了／MD5不一致で、SBI実行前に失敗。
-- 原因：未確定。独立MTIMERの実行経路と、インストール済みfirmwareの一致を確認する。
+- 過去の原因：未確定。現行ではクラウドとユーザー環境の双方で全PASS。
   最小S-mode runnerのoff成功だけをLinux経路の成功へ広げない。
 - 対応：選択BINの共存実装文字列を事前検査し、不一致時にpath/SHA256と再build案内を表示。
   bootのtimer情報を表示し、事前検査失敗時に古いserialログを再表示しない。
 - 検証：新しいLinux環境でon/offの3 boot全suite＋乱数7ケース、さらに通常trace=0版で
   on/off全suiteがPASS。SM timerコードは今回変更していない。元の環境の失敗は再現せず。
 - 未確認：提供された環境のboot情報・artifact hashとの一致。古いfirmwareが原因と
-  断定せず、要確認を維持する。[調査・結果](keystone-verification-off-log-followup.md)。
+  断定せず、履歴の要確認を維持する。現行の実行失敗・作業阻害項目にはしない。[調査・結果](keystone-verification-off-log-followup.md)。
 - 検証範囲：前回の構成未指定の全PASS申告は履歴として維持するが、今回の明示off失敗を含む成功とはしない。
+
+- 2026-11-09追加：直前に案内したoff再確認手順に対し、ユーザーから全PASSを受領。
+  新しいログ・manifestは未添付で、過去の原因が証明された意味ではない。
 
 ## 今後の必須更新手順
 

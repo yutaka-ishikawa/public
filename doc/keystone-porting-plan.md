@@ -1,7 +1,7 @@
 # K3 Keystone移植状況と残作業計画
 
 実装基準：本リポジトリ `bff3e8dcb`（Linux Sstc／SM M_TIMER共存まで）。
-検証状況更新：2026-11-09、共存対応後の全verification PASSをユーザーから受領。
+検証状況更新：2026-11-09、`bb84fa987`の展開・診断修正後、off再確認手順に対する全verification PASSをユーザーから受領。
 初回調査は `8b5e1d870`、当時の上流比較対象はKeystone
 `b8c2385355b2afb5b94a4e5dc503936f1502b972`。
 旧計画の「乱数・attestation・sealingが未実装」は現在には当てはまらない。
@@ -50,21 +50,22 @@ Keystone拡張IDは `0x08424b45`。表の番号はFID。
 
 ## 2. 現在の検証結果と再現方法
 
-2026-11-09、Linux Sstc／SM M_TIMER共存対応後に、ユーザーから
-「verificationsは全てPASS」との報告を受領した。Linuxゲスト・driver・OpenSBI・
-SM・Eyrie/enclaveを通る**現行QEMU全verificationの成功をユーザー確認済み**とする。
-3004の11 OCALL試験、タイマー取消し後も継続する中断・RESUME、ホストのsleep/wakeupを
-含む現行suiteについて、従来の「Linux全suite再実行待ち」を解消した。
+2026-11-09、展開・診断修正 `bb84fa987` の後、直前に案内した
+`run-qemu.py --all --sstc off` の再確認手順に対し、ユーザーから「全パス」との報告を受領した。
+**現行のLinuxゲスト・driver・OpenSBI・SM・Eyrie/enclaveを通る全verificationは
+ユーザー再実行でも成功確認済み**。以前の明示offログの失敗は現行環境では再発していない。
 
-直前に案内した自動runnerの既定は `--sstc on`。今回の報告には実行コマンド・
-serialログ・manifestの添付がなく、`--sstc off` も実行したかは明示されていない。
-したがって、**両profileのLinux全suite成功を確認済みとはしない**。
-クラウド側で独立にLinux全suiteを再実行した結果でもなく、バイナリのHEAD・hashとの
-一致を独立に確定した結果でもない。実機、全hart・migration・競合の網羅試験は別途残る。
+クラウドでもSstc on/off各3 boot全suite＋乱数7ケース、通常trace=0版のon/off全suiteを
+確認済み。3004の11 OCALL、通常／timer取消し後の中断・RESUME、host sleep/wakeup、
+cryptoと2/256 MiBのedgecall・PMP参照拒否を含む。
 
-履歴として、`9455ab462`後にはcrypto 3 bootと乱数7ケースの全PASSログを受領済み。
-その後3004追加時のtimer区間0回による失敗を `e4a736519`で修正し、
-`bff3e8dcb`でSstc共存へ更新した。今回の全PASS申告は、この最後の対応後の報告として記録する。
+今回のユーザー報告は成功の申告であり、新しいserialログ・manifestは未添付。
+過去のtimer取消し後0回の原因・当時のartifact一致までは確定しないが、
+現行の移植作業を止める未解決の実行失敗としては扱わない。
+実機、全hart固定実行・migration・競合の網羅検証は引き続き別の残作業である。
+
+履歴：`9455ab462`後の全PASS、3004追加後のtimer失敗、`e4a736519`の修正、
+`bff3e8dcb`のSstc共存、`bb84fa987`の展開・診断修正を経て、今回の再実行全PASSに到達した。
 
 再現手順（既定のSstc有効profile）：
 
@@ -88,7 +89,8 @@ Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり�
 従来の全PASS申告を、このoff実行の成功へは広げない。
 [bb84fa987](https://github.com/yutaka-ishikawa/public/commit/bb84fa987)で展開のpipe短読取りとfirmware診断を修正し、新規Linux環境でon/offそれぞれ3 boot全suite＋乱数7ケースを
 全PASS確認した。通常trace=0版のon/off全suiteも確認済み。
-元の環境のtimer取消し後0回は再現せず、artifact照合は継続事項（KSB-031）。
+その後、ユーザー環境でも再実行全PASSを確認。元のtimer取消し後0回の原因・artifact一致は
+未確定の履歴としてKSB-031に残し、現行の実行待ち項目からは外す。
 [調査・hash付き結果](keystone-verification-off-log-followup.md)を参照。
 
 ## 3. 再利用方針：KeystoneとOpenSBI
@@ -120,7 +122,7 @@ Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり�
 | samples/sealing・samples/attestation | 未追加 | 現在のsamplesはhelloworldのみ。 |
 | IO／LINUX／NET syscallオプション | optional・範囲確認待ち | Eyrieに既存実装あり。全Linux syscallの移植という要求とは分け、必要なAPIを選ぶ。 |
 | CPU hotplug／suspend | 現在の固定オンライン方針の対象外 | 拒否解除だけではPMP状態とHSMの整合が保証されない。 |
-| Linux Sstc／SM M_TIMER共存 | [bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)で実装済み、現行QEMU全verificationはユーザーPASS確認済み | [共存実装](keystone-sstc-coexistence.md)。最小実行でon/offを確認し、その後Linux全suiteの全PASS報告を受領。追加のクラウドLinux実行でon/off全suiteを確認済み。提供offログの失敗はartifact照合待ち。実機とenclaveへのSstc直接公開は対象外。 |
+| Linux Sstc／SM M_TIMER共存 | [bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)で実装済み、現行QEMU全verificationはユーザーPASS確認済み | [共存実装](keystone-sstc-coexistence.md)。最小実行でon/offを確認し、その後Linux全suiteの全PASS報告を受領。追加のクラウドLinux実行でon/off全suiteを確認済み。提供offログの失敗後、ユーザー再実行でも全PASS。過去原因は未確定。実機とenclaveへのSstc直接公開は対象外。 |
 | FPU／Vectorの状態管理 | 対応範囲の調査・拡張待ち | 汎用整数contextの動作からFP/Vectorの保存・復元成功は推定しない。 |
 | DMA／IOPMP | 実機向け未整備 | CPU PMPの試験ではデバイスDMA隔離を検証できない。 |
 | 単一enclaveの多スレッド | 上流にもある制約 | `MAX_ENCL_THREADS=1`。複数enclaveの実行と別の拡張で、K3だけの移植漏れとはしない。 |
@@ -135,7 +137,7 @@ QEMU作業列と実機作業列は並行可能だが、実機資料がない部�
 
 1. 現在の全suiteを基準として、HEADとartifact manifestを保存する。
 2. 現行3004／Sstc共存suiteはユーザー全PASS確認済み。
-   クラウドで両profileのLinux実行記録を追加済み。提供off失敗のartifact照合と、全hart・migration等の範囲拡充を進める。
+   クラウドで両profileのLinux実行記録を追加済み。ユーザーのoff再実行も全PASS。次は全hart・migration等の範囲拡充を進める。
    続いて非0 EXIT、複数enclaveの交互実行、RUN中DESTROY拒否、資源枯渇後の回収を追加する。
 3. 暗号providerの片側ready・初期化失敗、鍵/root変更・SM更新時の鍵導出の期待動作、
    Zkr WAIT/DEAD等、既存matrixが通さない異常経路を専用profileで確認する。
@@ -254,4 +256,4 @@ QEMU: N0 回帰拡充 → N1 サンプル統合 → N2 multimem → N3 paging
 QEMU `--sstc on|off` と11 OCALLの専用試験を実装。
 最小の実SM/Eyrie経路で両profileの中断とhost期限復元を確認した。
 [設計・検証範囲](keystone-sstc-coexistence.md) を参照。共存対応後のLinux全suiteはユーザー全PASS確認済み。
-`--sstc off`を含む両profileの実行有無は未明示、実機は未確認。
+その後、off再確認手順に対するユーザー全PASS報告も受領済み。実機は未確認。
