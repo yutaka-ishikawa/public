@@ -1,0 +1,100 @@
+{
+  "n": 1536,
+  "nb": 192,
+  "p": 1,
+  "q": 2,
+  "ranks": 2,
+  "cpus": [
+    0,
+    1
+  ],
+  "depth": 1,
+  "alignment_doubles": 8,
+  "maximum_balanced_n": 16128,
+  "matrix_bytes": 18886656,
+  "estimated_bytes": 101371312,
+  "budget_bytes": 2304978944,
+  "memory": {
+    "MemTotal": 8589934592,
+    "MemAvailable": 3378720768
+  },
+  "ram_cap_gib": 32.0,
+  "reserve_gib": 2.0,
+  "available_reserve_gib": 1.0,
+  "alignment_step": 384,
+  "smoke": true
+} 
+Results: /workspace/work/hpl/package-test/hpl-jupiter2-riscv64/results/20261109T093134.688518Z
+HPL_BIND local_rank=0 cpu=0
+HPL_BIND local_rank=1 cpu=1
+================================================================================
+HPLinpack 2.3  --  High-Performance Linpack benchmark  --   December 2, 2018
+Written by A. Petitet and R. Clint Whaley,  Innovative Computing Laboratory, UTK
+Modified by Piotr Luszczek, Innovative Computing Laboratory, UTK
+Modified by Julien Langou, University of Colorado Denver
+================================================================================
+
+An explanation of the input/output parameters follows:
+T/V    : Wall time / encoded variant.
+N      : The order of the coefficient matrix A.
+NB     : The partitioning blocking factor.
+P      : The number of process rows.
+Q      : The number of process columns.
+Time   : Time in seconds to solve the linear system.
+Gflops : Rate of execution for solving the linear system.
+
+The following parameter values will be used:
+
+N      :    1536 
+NB     :     192 
+PMAP   : Row-major process mapping
+P      :       1 
+Q      :       2 
+PFACT  :   Right 
+NBMIN  :       4 
+NDIV   :       2 
+RFACT  :   Crout 
+BCAST  :  1ringM 
+DEPTH  :       1 
+SWAP   : Mix (threshold = 64)
+L1     : transposed form
+U      : transposed form
+EQUIL  : yes
+ALIGN  : 8 double precision words
+
+--------------------------------------------------------------------------------
+
+- The matrix A is randomly generated for each test.
+- The following scaled residual check will be computed:
+      ||Ax-b||_oo / ( eps * ( || x ||_oo * || A ||_oo + || b ||_oo ) * N )
+- The relative machine precision (eps) is taken to be               1.110223e-16
+- Computational tests pass if scaled residuals are less than                16.0
+
+================================================================================
+T/V                N    NB     P     Q               Time                 Gflops
+--------------------------------------------------------------------------------
+WR11C2R4        1536   192     1     2               7.50             3.2255e-01
+HPL_pdgesv() start time Mon Nov  9 09:31:35 2026
+
+HPL_pdgesv() end time   Mon Nov  9 09:31:42 2026
+
+--VVV--VVV--VVV--VVV--VVV--VVV--VVV--VVV--VVV--VVV--VVV--VVV--VVV--VVV--VVV-
+Max aggregated wall time rfact . . . :               0.77
++ Max aggregated wall time pfact . . :               0.09
++ Max aggregated wall time mxswp . . :               0.01
+Max aggregated wall time update  . . :               6.70
++ Max aggregated wall time laswp . . :               0.42
+Max aggregated wall time up tr sv  . :               0.01
+--------------------------------------------------------------------------------
+||Ax-b||_oo/(eps*(||A||_oo*||x||_oo+||b||_oo)*N)=   6.17515326e-03 ...... PASSED
+================================================================================
+
+Finished      1 tests with the following results:
+              1 tests completed and passed residual checks,
+              0 tests completed and failed residual checks,
+              0 tests skipped because of illegal input values.
+--------------------------------------------------------------------------------
+
+End of Tests.
+================================================================================
+PASS: {'seconds': 7.5, 'gflops': 0.32255, 'residual': 0.00617515326, 'passed': True}

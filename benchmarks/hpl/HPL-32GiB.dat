@@ -1,0 +1,31 @@
+HPLinpack benchmark input file
+Jupiter2 / K3; benchmarks/hpl/README.md documents the preset
+HPL.out      output file name
+6            output device: stdout
+1            number of problem sizes
+61440          Ns
+1            number of block sizes
+192            NBs
+0            PMAP: row-major
+1            number of grids
+2              Ps
+4              Qs
+16.0         residual threshold
+1            number of panel factorizations
+2            PFACT: Right
+1            number of recursive stopping criteria
+4            NBMIN
+1            number of panels in recursion
+2            NDIV
+1            number of recursive panel factorizations
+1            RFACT: Crout
+1            number of broadcasts
+1            BCAST: 1ringM
+1            number of lookahead depths
+1            DEPTH
+2            SWAP: mixed
+64           swapping threshold
+0            L1 transposed
+0            U transposed
+1            equilibration
+8            alignment in doubles
