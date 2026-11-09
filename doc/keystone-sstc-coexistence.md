@@ -125,5 +125,8 @@ Sstc確認表示も一致しなければPASSにしない。停止や未到達を
 - [観測記録](../verifications/sbi-3004/evidence/sstc-coexistence.md) を参照。
 
 上記の最小runnerはLinuxとdriverを使わない実SBI調査経路。
-Linuxを含む全suite、新しい11 OCALL試験、複数enclaveの競合・実機の実行PASSは未確認。
-ユーザー環境で上記2 profileを実行し、HEAD・manifest・serialログを保存する。
+2026-11-09、共存対応後の現行verification全PASSをユーザーから受領した。
+Linuxを含む全suite・11 OCALL試験の成功をユーザー確認済みとして更新する。
+今回の申告にコマンド／ログの添付はなく、両profileの実行有無は未明示。
+`--sstc off`を含む両profileのLinux全suite成功や、複数enclaveの競合・実機のPASSへは広げない。
+上記2 profileのHEAD・manifest・serialログを保存し、対象profileを記録する。

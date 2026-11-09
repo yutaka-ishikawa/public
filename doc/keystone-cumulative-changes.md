@@ -374,3 +374,10 @@ QEMU `--sstc on|off` と検証profileを追加。Sstc読出し確認とLinux sle
 guest timer取消し後の中断試験を追加し、3004専用試験は11 OCALLになった。
 最小の実SM/Eyrie経路でon/offの反復中断・host期限復元を確認。
 Linux全suiteの実行と実機動作は未確認。[設計・手順](keystone-sstc-coexistence.md) を参照。
+
+## 共存対応後の全verification PASS（ユーザー報告）
+
+2026-11-09、`bff3e8dcb`のSstc共存対応後に現行verification全PASSとの報告を受領。
+Linux全suite・11 OCALLのSTOP専用試験をユーザー成功確認済みへ更新した。
+実行コマンド／ログは今回未添付で、on/off両profileの実行有無は未明示。
+実機や競合の網羅試験は未確認。[移植状況](keystone-porting-plan.md)を参照。

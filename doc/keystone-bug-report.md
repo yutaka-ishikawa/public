@@ -397,6 +397,9 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
   .koリンクは未実施。timer区間の非同期statusだけでM_TIMERとM_SOFTは区別できず、
   原因特定はSM traceのcauseを確認する。既存全PASS報告を新試験のPASSには流用しない。
 
+- 2026-11-09追記：Sstc共存対応後の現行Linux全verification PASSをユーザーから受領。
+  両Sstc profileの実行有無は未明示。実機・競合の網羅成功は含めない。
+
 ## KSB-028: QEMUでSstc抑止が適用されない
 
 - 状態：修正済（[e4a736519](https://github.com/yutaka-ishikawa/public/commit/e4a736519)）。対象はOpenSBI generic初期化とK3 timer hooks。
@@ -415,6 +418,9 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
   [共存方式](keystone-sstc-coexistence.md) に置換。enclaveのTIME要求だけMTIMERへ振り分け、
   RUN/RESUMEで独立期限を設定し、STOP/EXITでhost状態を復元する。
   最小の実SM経路でon/off・host期限復元を確認。Linux全suiteと実機は未確認。
+
+- 2026-11-09追記：Sstc共存対応後の現行Linux全verification PASSをユーザーから受領。
+  両Sstc profileの実行有無は未明示。実機・競合の網羅成功は含めない。
 
 ## KSB-029: 共有パッケージの断続的MD5不一致
 
@@ -444,6 +450,19 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
   →3006 EXIT→2002 DESTROY成功、中断1（P1）を観測。Linux/driverを使わない調査経路であり、
   9回OCALL・3回timer等を含むLinux専用verificationのPASSではない。
   記録は [timer evidence](../verifications/sbi-3004/evidence/timer-preemption.md)。
+
+- 2026-11-09追記：Sstc共存対応後の現行Linux全verification PASSをユーザーから受領。
+  両Sstc profileの実行有無は未明示。実機・競合の網羅成功は含めない。
+
+## 追加のユーザー検証報告（2026-11-09）
+
+Sstc共存実装 `bff3e8dcb` の対応後、現行verification全PASSとのユーザー報告を受領。
+KSB-027／028／030に関連するSTOP・timer共存の現行Linux suiteについて、
+従来の実行待ちをユーザー成功確認済みへ更新する。
+KSB-029のchecksum不一致も現行試験での再発報告はないが、根本原因は未確定のため
+要確認の分類は維持する。全PASSだけを根本原因の解消証明とは扱わない。
+今回の報告にはコマンド／ログ添付がなく、Sstc on/off両profileの実行有無は未明示。
+実機・競合の網羅試験やクラウド側での独立再実行の成功へは広げない。
 
 ## 今後の必須更新手順
 

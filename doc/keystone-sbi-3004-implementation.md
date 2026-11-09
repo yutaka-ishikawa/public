@@ -3,6 +3,14 @@
 STOPは従来からOCALL経路へ接続済み。本変更で要求検査・返却ABIを整理し、
 専用の実QEMUゲスト試験を追加した。実装コミットは [9b7285ae5](https://github.com/yutaka-ishikawa/public/commit/9b7285ae5)。コードの実装済みと、新試験の実行確認待ちを分ける。
 
+## 最新の検証報告（2026-11-09）
+
+Sstc共存実装 `bff3e8dcb` の対応後、ユーザーから現行verification全PASSを受領した。
+Linuxを含む全suite・11 OCALLの追加試験はユーザー成功確認済み。
+以前の未実行／失敗の記述は各修正時点の履歴として残す。
+報告にはコマンドやログ添付がなく、両Sstc profileの実行有無は未明示。
+実機・全hartや競合の網羅成功、クラウドでの独立再実行までは意味しない。
+
 ## 変更点
 
 - SMはrequest=0（interrupt/yield）、1（OCALL）だけ受理する。
