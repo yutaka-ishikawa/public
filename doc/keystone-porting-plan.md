@@ -86,7 +86,7 @@ Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり�
 
 その後、ユーザーの `--all --sstc off` ログではSTOP timer区間とpackage展開で失敗した。
 従来の全PASS申告を、このoff実行の成功へは広げない。
-展開のpipe短読取りを修正し、新規Linux環境でon/offそれぞれ3 boot全suite＋乱数7ケースを
+[bb84fa987](https://github.com/yutaka-ishikawa/public/commit/bb84fa987)で展開のpipe短読取りとfirmware診断を修正し、新規Linux環境でon/offそれぞれ3 boot全suite＋乱数7ケースを
 全PASS確認した。通常trace=0版のon/off全suiteも確認済み。
 元の環境のtimer取消し後0回は再現せず、artifact照合は継続事項（KSB-031）。
 [調査・hash付き結果](keystone-verification-off-log-followup.md)を参照。

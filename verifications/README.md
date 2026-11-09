@@ -125,18 +125,17 @@ bash run-guest.sh --data-only
 
 ## 現在の結果と限界
 
-ユーザーのQEMUゲストで、free memory 2 MiBのパッケージは4 MiBのEPM確保と
-8回のOCALL往復・不正return拒否に成功したとの画面報告がある。
-その報告は、今回追加した明示的DESTROY検査・SBIエラー試験・256 MiBパッケージ・
-PMP実参照拒否までのPASSを示すものではない。
+2026-11-09、クラウドで同梱K3 kernelのImageと対応するdriver／検証module、Bianbu rootfsを
+用意し、実LinuxでSstc on/off各3 bootの全suiteと乱数7ケースを全PASS確認した。
+通常trace=0版でもon/offの全suiteを追加確認した。
+STOPの11 OCALL、通常／timer取消し区間の中断、host sleep/wakeup、crypto、
+2/256 MiBのedgecallとPMP参照拒否を含む。
+[hash付き結果](sbi-3004/evidence/linux-on-off-results.json) と
+[提供offログとの切り分け](../doc/keystone-verification-off-log-followup.md)を参照。
 
-このクラウド環境ではRISC-Vビルドと検証モジュールのオブジェクト生成までを確認する。
-完全な対応カーネルと稼働中K3システムゲストがないため、新しい全試験の実行結果は
-**未確認**であり、コンパイル成功を実行PASSとして報告しない。
-
-全hart、実タイマー中断、競合、各エラー経路、実機固有の動作を網羅するものではない。
-各プログラムは実CPUモデルを使うが、QEMUの成功を実機での成功とは扱わない。
-以前の模擬試験のグループ数・PASS表は現行の結果として引き継がない。
+提供された環境のoff失敗は新規環境では再現せず、artifact照合が残る。
+全hart固定実行、migration、競合、全エラー経路、実機固有の動作は網羅していない。
+QEMUの成功を実機での成功とは扱わない。以前の模擬試験の結果は引き継がない。
 
 コンパイルとパッケージ検査の記録は [evidence](evidence/README.md) に保存する。
 CIもビルド検査のみで、システムゲストの試験結果を代用しない。

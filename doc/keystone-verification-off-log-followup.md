@@ -1,5 +1,7 @@
 # Sstc off失敗ログの調査と展開処理の修正
 
+展開処理・診断の修正コミット：[bb84fa987](https://github.com/yutaka-ishikawa/public/commit/bb84fa987)。
+
 2026-11-09 UTC。ユーザーから `run-qemu.py --all --sstc off` の失敗ログを受領した。
 前回の構成未指定の全PASS報告と区別する。
 

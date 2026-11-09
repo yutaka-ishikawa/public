@@ -425,7 +425,7 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
 
 ## KSB-029: makeselfのpipe短読取りでpayloadを切断
 
-- 状態：修正済（専用readerへ置換）。
+- 状態：修正済（専用readerへ置換、[bb84fa987](https://github.com/yutaka-ishikawa/public/commit/bb84fa987)）。
 - 対象：4種類のguest runnerとmakeself生成scriptのMS_dd経路。
 - 根拠：追加のoffログではsnapshot対策後もMD5不一致と、MD5成功後のgzip途中終了が発生。
   MS_ddのpipe内ddは短いreadもcount=1に数えるため、指定バイト数の前に終了できる。

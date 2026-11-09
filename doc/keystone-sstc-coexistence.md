@@ -117,7 +117,8 @@ Sstc確認表示も一致しなければPASSにしない。停止や未到達を
 ## 確認結果と限界
 
 - SM/OpenSBI、通常／専用runtimeと全guest verificationパッケージをbuild。
-- Sstc確認を追加したkernel objectをbuild。完全なModule.symversがないため.koリンクは未確認。
+- 初期段階ではkernel objectまで確認。その後、同じImageのvmlinux.symversを使って
+  driver／検証.koをlinkし、実Linuxでロード・全suite実行まで確認した。
 - 実QEMUの調査用S-mode runner＋実SM/Eyrie/native eappで、Sstc on/offの両方で
   M_TIMER中断・RESUMEを繰り返し、EXIT／DESTROYまで到達した。
 - Sstc onではhost stimecmpの元の絶対値への復元と、期限切れSTIPを確認。

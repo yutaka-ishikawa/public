@@ -39,8 +39,8 @@ rootの `make build` と `run-all.sh`、`crypto/run-qemu.py --all` に組み込�
 SM/OpenSBI trace版firmware、S-mode拒否試験のkernel objectのbuild。
 通常runtimeに専用hookがないことと専用runtimeに存在することをnmで確認した。
 
-**追加試験のLinuxゲスト統合実行と検証モジュール.koのリンクは未確認。**
-クラウド環境に対応Image/rootfs・完全なModule.symversがないため。
+**初期実装時点では追加試験のLinux統合実行と.koリンクは未確認だった。**
+その後、対応Image/rootfsとcore symbol情報を用意して実行済み。最新の結果は末尾の追加調査を参照。
 以前の全PASSは追加したSTOP試験に対する報告ではない。
 
 タイマー設定区間では非同期INTERRUPTED/RESUMEを計数する。

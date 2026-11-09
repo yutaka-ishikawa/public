@@ -79,10 +79,12 @@ callbackは短い観測処理に使い、enclaveのdestroy／run／resumeを再�
 
 ## 実施済みと未確認
 
-クラウドでSDK／通常runtime／専用runtime／全verificationパッケージと
-SM/OpenSBI firmwareをビルドした。実Linuxゲストからの本試験の実行は、対応Image/rootfsと
-完全なModule.symversがないため未確認。過去の全PASSはこの新試験のPASSではない。
-ユーザー環境で上記コマンドを実行し、serialログとmanifestを保存する。
+初期段階ではSDK／runtime／packageとfirmwareのbuildまで確認していた。
+現在はクラウドでK3 Image・Bianbu rootfsと対応driver／検証.koを用意し、on/offそれぞれ
+3 boot全suite・乱数7ケースと、通常trace=0のon/off全suiteをPASS確認済み。
+[hash付き結果](evidence/linux-on-off-results.json) と
+[提供offログの調査](../../doc/keystone-verification-off-log-followup.md) を参照。
+提供環境の失敗とのartifact一致、実機・競合等の網羅確認は残る。
 
 ## timer区間が0回で失敗した場合
 
