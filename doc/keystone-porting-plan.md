@@ -1,6 +1,7 @@
 # K3 Keystone移植状況と残作業計画
 
 実装基準：Linux Sstc／SM M_TIMER共存に加え、FID 4000の領域登録・照会・解放まで。
+FID 4000実装完了：[2f87a9d57](https://github.com/yutaka-ishikawa/public/commit/2f87a9d5736d7653c512e050e944f17b787098e5)。今回の実QEMU全suiteはSstc on/offともPASS。
 検証状況更新：2026-11-09、`bb84fa987`の展開・診断修正後、off再確認手順に対する全verification PASSをユーザーから受領。
 初回調査は `8b5e1d870`、当時の上流比較対象はKeystone
 `b8c2385355b2afb5b94a4e5dc503936f1502b972`。
@@ -30,8 +31,8 @@ Keystone拡張IDは `0x08424b45`。表の番号はFID。
 | 3003 | GET_SEALING_KEY：既存HKDF・署名を共通基盤へ接続済み。 | 3002と同時実装 [9bdd68447](https://github.com/yutaka-ishikawa/public/commit/9bdd68447)、native実行修正の到達点 [9455ab462](https://github.com/yutaka-ishikawa/public/commit/9455ab462)。 | QEMUで既知値・識別子分離・再起動整合性等を確認。実機永続鍵・更新運用・暗号化保存サンプルは残る。 |
 | 3004 | STOP：0/1の有効要求、無効要求の事前拒否、host status/a1と切替処理を実装済み。 | 既存の切替基盤は [75f5c0377](https://github.com/yutaka-ishikawa/public/commit/75f5c0377)。要求検査・返却ABI修正と専用実ゲスト試験の追加は [9b7285ae5](https://github.com/yutaka-ishikawa/public/commit/9b7285ae5)。 timer経路修正は [e4a736519](https://github.com/yutaka-ishikawa/public/commit/e4a736519)、Sstc共存・独立MTIMERと11 OCALL試験は [bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)。 | 共存対応後のLinuxを含むQEMU全verification PASSをユーザー確認済み。直接yield・不正要求・通常timer区間・guest timer取消し後の中断・host sleep/wakeupを含む現行suiteの範囲。実機・競合の網羅確認は残る。詳細は [3004実装記録](keystone-sbi-3004-implementation.md)。 |
 | 3006 | EXIT：終了値を伴うホスト復帰を接続済み。 | フレーム切替基盤 [75f5c0377](https://github.com/yutaka-ishikawa/public/commit/75f5c0377)、実ゲスト試験 [0977df6be](https://github.com/yutaka-ishikawa/public/commit/0977df6be)。 | suiteの正常終了を確認。全終了値・異常終了条件の網羅試験は残る。 |
-| 4000 | CALL_PLUGIN／multimem：K3で登録・照会・解放を統合済み。 | 本変更（完了commitを後続記録）。 | 実QEMUで有効/無効、Sstc on/off、256 MiB超CMA/TOR、異常系・回収を検証。pagingは別工程。 |
-| 2006 | K3拡張CREATE_ENCLAVE_V2：version付きbacking登録。 | 4000と同時実装。 | 旧2001を維持し、不正header・範囲・他enclaveの重複登録を拒否。 |
+| 4000 | CALL_PLUGIN／multimem：K3で登録・照会・解放を統合済み。 | [2f87a9d57](https://github.com/yutaka-ishikawa/public/commit/2f87a9d5736d7653c512e050e944f17b787098e5)。 | 実QEMUで有効/無効、Sstc on/off、256 MiB超CMA/TOR、異常系・回収を検証。pagingは別工程。 |
+| 2006 | K3拡張CREATE_ENCLAVE_V2：version付きbacking登録。 | [2f87a9d57](https://github.com/yutaka-ishikawa/public/commit/2f87a9d5736d7653c512e050e944f17b787098e5)（4000と同時実装）。 | 旧2001を維持し、不正header・範囲・他enclaveの重複登録を拒否。 |
 
 **2004は定義済みの機能ではない。** 未実装機能として追加せず、未定義番号への拒否応答を試験する。
 初回調査以前の接続については、今回確認した修正コミットを原始実装コミットとは表記しない。

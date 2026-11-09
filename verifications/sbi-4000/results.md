@@ -34,7 +34,7 @@ driver/probeをビルドした。未解決symbolの許容、force insmod、検�
 
 manifestは試験時の作業ツリー基準commitと対象ソースのhash、firmware/kernel/QEMU/
 package等のhash、実行コマンド、guest statusを記録する。試験は実装commit作成前に行い、
-対応する確定commitは移植計画に記録する。生serial logはクラウドの`.build-k3/`に保持し、
+対応する確定実装commitは[2f87a9d57](https://github.com/yutaka-ishikawa/public/commit/2f87a9d5736d7653c512e050e944f17b787098e5)。移植計画にも記録した。生serial logはクラウドの`.build-k3/`に保持し、
 公開証跡にはそのhashと抽出したassertion logを置いた。秘密鍵・seedは含めない。
 
 再ビルド途中のcrypto packageと旧package-sha256.txtの組合せでは検査が失敗したため、

@@ -126,7 +126,7 @@ QEMUの結果でJupiter2実機のPMP・CMA・cache整合性まで確認済みと
 
 P0〜P2と照会・解放のguest試験が完了した時点でFID 4000 / multimem登録を完了とする。
 P3とP4は別に進捗を記録する。各工程の実装commitと試験証跡を本書および
-[移植計画](keystone-porting-plan.md)へ追記する。P0〜P2の実装commitは移植計画に記載する。
+[移植計画](keystone-porting-plan.md)へ追記する。P0〜P2の実装commit：[2f87a9d57](https://github.com/yutaka-ishikawa/public/commit/2f87a9d5736d7653c512e050e944f17b787098e5)。
 
 ## P0〜P2で確定した仕様
 

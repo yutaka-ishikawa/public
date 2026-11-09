@@ -740,5 +740,6 @@
     "no real-hardware claim",
     "not exhaustive concurrency/hart/PMP-fault-injection coverage",
     "SDK host resources KSB-035 not fixed"
-  ]
+  ],
+  "implementation_commit": "2f87a9d5736d7653c512e050e944f17b787098e5"
 }

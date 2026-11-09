@@ -529,7 +529,7 @@ linkに失敗することを確認した。また未知callが0（成功）を�
 他の上流build全体にlink失敗を帰属させない。header includeへ修正し、未知callと
 host呼出しを拒否する。4000のcopy先もprivate EPM内に限定する。
 状態：修正済み。Sstc on/offの実QEMU試験で異常要求拒否・失敗後close・反復回収を確認。
-修正commitと証跡はFID 4000検証記録に記載する。
+修正commit：[2f87a9d57](https://github.com/yutaka-ishikawa/public/commit/2f87a9d5736d7653c512e050e944f17b787098e5)。証跡は[FID 4000検証記録](../verifications/sbi-4000/results.md)。
 
 ## KSB-033: FINALIZE失敗後のdriver IDRに解放済みポインタが残る
 
@@ -540,7 +540,7 @@ rollback実装中に発見した既存driverの欠陥。上流releaseでの再�
 失敗時は所有権を保持して明示DESTROY/closeで一度だけ回収するよう変更する。
 関連して新backing操作はfile所有者検査・fileごとのmutexで状態遷移を直列化する。
 状態：修正済み。Sstc on/offの実QEMU試験で異常要求拒否・失敗後close・反復回収を確認。
-修正commitと証跡はFID 4000検証記録に記載する。
+修正commit：[2f87a9d57](https://github.com/yutaka-ishikawa/public/commit/2f87a9d5736d7653c512e050e944f17b787098e5)。証跡は[FID 4000検証記録](../verifications/sbi-4000/results.md)。
 
 ## KSB-034: 新規backing実装のhost復帰時PMP解除不足
 
@@ -550,6 +550,7 @@ QEMUの生成・破棄反復で解放済みbackingページをLinuxが再利用�
 store access faultとなる実ログで確認。上流Keystoneの不具合ではない。
 host復帰・RUN失敗rollbackではbackingのPMPをOFFにし、OS catch-allへ戻す。
 DESTROYでも全hartの解除完了後にdescriptorを解放する。
+修正commit：[2f87a9d57](https://github.com/yutaka-ishikawa/public/commit/2f87a9d5736d7653c512e050e944f17b787098e5)。
 状態：修正済み。Sstc両profileで2 enclaveの反復破棄、CPU切替、
 256 MiB + 4 KiB CMA/TOR backingの解除・回収を確認。証跡はFID 4000検証記録を参照。
 
