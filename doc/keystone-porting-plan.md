@@ -118,7 +118,7 @@ Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり�
 | 実機の3002/3003用鍵provider | 未実装 | `security/security.c`はqemu-dev条件以外unavailable。`k3_b1_platform_provision()`は失敗を返すstub。descriptor検査だけでは鍵供給は完成しない。 |
 | Jupiter2 WTM RNG | 実装済み・実機未確認 | `rng/rng.c`にCPU MMIO経路あり。DT追加、clock・RNGのLinux/OP-TEEとの所有権調整が必要。QEMUは部分レジスタモデル。 |
 | 実機boot／全hart PMP・IPI・timer | 検証待ち・適合作業が必要 | K3系OpenSBIが共通でも、FSBL/FIT、入力DT、実PMP/PMACFG、実割り込み構成との一致は未確認。 |
-| CALL_PLUGIN／multimem | K3統合済み・QEMU検証済み | P0〜P2完了。[実装・検証](../verifications/sbi-4000/README.md)。実機・PMP失敗注入・同時実行等の網羅試験は残る。 |
+| CALL_PLUGIN／multimem | K3統合済み・QEMU検証済み | P0〜P2完了。[実装・検証](../verifications/sbi-4000/README.md)。実機は別途。PMP失敗・同時実行等は[異常・競合計画](keystone-abnormal-concurrency-verification-plan.md)のA-2006/4000、X-07/08、F-PMP/IPI等で拡充予定。 |
 | paging | コードあり・K3未統合 | FID 4000計画P3。runtimeのPAGINGは既定OFF。 |
 | PAGE_HASH／PAGE_CRYPTO | コードあり・未統合 | pagingとswap領域、乱数供給への接続が前提。乱数移植だけでpaging完了とはならない。 |
 | 上流attestor.ke／tests.ke相当 | samplesへ統合済み | samples/attestationとsamples/testsでMakefile化。外部pin・正規report・期待retvalへ適合。[統合記録](keystone-examples-integration.md)。 |
@@ -138,6 +138,10 @@ Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり�
 QEMU作業列と実機作業列は並行可能だが、実機資料がない部分を推測で完成扱いしない。
 
 ### N0：現行機能の回帰・残る検証を先行
+
+異常系・競合の具体的なコード作成計画は[異常・競合検証計画](keystone-abnormal-concurrency-verification-plan.md)を参照。
+単一FID異常、同FID競合、異なるFID/driver/timer間の機能対、fault注入を分類する。
+この計画に列挙した新規caseは未実装・未実行で、既存全PASSとは別に扱う。
 
 1. 現在の全suiteを基準として、HEADとartifact manifestを保存する。
 2. 現行3004／Sstc共存suiteはユーザー全PASS確認済み。
