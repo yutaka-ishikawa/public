@@ -1,5 +1,7 @@
 # Linux SstcとKeystone SM M_TIMERの共存
 
+実装コミット：[bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)。
+
 対象はRV64 K3構成。LinuxではSstcを維持し、enclave/EyrieにはSstcを公開せず、
 SMが独立したM_TIMERでプリエンプションする。従来の「Sstcを全体で抑止する」
 方式を置き換える。Milk-V Jupiter2は提供された実機情報でSstc対応・出荷Linuxでの

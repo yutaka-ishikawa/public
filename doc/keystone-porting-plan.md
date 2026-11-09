@@ -1,6 +1,6 @@
 # K3 Keystone移植状況と残作業計画
 
-更新基準：本リポジトリ `e4a736519`（SBI 3004 timer経路修正まで）。
+更新基準：本リポジトリ `bff3e8dcb`（Linux Sstc／SM M_TIMER共存まで）。
 初回調査は `8b5e1d870`、当時の上流比較対象はKeystone
 `b8c2385355b2afb5b94a4e5dc503936f1502b972`。
 旧計画の「乱数・attestation・sealingが未実装」は現在には当てはまらない。
@@ -100,7 +100,7 @@ Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり�
 | samples/sealing・samples/attestation | 未追加 | 現在のsamplesはhelloworldのみ。 |
 | IO／LINUX／NET syscallオプション | optional・範囲確認待ち | Eyrieに既存実装あり。全Linux syscallの移植という要求とは分け、必要なAPIを選ぶ。 |
 | CPU hotplug／suspend | 現在の固定オンライン方針の対象外 | 拒否解除だけではPMP状態とHSMの整合が保証されない。 |
-| Linux Sstc／SM M_TIMER共存 | 実装済み、Linux全suite再実行待ち | [共存実装](keystone-sstc-coexistence.md)。QEMU最小実行でon/off、host期限復元・取消し後の中断を確認。enclaveへSstcを直接公開する拡張は対象外。 |
+| Linux Sstc／SM M_TIMER共存 | [bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)で実装済み、Linux全suite再実行待ち | [共存実装](keystone-sstc-coexistence.md)。QEMU最小実行でon/off、host期限復元・取消し後の中断を確認。enclaveへSstcを直接公開する拡張は対象外。 |
 | FPU／Vectorの状態管理 | 対応範囲の調査・拡張待ち | 汎用整数contextの動作からFP/Vectorの保存・復元成功は推定しない。 |
 | DMA／IOPMP | 実機向け未整備 | CPU PMPの試験ではデバイスDMA隔離を検証できない。 |
 | 単一enclaveの多スレッド | 上流にもある制約 | `MAX_ENCL_THREADS=1`。複数enclaveの実行と別の拡張で、K3だけの移植漏れとはしない。 |
@@ -226,3 +226,11 @@ QEMU: N0 回帰拡充 → N1 サンプル統合 → N2 multimem → N3 paging
 元の全3bootではSTOP試験で停止しており、後続crypto/edgecallのPASSではない。
 最小の実QEMU SM/Eyrie経路で修正後のM_TIMER→STOP→RESUME→EXIT→DESTROYを確認したが、
 Linux suiteの再実行は未確認。[実装記録](keystone-sbi-3004-implementation.md)を参照。
+
+### Linux Sstc／SM M_TIMER共存の実装到達点
+
+[bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)でLinuxのSstcを維持する方式へ更新した。
+独立した10msのSM timer、host状態の保存／復元、enclave TIMEの振分け、
+QEMU `--sstc on|off` と11 OCALLの専用試験を実装。
+最小の実SM/Eyrie経路で両profileの中断とhost期限復元を確認した。
+[設計・検証範囲](keystone-sstc-coexistence.md) を参照。Linux全suiteと実機は未確認。

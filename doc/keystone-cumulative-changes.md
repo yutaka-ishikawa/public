@@ -364,6 +364,8 @@ snapshotしてからchecksum検査・展開する対策を追加した。
 
 ## Linux Sstc／SM M_TIMERの共存
 
+実装コミット：[bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)。
+
 LinuxのISAからsstcを取り除く旧方式を置き換え、RUN/RESUMEでLinux timerを保存して
 独立MTIMERを設定、STOP/EXITでhostのstimecmp・STCE・MTIE・保留状態を復元する。
 既存OpenSBI timer device・scratch・TIME共通処理を再利用する。
