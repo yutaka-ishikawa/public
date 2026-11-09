@@ -1,7 +1,7 @@
 # samples統合の検証結果
 
 2026-11-09（日本時間）。今回の作業ツリーをコミットする前に、K3の実system QEMUと
-Linux/driver/OpenSBI/SM/Eyrieを使って確認した。
+Linux/driver/OpenSBI/SM/Eyrieを使って確認した。実装commitは[8d8fd5b9c](https://github.com/yutaka-ishikawa/public/commit/8d8fd5b9c8e52f54169064548dad074e20ac5186)。
 [実行manifest・入力hash](evidence/results.json)と同ディレクトリのassertion logを参照。
 
 | 対象 | 確認内容 | 結果 |

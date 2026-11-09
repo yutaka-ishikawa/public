@@ -151,6 +151,8 @@ QEMU作業列と実機作業列は並行可能だが、実機資料がない部�
 
 ### N1：アプリ開発用サンプル（example統合済み、sealing利用例は残る）
 
+example統合の完了commit：[8d8fd5b9c](https://github.com/yutaka-ishikawa/public/commit/8d8fd5b9c8e52f54169064548dad074e20ac5186)。
+
 hello（samples/helloworld）、hello-native、attestation、上流testsの9例を
 samplesへ統合した。Makefile、共通runner、期待終了値、外部公開metadataの検査と
 guest実行scriptを用意し、元のkeystone/examplesは変更せず残す。

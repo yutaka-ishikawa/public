@@ -346,5 +346,6 @@
       "tested_sha256": "8de15e3f59e8fe28cf8a67bf543dc9b52790f18306edeab76c238cfe7298c038",
       "final_sha256": "212997a82b5b2c291fa3cb5cee9030ae04d18cfe54c97f2f74e9dc8fdf9dfbd1"
     }
-  }
+  },
+  "implementation_commit": "8d8fd5b9c8e52f54169064548dad074e20ac5186"
 }

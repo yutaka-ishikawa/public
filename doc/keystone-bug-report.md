@@ -623,4 +623,4 @@ samples版では上限1024、checked API、sizeof共通report型、成功時だ�
 誤retval、誤った外部device pin、unavailable providerの完全実行は非0となる。
 KSB-036/037/040はsamplesコピー側の修正で、元のkeystone/examplesは変更していない。
 KSB-038はcounterアクセス方針への適合、KSB-039は本作業の草稿に限定した不具合。
-実装commitは統合記録に追記する。
+修正commit：[8d8fd5b9c](https://github.com/yutaka-ishikawa/public/commit/8d8fd5b9c8e52f54169064548dad074e20ac5186)。元のexamplesは保持したままで、変更対象はsamples統合側。

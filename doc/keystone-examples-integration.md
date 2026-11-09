@@ -1,6 +1,6 @@
 # Keystone examplesのsamples統合と互換性差分
 
-2026-11-09。`keystone/examples/`は変更せず、Makefile版を`samples/`に置く。
+2026-11-09。実装commit：[8d8fd5b9c](https://github.com/yutaka-ishikawa/public/commit/8d8fd5b9c8e52f54169064548dad074e20ac5186)。`keystone/examples/`は変更せず、Makefile版を`samples/`に置く。
 helloは既存helloworld名を維持し、hello-native、attestation、testsを追加した。
 SDK/EyrieのビルドにはCMakeを使うが、アプリは全てMakefileからコンパイルする。
 
