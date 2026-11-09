@@ -22,12 +22,39 @@ MODULE_AUTHOR("Dayeol Lee <dayeol@berkeley.edu>");
 MODULE_VERSION(DRV_VERSION);
 MODULE_LICENSE("Dual BSD/GPL");
 
-static const struct file_operations keystone_fops = {
-    .owner          = THIS_MODULE,
-    .mmap           = keystone_mmap,
-    .unlocked_ioctl = keystone_ioctl,
-    .release        = keystone_release
+atomic_long_t keystone_backing_bytes = ATOMIC_LONG_INIT(0);
+
+static int backing_bytes_get(char *buffer, const struct kernel_param *param)
+{
+    return scnprintf(buffer, PAGE_SIZE, "%ld\n",
+		     atomic_long_read(&keystone_backing_bytes));
+}
+
+static const struct kernel_param_ops backing_bytes_ops = {
+    .get = backing_bytes_get,
 };
+module_param_cb(backing_bytes, &backing_bytes_ops, NULL, 0444);
+MODULE_PARM_DESC(backing_bytes, "Bytes of currently owned multimem backing");
+
+static int keystone_open(struct inode *inode, struct file *file)
+{
+    struct keystone_file *ctx;
+
+    ctx = kzalloc(sizeof *ctx, GFP_KERNEL);
+    if (!ctx) {
+	return -ENOMEM;
+    }
+    mutex_init(&ctx->lock);
+    file->private_data = ctx;
+    return 0;
+}
+
+static const struct file_operations keystone_fops = {
+    .open = keystone_open,
+    .owner = THIS_MODULE,
+    .mmap = keystone_mmap,
+    .unlocked_ioctl = keystone_ioctl,
+    .release = keystone_release};
 
 struct miscdevice keystone_dev = {
   .minor = MISC_DYNAMIC_MINOR,
@@ -36,43 +63,52 @@ struct miscdevice keystone_dev = {
   .mode = 0666,
 };
 
-int keystone_mmap(struct file* filp, struct vm_area_struct *vma)
+static int keystone_mmap_locked(struct file *filp, struct vm_area_struct *vma)
 {
-  struct utm* utm;
-  struct epm* epm;
-  struct enclave* enclave;
-  unsigned long vsize, psize;
-  vaddr_t paddr;
-  enclave = get_enclave_by_id((unsigned long) filp->private_data);
-  if(!enclave) {
-    keystone_err("invalid enclave id\n");
-    return -EINVAL;
-  }
+    struct utm *utm;
+    struct epm *epm;
+    struct enclave *enclave;
+    unsigned long vsize, psize;
+    vaddr_t paddr;
+    enclave =
+	get_enclave_by_id(((struct keystone_file *)filp->private_data)->ueid);
+    if (!enclave) {
+	keystone_err("invalid enclave id\n");
+	return -EINVAL;
+    }
 
-  utm = enclave->utm;
-  epm = enclave->epm;
-  vsize = vma->vm_end - vma->vm_start;
+    utm = enclave->utm;
+    epm = enclave->epm;
+    vsize = vma->vm_end - vma->vm_start;
 
-  if(enclave->is_init){
-    if (vsize > PAGE_SIZE)
-      return -EINVAL;
-    paddr = epm->pa + (vma->vm_pgoff << PAGE_SHIFT);
-    remap_pfn_range(vma,
-                    vma->vm_start,
-                    paddr >> PAGE_SHIFT,
-                    vsize, vma->vm_page_prot);
-  }
-  else
-  {
-    psize = utm->size;
-    if (vsize > psize)
-      return -EINVAL;
-    remap_pfn_range(vma,
-                    vma->vm_start,
-                    __pa(utm->ptr) >> PAGE_SHIFT,
-                    vsize, vma->vm_page_prot);
-  }
-  return 0;
+    if (enclave->is_init) {
+	if (vsize > PAGE_SIZE) {
+	    return -EINVAL;
+	}
+	paddr = epm->pa + (vma->vm_pgoff << PAGE_SHIFT);
+	remap_pfn_range(vma, vma->vm_start, paddr >> PAGE_SHIFT, vsize,
+			vma->vm_page_prot);
+    } else {
+	psize = utm->size;
+	if (vsize > psize) {
+	    return -EINVAL;
+	}
+	remap_pfn_range(vma, vma->vm_start, __pa(utm->ptr) >> PAGE_SHIFT, vsize,
+			vma->vm_page_prot);
+    }
+    return 0;
+}
+
+int keystone_mmap(struct file *file, struct vm_area_struct *vma)
+{
+    struct keystone_file *ctx;
+    int rc;
+
+    ctx = file->private_data;
+    mutex_lock(&ctx->lock);
+    rc = keystone_mmap_locked(file, vma);
+    mutex_unlock(&ctx->lock);
+    return rc;
 }
 
 static int __init keystone_dev_init(void)

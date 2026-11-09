@@ -79,7 +79,8 @@ def run(args, name, provider):
                             host_marker = (b'PASS GUEST HOST SSTC:' if args.sstc == 'on'
                                            else b'INFO HOST TIMER: sstc=0')
                             suite_markers = [b'PASS GUEST SBI 3004: STOP/RESUME,',
-                                             b'PASS GUEST SUITE SBI ', timer_banner, host_marker]
+                                             b'PASS GUEST SUITE SBI ', b'PASS GUEST SBI 4000: registered/',
+                                             timer_banner, host_marker]
                             suite_complete = (not args.all or
                                               all(marker in captured for marker in suite_markers))
                             record['pass'] = (int(match[1]) == 0 and banner in captured and
@@ -121,7 +122,7 @@ def main():
                            ('unavailable', 'unavailable')]:
         result = run(args, name, provider)
         records.append(result)
-        scope = ('SBI 2001/2002/2003/2004(undefined)/2005/3001/3002/3003/3004/3006'
+        scope = ('SBI 2001/2002/2003/2004(undefined)/2005/3001/3002/3003/3004/3006/4000'
                  if args.all else 'SBI 3002/3003')
         print(('PASS' if result['pass'] else 'FAIL'), scope, name,
               result.get('error', ''), flush=True)

@@ -396,3 +396,14 @@ artifact照合をKSB-031に残す。[調査・結果](keystone-verification-off-
 現行環境での実行失敗は再発しておらず、移植作業の実行待ち項目から外す。
 過去のtimer失敗の原因と当時のartifact一致は未確定の履歴として残す。
 実機・全hart固定実行・競合の網羅検証の完了を意味しない。
+
+## FID 4000のK3統合（2026-11-09）
+
+SDK/driver/SMにbackingの固定登録・照会・解放を追加した。
+旧CREATE 2001を維持し、version付き拡張CREATE 2006を使う。
+Eyrieの既存multimem照会ABIは維持し、専用runtimeに実SMへ送信するverification hookを追加した。
+通常runtimeのPAGINGは有効にしない。詳細は
+[実装計画と確定仕様](keystone-fid-4000-plan.md)、
+[ソース検証](../verifications/sbi-4000/source-review.md)、
+[検証結果](../verifications/sbi-4000/results.md)を参照。
+KSB-032〜034を修正。SDKの既存host資源寿命の課題はKSB-035として未修正で記録した。

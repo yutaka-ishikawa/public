@@ -1,0 +1,8 @@
+[SM/TIMER] host=sstc enclave=mtimer slice-us=10000
+[SM/CRYPTO] provider=unavailable attestation=0 sealing=0
+-38; rc=$?; printf '\nRNG_CASE_EXIT=%d\n' "$rc"
+PASS PACKAGE: random.ke; size=573493 md5=58b5b46f919af5c2a3636dfd6cf0f40a
+PASS GUEST SBI 3001: mode=native expected-error=-38 callbacks=1 DESTROY
+PASS GUEST SBI 3001: mode=env expected-error=-38 callbacks=0 DESTROY
+PASS GUEST SBI 3001: AT_RANDOM startup/resume error=-38
+RNG_CASE_EXIT=0

@@ -56,6 +56,14 @@ class Enclave {
   Enclave();
   ~Enclave();
   static Error measure(char* hash, const char* eapppath, const char* runtimepath, const char* loaderpath);
+    uintptr_t getBackingMemoryBase()
+    {
+	return pDevice->getBackingAddress();
+    }
+    uintptr_t getBackingMemorySize()
+    {
+	return pDevice->getBackingSize();
+    }
   void* getSharedBuffer();
   size_t getSharedBufferSize();
   Memory* getMemory();

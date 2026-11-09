@@ -12,62 +12,66 @@ DEFINE_MUTEX(idr_enclave_lock);
 #define ENCLAVE_IDR_MAX 0xffff
 
 /* Smart destroy, handles partial initialization of epm and utm etc */
-int destroy_enclave(struct enclave* enclave)
+int destroy_enclave(struct enclave *enclave)
 {
-  struct epm* epm;
-  struct utm* utm;
-  if (enclave == NULL)
-    return -ENOSYS;
+    struct epm *epm;
+    struct utm *utm;
+    if (enclave == NULL) {
+	return -ENOSYS;
+    }
 
-  epm = enclave->epm;
-  utm = enclave->utm;
+    epm = enclave->epm;
+    utm = enclave->utm;
 
-  if (epm)
-  {
-    epm_destroy(epm);
-    kfree(epm);
-  }
-  if (utm)
-  {
-    utm_destroy(utm);
-    kfree(utm);
-  }
-  kfree(enclave);
-  return 0;
+    if (epm) {
+	epm_destroy(epm);
+	kfree(epm);
+    }
+    if (utm) {
+	utm_destroy(utm);
+	kfree(utm);
+    }
+    if (enclave->backing) {
+	atomic_long_sub(enclave->backing->size, &keystone_backing_bytes);
+	epm_destroy(enclave->backing);
+	kfree(enclave->backing);
+    }
+    kfree(enclave);
+    return 0;
 }
 
-struct enclave* create_enclave(unsigned long min_pages)
+struct enclave *create_enclave(unsigned long min_pages)
 {
-  struct enclave* enclave;
+    struct enclave *enclave;
 
-  enclave = kmalloc(sizeof(struct enclave), GFP_KERNEL);
-  if (!enclave){
-    keystone_err("failed to allocate enclave struct\n");
-    goto error_no_free;
-  }
+    enclave = kmalloc(sizeof(struct enclave), GFP_KERNEL);
+    if (!enclave) {
+	keystone_err("failed to allocate enclave struct\n");
+	goto error_no_free;
+    }
 
-  enclave->eid = -1;
-  enclave->utm = NULL;
-  enclave->close_on_pexit = 1;
+    enclave->eid = -1;
+    enclave->utm = NULL;
+    enclave->backing = NULL;
+    enclave->close_on_pexit = 1;
 
-  enclave->epm = kmalloc(sizeof(struct epm), GFP_KERNEL);
-  enclave->is_init = true;
-  if (!enclave->epm)
-  {
-    keystone_err("failed to allocate epm\n");
-    goto error_destroy_enclave;
-  }
+    enclave->epm = kmalloc(sizeof(struct epm), GFP_KERNEL);
+    enclave->is_init = true;
+    if (!enclave->epm) {
+	keystone_err("failed to allocate epm\n");
+	goto error_destroy_enclave;
+    }
 
-  if(epm_init(enclave->epm, min_pages)) {
-    keystone_err("failed to initialize epm\n");
-    goto error_destroy_enclave;
-  }
-  return enclave;
+    if (epm_init(enclave->epm, min_pages)) {
+	keystone_err("failed to initialize epm\n");
+	goto error_destroy_enclave;
+    }
+    return enclave;
 
- error_destroy_enclave:
-  destroy_enclave(enclave);
- error_no_free:
-  return NULL;
+error_destroy_enclave:
+    destroy_enclave(enclave);
+error_no_free:
+    return NULL;
 }
 
 unsigned int enclave_idr_alloc(struct enclave* enclave)

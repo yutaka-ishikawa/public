@@ -18,6 +18,15 @@
 #include <linux/idr.h>
 
 #include <linux/file.h>
+#include <linux/mutex.h>
+#include <linux/atomic.h>
+
+extern atomic_long_t keystone_backing_bytes;
+
+struct keystone_file {
+    struct mutex lock;
+    unsigned long ueid;
+};
 
 /* IMPORTANT: This code assumes Sv39 */
 #include "riscv64.h"
@@ -58,6 +67,7 @@ struct enclave
   int close_on_pexit;
   struct utm* utm;
   struct epm* epm;
+  struct epm *backing;
   bool is_init;
 };
 

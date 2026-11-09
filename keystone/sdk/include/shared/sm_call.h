@@ -15,6 +15,8 @@
 #define SBI_SM_DESTROY_ENCLAVE   2002
 #define SBI_SM_RUN_ENCLAVE       2003
 #define SBI_SM_RESUME_ENCLAVE    2005
+/* K3 extension: explicit versioned CREATE, old firmware rejects the FID. */
+#define SBI_SM_CREATE_ENCLAVE_V2 2006
 #define FID_RANGE_HOST           2999
 
 /* 3000-3999 are called by enclave */
@@ -64,6 +66,14 @@ struct keystone_sbi_create_t {
   uintptr_t user_paddr;
   uintptr_t free_paddr;
   uintptr_t free_requested;
+};
+
+#define KEYSTONE_CREATE_V2_VERSION 1
+struct keystone_sbi_create_v2 {
+  uintptr_t version;
+  uintptr_t bytes;
+  struct keystone_sbi_create_t base;
+  struct keystone_sbi_pregion_t backing;
 };
 
 #endif  // __SM_CALL_H__

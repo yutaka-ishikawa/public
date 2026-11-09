@@ -1,0 +1,80 @@
+[SM/TIMER] host=sstc enclave=mtimer slice-us=10000
+[SM/CRYPTO] provider=qemu-dev attestation=1 sealing=1 DEV-ONLY
+rifications/run-all.sh; rc=$?; printf "\nCRYPTO_CASE_EXIT=%d\n" "$rc"
+PASS GUEST HOST SSTC: stimecmp readable in Linux S-mode, compare=154178368
+PASS GUEST SBI 2001: error=100008 expected=100008 value=0
+PASS GUEST SBI 2002: error=100001 expected=100001 value=0
+PASS GUEST SBI 2003: error=100001 expected=100001 value=0
+PASS GUEST SBI 2004: error=100100 expected=100100 value=0
+PASS GUEST SBI 2005: error=100001 expected=100001 value=0
+PASS GUEST SBI 3001: error=100014 expected=100014 value=0
+PASS GUEST SBI 3002: error=100014 expected=100014 value=0
+PASS GUEST SBI 3003: error=100014 expected=100014 value=0
+PASS GUEST SBI 3004: error=100014 expected=100014 value=0
+PASS PACKAGE: stop.ke; size=213271 md5=81eedb6e929ada929db91a3555935d16
+PASS GUEST SBI 3004: invalid request=2 rejected in enclave
+PASS GUEST SBI 3004: invalid request=3 rejected in enclave
+PASS GUEST SBI 3004: invalid request=18446744073709551615 rejected in enclave
+PASS GUEST SBI 3004/2005: explicit timer-yield/resume 1
+PASS GUEST SBI 3004/2005: explicit timer-yield/resume 2
+PASS GUEST SBI 3004/2005: explicit timer-yield/resume 3
+PASS GUEST SBI 3004/2005: SM preemption interval, guest-timer=armed interruptions/resumes=15
+PASS GUEST SBI 3004/2005: SM preemption interval, guest-timer=cancelled interruptions/resumes=15
+PASS GUEST HOST TIMER: sleep/wakeup before RUN and after EXIT
+PASS GUEST SBI 3004: STOP/RESUME, 11 OCALL round trips, stack/global preservation, explicit DESTROY
+FID 4000 guest kernel: 6.18.3
+0aeb039caed488b0c2c36a7baae847258f33ae40068bed17d27630d2518a2451  /usr/lib/modules/6.18.3/extra/keystone-driver.ko
+PASS GUEST SBI 4000: invalid request case=0 status=100014
+PASS GUEST SBI 2006: invalid request case=1 status=100008
+PASS GUEST SBI 2006: invalid request case=2 status=100008
+PASS GUEST SBI 2006: invalid request case=3 status=100008
+PASS GUEST SBI 2006: invalid request case=4 status=100008
+PASS GUEST SBI 2006: invalid request case=5 status=100008
+PASS GUEST SBI 2006: invalid request case=6 status=100008
+PASS GUEST SBI 2006: invalid request case=7 status=100006
+PASS GUEST SBI 2006: invalid request case=8 status=100006
+PASS GUEST SBI 2006: invalid request case=9 status=100008
+PASS PACKAGE: multimem.ke; size=194421 md5=cdae6c6a056886ce6a2b3458e8b3a694
+PASS GUEST SBI 4000/2006: driver ABI/ownership and failed CREATE cleanup
+PASS GUEST SBI 4000/2006: another enclave backing registration rejected
+PASS GUEST SBI 4000: exact registered PA/size=4194304, 8 error probes, 3 OCALL/RESUME, timer stops=4, CPU choices=16
+PASS GUEST SBI 4000: exact registered PA/size=4194304, 8 error probes, 3 OCALL/RESUME, timer stops=5, CPU choices=16
+PASS GUEST SBI 4000/2002: two owners, OCALL/RESUME, destroy/reuse cycle=0
+PASS GUEST SBI 4000/2006: another enclave backing registration rejected
+PASS GUEST SBI 4000: exact registered PA/size=4194304, 8 error probes, 3 OCALL/RESUME, timer stops=5, CPU choices=16
+PASS GUEST SBI 4000: exact registered PA/size=4194304, 8 error probes, 3 OCALL/RESUME, timer stops=5, CPU choices=16
+PASS GUEST SBI 4000/2002: two owners, OCALL/RESUME, destroy/reuse cycle=1
+PASS GUEST SBI 4000/2006: another enclave backing registration rejected
+PASS GUEST SBI 4000: exact registered PA/size=4194304, 8 error probes, 3 OCALL/RESUME, timer stops=4, CPU choices=16
+PASS GUEST SBI 4000: exact registered PA/size=4194304, 8 error probes, 3 OCALL/RESUME, timer stops=4, CPU choices=16
+PASS GUEST SBI 4000/2002: two owners, OCALL/RESUME, destroy/reuse cycle=2
+PASS GUEST SBI 4000: exact registered PA/size=268439552, 8 error probes, 3 OCALL/RESUME, timer stops=4, CPU choices=16
+PASS GUEST SBI 4000: 256 MiB + 4 KiB CMA/TOR backing, timer/migration, reclaimed
+PASS GUEST SBI 4000: exact registered PA/size=0, 8 error probes, 3 OCALL/RESUME, timer stops=4, CPU choices=16
+PASS GUEST SBI 4000: registered/unregistered query, invalid pointers, process-exit cleanup
+PASS PACKAGE: random.ke; size=573493 md5=58b5b46f919af5c2a3636dfd6cf0f40a
+PASS GUEST SBI 3001: mode=native expected-error=0 callbacks=10 DESTROY
+PASS GUEST SBI 3001: mode=env expected-error=0 callbacks=1 DESTROY
+PASS GUEST SBI 3001: AT_RANDOM startup/resume error=0
+PASS PACKAGE: crypto.ke; size=613589 md5=66e22c6acb380adff48edb206cd12d9b
+PASS GUEST CRYPTO: SBI 3002/3003 provider=qemu-dev reports=7 CREATE/RUN/OCALL/RESUME/DESTROY; no keys exported
+PASS GUEST CRYPTO: SBI 3002/3003 provider=qemu-dev reports=7 CREATE/RUN/OCALL/RESUME/DESTROY; no keys exported
+PASS GUEST CRYPTO: SBI 3002/3003 provider=qemu-dev reports=7 CREATE/RUN/OCALL/RESUME/DESTROY; no keys exported
+PASS PACKAGE: edgecall.ke; size=220273 md5=e60004047758f66091a1bb441579580f
+PASS GUEST SBI 2001 PMP: kernel direct-map EPM read denied; UTM/control readable
+PASS GUEST SBI 2001/2003/3004/2005/3006/2002: CREATE/RUN/STOP/RESUME/EXIT/DESTROY
+PASS GUEST SBI 3004/2005: 8 binary OCALL round trips and invalid return rejection
+PASS PACKAGE: edgecall.ke; size=220273 md5=0b9cf825c4a338752b3cac4a5a815eef
+PASS GUEST SBI 2001 PMP: kernel direct-map EPM read denied; UTM/control readable
+PASS GUEST SBI 2001/2003/3004/2005/3006/2002: CREATE/RUN/STOP/RESUME/EXIT/DESTROY
+PASS GUEST SBI 3004/2005: 8 binary OCALL round trips and invalid return rejection
+PASS PACKAGE: edgecall.ke; size=220273 md5=e60004047758f66091a1bb441579580f
+PASS GUEST SBI 2001 PMP: kernel direct-map EPM read denied; UTM/control readable
+PASS GUEST SBI 2001/2003/3004/2005/3006/2002: CREATE/RUN/STOP/RESUME/EXIT/DESTROY
+PASS GUEST SBI 3004/2005: 8 binary OCALL round trips and invalid return rejection
+PASS PACKAGE: edgecall.ke; size=220273 md5=0b9cf825c4a338752b3cac4a5a815eef
+PASS GUEST SBI 2001 PMP: kernel direct-map EPM read denied; UTM/control readable
+PASS GUEST SBI 2001/2003/3004/2005/3006/2002: CREATE/RUN/STOP/RESUME/EXIT/DESTROY
+PASS GUEST SBI 3004/2005: 8 binary OCALL round trips and invalid return rejection
+PASS GUEST SUITE SBI 2001/2002/2003/2004(undefined)/2005/3001/3002/3003/3004/3006/4000: real SBI errors and enclave lifecycle at 2/256 MiB free memory
+CRYPTO_CASE_EXIT=0

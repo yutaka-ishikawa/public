@@ -57,6 +57,10 @@
 | KSB-029 | makeselfの短いpipe readでchecksum誤判定・展開切断 | 外部展開tool／試験経路 | 修正済 |
 | KSB-030 | trap_vector_enclaveが4-byte未整列でmtvecへ設定されない | SM/OpenSBIリンク移植 | 修正済 |
 | KSB-031 | 過去のSstc offでtimer取消し後の中断0 | 現行は再実行全PASS・過去原因未確定 | 要確認（履歴のみ） |
+| KSB-032 | multimem有効化とエラー処理 | SM plugin／K3ビルド統合 | 修正済・実QEMU PASS |
+| KSB-033 | FINALIZE失敗後のdriver IDR | 既存Linux driver | 修正済・実QEMU PASS |
+| KSB-034 | 新規backingのhost復帰時PMP | 本作業の未公開草稿 | 修正済・実QEMU反復PASS |
+| KSB-035 | SDKのhost資源の解放不足 | 既存SDK・ソース確認 | 未修正・4000のページ回収とは別 |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
 KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
@@ -515,3 +519,47 @@ KSB-029のchecksum不一致も現行試験での再発報告はないが、根�
 
 秘密鍵やsealing keyを報告書へ掲載しない。既存の累積変更記録と個別解析文書は根拠として
 リンクし、本書を不具合ID・現在の状態を確認する入口にする。
+
+## KSB-032: multimem有効化時の重複定義と未定義callの成功扱い
+
+対象：SM plugins.c / multimem.c。元コードはplugins.cからmultimem.cをincludeし、
+K3ビルドは同じファイルも別途コンパイルする。有効化するとdo_sbi_multimemが重複し
+linkに失敗することを確認した。また未知callが0（成功）を返し、4000のhost文脈を
+明示的に拒否していなかった。K3のbuild統合と既存pluginのエラー処理に関する問題で、
+他の上流build全体にlink失敗を帰属させない。header includeへ修正し、未知callと
+host呼出しを拒否する。4000のcopy先もprivate EPM内に限定する。
+状態：修正済み。Sstc on/offの実QEMU試験で異常要求拒否・失敗後close・反復回収を確認。
+修正commitと証跡はFID 4000検証記録に記載する。
+
+## KSB-033: FINALIZE失敗後のdriver IDRに解放済みポインタが残る
+
+対象：linux-keystone-driver/keystone-ioctl.c。FINALIZEのSM CREATE失敗時に
+destroy_enclave()だけでメモリを解放し、IDRとfileのUIDを残す実ソースを確認。
+その後SDKのdestroy()/closeが同じポインタを参照する。backing CREATE失敗の
+rollback実装中に発見した既存driverの欠陥。上流releaseでの再現範囲は未確認。
+失敗時は所有権を保持して明示DESTROY/closeで一度だけ回収するよう変更する。
+関連して新backing操作はfile所有者検査・fileごとのmutexで状態遷移を直列化する。
+状態：修正済み。Sstc on/offの実QEMU試験で異常要求拒否・失敗後close・反復回収を確認。
+修正commitと証跡はFID 4000検証記録に記載する。
+
+## KSB-034: 新規backing実装のhost復帰時PMP解除不足
+
+本作業中の未公開草稿に限定。新しいREGION_BACKINGをEPMと同様にhost復帰時
+NO_PERMへ変更すると、host-visibleという設計に反してhostからも参照不能になる。
+QEMUの生成・破棄反復で解放済みbackingページをLinuxが再利用しclear_pageの
+store access faultとなる実ログで確認。上流Keystoneの不具合ではない。
+host復帰・RUN失敗rollbackではbackingのPMPをOFFにし、OS catch-allへ戻す。
+DESTROYでも全hartの解除完了後にdescriptorを解放する。
+状態：修正済み。Sstc両profileで2 enclaveの反復破棄、CPU切替、
+256 MiB + 4 KiB CMA/TOR backingの解除・回収を確認。証跡はFID 4000検証記録を参照。
+
+## KSB-035: SDKのdevice fd・hostオブジェクトの解放不足
+
+対象：SDK host/Enclave.cpp、KeystoneDevice.cpp、KeystoneDevice.hpp。ソース確認で
+Enclaveのdestructorはdestroy()だけを呼び、destroy()はpDevice->destroy()だけを呼ぶ。
+KeystoneDevice::destroy()はSM enclaveを破棄するがdevice fdをcloseせず、
+KeystoneDeviceのdestructorも空である。host側のdevice/memoryオブジェクト等の
+ライフサイクル整理が別途必要。FD数やhost heapの反復増加量の実測は未実施。
+影響は長寿命hostプロセスでの資源増加。今回のbacking_bytes回復はdriverが所有する
+backingページの回収を検証するものであり、SDKの全資源解放の証明にはしない。
+既存SDKに確認した問題で、上流releaseごとの影響範囲は未調査。今回は未修正。

@@ -149,3 +149,9 @@ Makefile経由のOpenSBI/SM、SDK/Eyrie、samplesのbuildと、最終PREFIXが�
 全コンポーネントを通したbuild/installと更新後のゲスト起動は未確認です。
 統合試験は [verification手順](../verifications/README.md)、
 乱数方式別試験は [SBI 3001検証](../verifications/random/README.md) を参照してください。
+
+FID 4000のSDK・driver・firmware更新にも`make build-install`を使う。
+`make verifications`は`sbi-4000`のguest packageとkernel probeも生成し、
+`make install-verifications`はそれらも配置する。
+既定のK3 firmwareではmultimemが有効。無効profileの作り方と個別試験は
+[FID 4000 README](../verifications/sbi-4000/README.md)を参照。

@@ -39,11 +39,12 @@ typedef unsigned int enclave_id;
  * OTHER is managed by some other component (e.g. platform_)
  * INVALID is an unused index
  */
-enum enclave_region_type{
-  REGION_INVALID,
-  REGION_EPM,
-  REGION_UTM,
-  REGION_OTHER,
+enum enclave_region_type {
+    REGION_INVALID,
+    REGION_EPM,
+    REGION_UTM,
+    REGION_OTHER,
+    REGION_BACKING, /* Host-visible, fixed at CREATE; not private EPM. */
 };
 
 struct enclave_region
@@ -109,6 +110,10 @@ struct sealing_key
 /*** SBI functions & external functions ***/
 // callables from the host
 unsigned long create_enclave(unsigned long *eid, struct keystone_sbi_create_t create_args);
+unsigned long create_enclave_backed(unsigned long *eid,
+				    struct keystone_sbi_create_t args,
+				    struct keystone_sbi_pregion_t backing);
+unsigned long multimem_query(enclave_id eid, uintptr_t call, uintptr_t output);
 unsigned long destroy_enclave(enclave_id eid);
 unsigned long run_enclave(struct sbi_trap_regs *regs, enclave_id eid);
 unsigned long resume_enclave(struct sbi_trap_regs *regs, enclave_id eid);

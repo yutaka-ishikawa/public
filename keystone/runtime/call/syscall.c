@@ -329,6 +329,15 @@ void handle_syscall(struct encl_ctx* ctx)
   ctx->regs.sepc += 4;
 
   switch (n) {
+#ifdef USE_MULTIMEM_VERIFY
+    case 1098: {
+	extern uintptr_t multimem_verify(uintptr_t output,
+				 uintptr_t readonly);
+
+	ret = multimem_verify(arg0, arg1);
+	break;
+    }
+#endif
 #ifdef USE_STOP_VERIFY
   case 1100:
       ret = stop_verify_control(arg0, arg1);

@@ -30,9 +30,20 @@ class KeystoneDevice {
 
  private:
   int fd;
+  uintptr_t backingSize;
+  uintptr_t backingAddr = 0;
+  uintptr_t backingAllocated = 0;
   Error __run(bool resume, uintptr_t* ret);
 
  public:
+    uintptr_t getBackingAddress()
+    {
+	return backingAddr;
+    }
+    uintptr_t getBackingSize()
+    {
+	return backingAllocated;
+    }
   virtual uintptr_t getPhysAddr() { return physAddr; }
 
   KeystoneDevice();

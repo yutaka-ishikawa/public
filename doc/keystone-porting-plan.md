@@ -1,6 +1,6 @@
 # K3 Keystone移植状況と残作業計画
 
-実装基準：本リポジトリ `bff3e8dcb`（Linux Sstc／SM M_TIMER共存まで）。
+実装基準：Linux Sstc／SM M_TIMER共存に加え、FID 4000の領域登録・照会・解放まで。
 検証状況更新：2026-11-09、`bb84fa987`の展開・診断修正後、off再確認手順に対する全verification PASSをユーザーから受領。
 初回調査は `8b5e1d870`、当時の上流比較対象はKeystone
 `b8c2385355b2afb5b94a4e5dc503936f1502b972`。
@@ -30,7 +30,8 @@ Keystone拡張IDは `0x08424b45`。表の番号はFID。
 | 3003 | GET_SEALING_KEY：既存HKDF・署名を共通基盤へ接続済み。 | 3002と同時実装 [9bdd68447](https://github.com/yutaka-ishikawa/public/commit/9bdd68447)、native実行修正の到達点 [9455ab462](https://github.com/yutaka-ishikawa/public/commit/9455ab462)。 | QEMUで既知値・識別子分離・再起動整合性等を確認。実機永続鍵・更新運用・暗号化保存サンプルは残る。 |
 | 3004 | STOP：0/1の有効要求、無効要求の事前拒否、host status/a1と切替処理を実装済み。 | 既存の切替基盤は [75f5c0377](https://github.com/yutaka-ishikawa/public/commit/75f5c0377)。要求検査・返却ABI修正と専用実ゲスト試験の追加は [9b7285ae5](https://github.com/yutaka-ishikawa/public/commit/9b7285ae5)。 timer経路修正は [e4a736519](https://github.com/yutaka-ishikawa/public/commit/e4a736519)、Sstc共存・独立MTIMERと11 OCALL試験は [bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)。 | 共存対応後のLinuxを含むQEMU全verification PASSをユーザー確認済み。直接yield・不正要求・通常timer区間・guest timer取消し後の中断・host sleep/wakeupを含む現行suiteの範囲。実機・競合の網羅確認は残る。詳細は [3004実装記録](keystone-sbi-3004-implementation.md)。 |
 | 3006 | EXIT：終了値を伴うホスト復帰を接続済み。 | フレーム切替基盤 [75f5c0377](https://github.com/yutaka-ishikawa/public/commit/75f5c0377)、実ゲスト試験 [0977df6be](https://github.com/yutaka-ishikawa/public/commit/0977df6be)。 | suiteの正常終了を確認。全終了値・異常終了条件の網羅試験は残る。 |
-| 4000 | CALL_PLUGIN：dispatcherあり。multimemを含むK3機能統合は未完了。 | 完了コミットなし。 | backing store登録・所有権・解放とpaging連携を設計する。 |
+| 4000 | CALL_PLUGIN／multimem：K3で登録・照会・解放を統合済み。 | 本変更（完了commitを後続記録）。 | 実QEMUで有効/無効、Sstc on/off、256 MiB超CMA/TOR、異常系・回収を検証。pagingは別工程。 |
+| 2006 | K3拡張CREATE_ENCLAVE_V2：version付きbacking登録。 | 4000と同時実装。 | 旧2001を維持し、不正header・範囲・他enclaveの重複登録を拒否。 |
 
 **2004は定義済みの機能ではない。** 未実装機能として追加せず、未定義番号への拒否応答を試験する。
 初回調査以前の接続については、今回確認した修正コミットを原始実装コミットとは表記しない。
@@ -116,7 +117,8 @@ Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり�
 | 実機の3002/3003用鍵provider | 未実装 | `security/security.c`はqemu-dev条件以外unavailable。`k3_b1_platform_provision()`は失敗を返すstub。descriptor検査だけでは鍵供給は完成しない。 |
 | Jupiter2 WTM RNG | 実装済み・実機未確認 | `rng/rng.c`にCPU MMIO経路あり。DT追加、clock・RNGのLinux/OP-TEEとの所有権調整が必要。QEMUは部分レジスタモデル。 |
 | 実機boot／全hart PMP・IPI・timer | 検証待ち・適合作業が必要 | K3系OpenSBIが共通でも、FSBL/FIT、入力DT、実PMP/PMACFG、実割り込み構成との一致は未確認。 |
-| CALL_PLUGIN／multimem／paging | コードあり・K3未統合 | dispatcherとmultimemコードはあるが、K3で有効化・backing store登録を行う経路がない。runtimeのPAGINGは既定OFF。 |
+| CALL_PLUGIN／multimem | K3統合済み・QEMU検証済み | P0〜P2完了。[実装・検証](../verifications/sbi-4000/README.md)。実機・PMP失敗注入・同時実行等の網羅試験は残る。 |
+| paging | コードあり・K3未統合 | FID 4000計画P3。runtimeのPAGINGは既定OFF。 |
 | PAGE_HASH／PAGE_CRYPTO | コードあり・未統合 | pagingとswap領域、乱数供給への接続が前提。乱数移植だけでpaging完了とはならない。 |
 | 上流attestor.ke／tests.ke | ビルド・組み込み未統合 | 現スクリプトの対象はhelloとhello-native。専用crypto verificationの成功とは別。 |
 | samples/sealing・samples/attestation | 未追加 | 現在のsamplesはhelloworldのみ。 |
@@ -157,23 +159,21 @@ QEMU作業列と実機作業列は並行可能だが、実機資料がない部�
 検査する。開発用qemu-dev identityであることを結果に明示する。
 SBI 3002/3003自体をもう一度新規実装する段階ではない。
 
-### N2：SBI 4000／multimemとbacking storeの接続
+### N2：SBI 4000／multimemの登録・照会・解放（完了）
 
-詳細は[FID 4000実装計画](keystone-fid-4000-plan.md)を参照。
-P0のABI確定からP2の登録・解放を先行し、pagingと暗号化は別工程で検証する。
+[FID 4000実装計画](keystone-fid-4000-plan.md)のP0〜P2を実装した。
+SDK/driverで別backing領域を確保し、拡張CREATE 2006でSMへ固定登録する。
+4000は登録値をprivate EPMへ返し、DESTROY/close時に解除・解放する。
+OpenSBIのecall/domain検査と既存IPI/PMP機構を再利用する。
 
-1. Keystoneのmultimemと通常CREATEにおける`REGION_OTHER`の扱いを再調査する。
-2. driver／SDK／SM間でbacking領域の割当・登録・PMP方針・所有者・解放ABIを設計する。
-   外部swap領域をEPMと同じ秘密保持領域として扱わず、露出可能な内容を定義する。
-3. 明示的なbuild profileでpluginを有効化し、登録前の拒否、正常参照、他enclaveの
-   領域拒否、DESTROY後の回収を実QEMU試験へ追加する。
-
-完了条件：4000が実際の登録領域を扱い、失敗・終了時も領域が漏れないこと。
-pluginのdefineを追加しただけでは完了としない。
+実QEMUで不正呼出し、他enclaveへの重複登録拒否、OCALL/RESUME・timer中断・CPU切替、
+256 MiB + 4 KiB CMA/TOR、反復破棄・プロセス終了後のdriver保持量回復を確認。
+結果とhashは[verification記録](../verifications/sbi-4000/results.md)を参照。
+SDKのfd等のhost資源解放不足はKSB-035として別記し、全資源の回収完了とはしない。
 
 ### N3：paging→PAGE_HASH→PAGE_CRYPTO
 
-N2完了後に着手する。既存Keystone paging／Merkle／swap実装を再利用し、
+N2は完了した。次工程として着手する。既存Keystone paging／Merkle／swap実装を再利用し、
 まず基本evict／swap-in、次にhash検査、最後に暗号化を有効化する。
 PAGE_CRYPTOには利用可能な乱数profileと鍵・counter管理が必要。
 

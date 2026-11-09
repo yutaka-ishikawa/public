@@ -13,4 +13,8 @@ if(NET_SYSCALL)
     list(APPEND CALL_SOURCES net_wrap.c)
 endif()
 
+if(MULTIMEM_VERIFY)
+    list(APPEND CALL_SOURCES multimem_verify.c)
+endif()
+
 add_library(rt_call STATIC ${CALL_SOURCES})

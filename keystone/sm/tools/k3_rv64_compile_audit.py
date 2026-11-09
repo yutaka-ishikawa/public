@@ -51,6 +51,11 @@ def main():
     flags.append("-I" + str(a.output))
     if a.crypto == "qemu-dev":
         flags.append("-DKEYSTONE_CRYPTO_QEMU_DEV=1")
+    import os
+    if os.environ.get("KEYSTONE_MULTIMEM", "1") == "1":
+        flags.append("-DPLUGIN_ENABLE_MULTIMEM=1")
+    elif os.environ.get("KEYSTONE_MULTIMEM") != "0":
+        raise SystemExit("KEYSTONE_MULTIMEM must be 0 or 1")
     if a.trace:
         flags.append("-DKEYSTONE_SM_TRACE=1")
     if a.dev_embedded_key:

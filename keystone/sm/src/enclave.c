@@ -11,6 +11,7 @@
 #include "pmp.h"
 #include "ipi.h"
 #include <sbi/sbi_hart.h>
+#include <sbi/sbi_domain.h>
 #include "page.h"
 #include "cpu.h"
 #include "security/security.h"
@@ -30,6 +31,16 @@ struct enclave enclaves[ENCL_MAX];
 #define ENCLAVE_EXISTS(eid) (eid < ENCL_MAX && enclaves[eid].state >= 0)
 
 static spinlock_t encl_lock = SPIN_LOCK_INITIALIZER;
+
+static int revoke_region(struct enclave_region *region)
+{
+    if (region->type == REGION_BACKING) {
+        /* Host-visible storage must fall through to the OS PMP catch-all.
+         * A matching NO_PERM entry would instead deny subsequent host access. */
+        return pmp_unset(region->pmp_rid);
+    }
+    return pmp_set_keystone(region->pmp_rid, PMP_NO_PERM);
+}
 
 extern void save_host_regs(void);
 extern void restore_host_regs(void);
@@ -69,7 +80,9 @@ context_switch_to_enclave(struct sbi_trap_regs *regs, enclave_id eid,
     for (memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
 	if (enclaves[eid].regions[memid].type != REGION_INVALID &&
 	    pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid,
-			     PMP_ALL_PERM)) {
+			     enclaves[eid].regions[memid].type == REGION_BACKING
+				 ? PMP_R | PMP_W
+				 : PMP_ALL_PERM)) {
 	    goto restore_host_pmp;
 	}
     }
@@ -111,8 +124,7 @@ restore_host_pmp:
     /* Unknown permissions must never reach S-mode after an update failure. */
     for (memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
 	if (enclaves[eid].regions[memid].type != REGION_INVALID &&
-	    pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid,
-			     PMP_NO_PERM)) {
+	    revoke_region(&enclaves[eid].regions[memid])) {
 	    sbi_hart_hang();
 	}
     }
@@ -134,8 +146,7 @@ static inline void context_switch_to_host(struct sbi_trap_regs *regs,
     }
     for (memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
 	if (enclaves[eid].regions[memid].type != REGION_INVALID) {
-	    if (pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid,
-				 PMP_NO_PERM)) {
+	    if (revoke_region(&enclaves[eid].regions[memid])) {
 		sbi_hart_hang();
 	    }
 	}
@@ -393,125 +404,165 @@ static int is_create_args_valid(struct keystone_sbi_create_t* args)
  *
  * This may fail if: it cannot allocate PMP regions, EIDs, etc
  */
-unsigned long create_enclave(unsigned long *eidptr, struct keystone_sbi_create_t create_args)
+static unsigned long
+create_enclave_internal(unsigned long *eidptr,
+			struct keystone_sbi_create_t create_args,
+			struct keystone_sbi_pregion_t backing)
 {
-  /* EPM and UTM parameters */
-  uintptr_t base = create_args.epm_region.paddr;
-  size_t size = create_args.epm_region.size;
-  uintptr_t utbase = create_args.utm_region.paddr;
-  size_t utsize = create_args.utm_region.size;
+    /* EPM and UTM parameters */
+    uintptr_t base = create_args.epm_region.paddr;
+    size_t size = create_args.epm_region.size;
+    uintptr_t utbase = create_args.utm_region.paddr;
+    size_t utsize = create_args.utm_region.size;
 
-  enclave_id eid;
-  unsigned long ret;
-  int region, shared_region;
+    enclave_id eid;
+    unsigned long ret;
+    int region, shared_region;
+    int backing_region = -1;
+    int memid;
+    int pmp_rc;
+    struct runtime_params_t params;
 
-  /* No mutation or EID allocation is permitted before protection and RoT
-   * have been established. This is required for K3 QEMU stage 20. */
+    /* No mutation or EID allocation is permitted before protection and RoT
+     * have been established. This is required for K3 QEMU stage 20. */
 #ifdef KEYSTONE_K3_PMP_N_REG
-  if (!sm_is_ready()) {
-    sbi_printf("[SM/K3] CREATE_ENCLAVE unavailable: SM/PMP not initialized\n");
-    return SBI_ERR_SM_ENCLAVE_NOT_INITIALIZED;
-  }
+    if (!sm_is_ready()) {
+	sbi_printf(
+	    "[SM/K3] CREATE_ENCLAVE unavailable: SM/PMP not initialized\n");
+	return SBI_ERR_SM_ENCLAVE_NOT_INITIALIZED;
+    }
 #endif
-  /* Runtime parameters */
-  if(!is_create_args_valid(&create_args))
-    return SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT;
+    /* Runtime parameters */
+    if (!is_create_args_valid(&create_args)) {
+	return SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT;
+    }
 
-  SM_TRACE_STAGE("CREATE layout valid");
-  /* set params */
-  struct runtime_params_t params;
-  params.dram_base = base;
-  params.dram_size = size;
-  params.runtime_base = create_args.runtime_paddr;
-  params.user_base = create_args.user_paddr;
-  params.free_base = create_args.free_paddr;
-  params.untrusted_base = utbase;
-  params.untrusted_size = utsize;
-  params.free_requested = create_args.free_requested;
+    SM_TRACE_STAGE("CREATE layout valid");
+    /* set params */
+    params.dram_base = base;
+    params.dram_size = size;
+    params.runtime_base = create_args.runtime_paddr;
+    params.user_base = create_args.user_paddr;
+    params.free_base = create_args.free_paddr;
+    params.untrusted_base = utbase;
+    params.untrusted_size = utsize;
+    params.free_requested = create_args.free_requested;
 
+    // allocate eid
+    ret = SBI_ERR_SM_ENCLAVE_NO_FREE_RESOURCE;
+    if (encl_alloc_eid(&eid) != SBI_ERR_SM_ENCLAVE_SUCCESS) {
+	goto error;
+    }
 
-  // allocate eid
-  ret = SBI_ERR_SM_ENCLAVE_NO_FREE_RESOURCE;
-  if (encl_alloc_eid(&eid) != SBI_ERR_SM_ENCLAVE_SUCCESS)
-    goto error;
+    for (memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
+	enclaves[eid].regions[memid].type = REGION_INVALID;
+    }
 
-  // create a PMP region bound to the enclave
-  ret = SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
-  if(pmp_region_init_atomic(base, size, PMP_PRI_ANY, &region, 0))
-    goto free_encl_idx;
+    /* Backing is host-visible like UTM. Reserve a descriptor for exclusive
+     * ownership and grant it locally only on RUN/RESUME. Never deny it
+     * globally. PMP_PRI_ANY supports TOR and avoids the single bottom UTM slot.
+     */
+    if (backing.size) {
+	if (pmp_region_init_atomic(backing.paddr, backing.size, PMP_PRI_ANY,
+				   &backing_region, 0)) {
+	    ret = SBI_ERR_SM_ENCLAVE_REGION_OVERLAPS;
+	    goto free_encl_idx;
+	}
+    }
 
-  // create PMP region for shared memory
-  if(pmp_region_init_atomic(utbase, utsize, PMP_PRI_BOTTOM, &shared_region, 0))
-    goto free_region;
+    // create a PMP region bound to the enclave
+    ret = SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
+    if (pmp_region_init_atomic(base, size, PMP_PRI_ANY, &region, 0)) {
+	goto free_backing_region;
+    }
 
-  // set pmp registers for private region (not shared)
-  SM_TRACE_STAGE("CREATE pmp-global begin");
-  int pmp_rc = pmp_set_global(region, PMP_NO_PERM);
-  SM_TRACE_RESULT("CREATE pmp-global end", pmp_rc);
-  if(pmp_rc)
-    goto free_shared_region;
+    // create PMP region for shared memory
+    if (pmp_region_init_atomic(utbase, utsize, PMP_PRI_BOTTOM, &shared_region,
+			       0)) {
+	goto free_region;
+    }
 
-  // cleanup some memory regions for sanity See issue #38
-  SM_TRACE_STAGE("CREATE utm-clean begin");
-  clean_enclave_memory(utbase, utsize);
-  SM_TRACE_STAGE("CREATE utm-clean end");
+    // set pmp registers for private region (not shared)
+    SM_TRACE_STAGE("CREATE pmp-global begin");
+    pmp_rc = pmp_set_global(region, PMP_NO_PERM);
+    SM_TRACE_RESULT("CREATE pmp-global end", pmp_rc);
+    if (pmp_rc) {
+	goto free_shared_region;
+    }
 
+    // cleanup some memory regions for sanity See issue #38
+    SM_TRACE_STAGE("CREATE utm-clean begin");
+    clean_enclave_memory(utbase, utsize);
+    SM_TRACE_STAGE("CREATE utm-clean end");
 
-  // initialize enclave metadata
-  enclaves[eid].eid = eid;
+    // initialize enclave metadata
+    enclaves[eid].eid = eid;
 
-  enclaves[eid].regions[0].pmp_rid = region;
-  enclaves[eid].regions[0].type = REGION_EPM;
-  enclaves[eid].regions[1].pmp_rid = shared_region;
-  enclaves[eid].regions[1].type = REGION_UTM;
+    enclaves[eid].regions[0].pmp_rid = region;
+    enclaves[eid].regions[0].type = REGION_EPM;
+    enclaves[eid].regions[1].pmp_rid = shared_region;
+    enclaves[eid].regions[1].type = REGION_UTM;
+    if (backing_region >= 0) {
+	enclaves[eid].regions[2].pmp_rid = backing_region;
+	enclaves[eid].regions[2].type = REGION_BACKING;
+    }
 #if __riscv_xlen == 32
-  enclaves[eid].encl_satp = ((base >> RISCV_PGSHIFT) | (SATP_MODE_SV32 << HGATP_MODE_SHIFT));
+    enclaves[eid].encl_satp =
+	((base >> RISCV_PGSHIFT) | (SATP_MODE_SV32 << HGATP_MODE_SHIFT));
 #else
-  enclaves[eid].encl_satp = ((base >> RISCV_PGSHIFT) | (SATP_MODE_SV39 << HGATP_MODE_SHIFT));
+    enclaves[eid].encl_satp =
+	((base >> RISCV_PGSHIFT) | (SATP_MODE_SV39 << HGATP_MODE_SHIFT));
 #endif
-  enclaves[eid].n_thread = 0;
-  enclaves[eid].params = params;
+    enclaves[eid].n_thread = 0;
+    enclaves[eid].params = params;
 
-  /* Init enclave state (regs etc) */
-  clean_state(&enclaves[eid].threads[0]);
+    /* Init enclave state (regs etc) */
+    clean_state(&enclaves[eid].threads[0]);
 
-  /* Platform create happens as the last thing before hashing/etc since
-     it may modify the enclave struct */
-  ret = platform_create_enclave(&enclaves[eid]);
-  if (ret)
-    goto unset_region;
+    /* Platform create happens as the last thing before hashing/etc since
+       it may modify the enclave struct */
+    ret = platform_create_enclave(&enclaves[eid]);
+    if (ret) {
+	goto unset_region;
+    }
 
-  /* Validate memory, prepare hash and signature for attestation */
-  spin_lock(&encl_lock); // FIXME This should error for second enter.
- 
-  SM_TRACE_STAGE("CREATE hash begin");
-  ret = validate_and_hash_enclave(&enclaves[eid]);
-  SM_TRACE_RESULT("CREATE hash end", ret);
-  /* The enclave is fresh if it has been validated and hashed but not run yet. */
-  if (ret)
-    goto unlock;
+    /* Validate memory, prepare hash and signature for attestation */
+    spin_lock(&encl_lock); // FIXME This should error for second enter.
 
-  enclaves[eid].state = FRESH;
-  /* EIDs are unsigned int in size, copy via simple copy */
-  *eidptr = eid;
+    SM_TRACE_STAGE("CREATE hash begin");
+    ret = validate_and_hash_enclave(&enclaves[eid]);
+    SM_TRACE_RESULT("CREATE hash end", ret);
+    /* The enclave is fresh if it has been validated and hashed but not run yet.
+     */
+    if (ret) {
+	goto unlock;
+    }
 
-  spin_unlock(&encl_lock);
-  return SBI_ERR_SM_ENCLAVE_SUCCESS;
+    enclaves[eid].state = FRESH;
+    /* EIDs are unsigned int in size, copy via simple copy */
+    *eidptr = eid;
+
+    spin_unlock(&encl_lock);
+    return SBI_ERR_SM_ENCLAVE_SUCCESS;
 
 unlock:
-  spin_unlock(&encl_lock);
-// free_platform:
-  platform_destroy_enclave(&enclaves[eid]);
+    spin_unlock(&encl_lock);
+    // free_platform:
+    platform_destroy_enclave(&enclaves[eid]);
 unset_region:
-  pmp_unset_global(region);
+    pmp_unset_global(region);
 free_shared_region:
-  pmp_region_free_atomic(shared_region);
+    pmp_region_free_atomic(shared_region);
 free_region:
-  pmp_region_free_atomic(region);
+    pmp_region_free_atomic(region);
+free_backing_region:
+    if (backing_region >= 0) {
+	pmp_region_free_atomic(backing_region);
+    }
 free_encl_idx:
-  encl_free_eid(eid);
+    encl_free_eid(eid);
 error:
-  return ret;
+    return ret;
 }
 
 /*
@@ -521,74 +572,94 @@ error:
  */
 unsigned long destroy_enclave(enclave_id eid)
 {
-  int destroyable;
+    int destroyable;
+    int i;
+    void *base;
+    size_t size;
+    region_id rid;
 
-  spin_lock(&encl_lock);
-  destroyable = (ENCLAVE_EXISTS(eid) &&
-                (enclaves[eid].state == FRESH || enclaves[eid].state == STOPPED));
-  /* update the enclave state first so that
-   * no SM can run the enclave any longer */
-  if(destroyable)
-    enclaves[eid].state = DESTROYING;
-  spin_unlock(&encl_lock);
+    spin_lock(&encl_lock);
+    destroyable = (ENCLAVE_EXISTS(eid) && (enclaves[eid].state == FRESH ||
+					   enclaves[eid].state == STOPPED));
+    /* update the enclave state first so that
+     * no SM can run the enclave any longer */
+    if (destroyable) {
+	enclaves[eid].state = DESTROYING;
+    }
+    spin_unlock(&encl_lock);
 
-  if(!destroyable)
-    return SBI_ERR_SM_ENCLAVE_NOT_DESTROYABLE;
+    if (!destroyable) {
+	return SBI_ERR_SM_ENCLAVE_NOT_DESTROYABLE;
+    }
 
+    // 0. Let the platform specifics do cleanup/modifications
+    platform_destroy_enclave(&enclaves[eid]);
 
-  // 0. Let the platform specifics do cleanup/modifications
-  platform_destroy_enclave(&enclaves[eid]);
+    // 1. clear all the data in the enclave pages
+    // requires no lock (single runner)
+    for (i = 0; i < ENCLAVE_REGIONS_MAX; i++) {
+	if (enclaves[eid].regions[i].type == REGION_INVALID ||
+	    enclaves[eid].regions[i].type == REGION_UTM ||
+	    enclaves[eid].regions[i].type == REGION_BACKING) {
+	    continue;
+	}
+	// 1.a Clear all pages
+	rid = enclaves[eid].regions[i].pmp_rid;
+	base = (void *)pmp_region_get_addr(rid);
+	size = (size_t)pmp_region_get_size(rid);
+	sbi_memset((void *)base, 0, size);
 
+	// 1.b globally unset the region; free descriptors only after all
+	// succeed
+	if (pmp_unset_global(rid)) {
+	    /* Keep DESTROYING and all allocations quarantined. In particular,
+	     * the driver must not receive success and recycle these pages. */
+	    return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
+	}
+    }
 
-  // 1. clear all the data in the enclave pages
-  // requires no lock (single runner)
-  int i;
-  void* base;
-  size_t size;
-  region_id rid;
-  for(i = 0; i < ENCLAVE_REGIONS_MAX; i++){
-    if(enclaves[eid].regions[i].type == REGION_INVALID ||
-       enclaves[eid].regions[i].type == REGION_UTM)
-      continue;
-    //1.a Clear all pages
-    rid = enclaves[eid].regions[i].pmp_rid;
-    base = (void*) pmp_region_get_addr(rid);
-    size = (size_t) pmp_region_get_size(rid);
-    sbi_memset((void*) base, 0, size);
+    rid = get_enclave_region_index(eid, REGION_BACKING);
+    if (rid != -1 && pmp_unset_global(enclaves[eid].regions[rid].pmp_rid)) {
+	return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
+    }
 
-    //1.b globally unset the region; free descriptors only after all succeed
-    if (pmp_unset_global(rid))
-      /* Keep DESTROYING and all allocations quarantined. In particular,
-       * the driver must not receive success and recycle these pages. */
-      return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
-  }
+    /* All private regions are cleared and globally unset. Only now release
+     * their descriptors. A failed unset above must not free even earlier ones.
+     */
+    for (i = 0; i < ENCLAVE_REGIONS_MAX; i++) {
+	if (enclaves[eid].regions[i].type == REGION_INVALID ||
+	    enclaves[eid].regions[i].type == REGION_UTM ||
+	    enclaves[eid].regions[i].type == REGION_BACKING) {
+	    continue;
+	}
+	if (pmp_region_free_atomic(enclaves[eid].regions[i].pmp_rid)) {
+	    return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
+	}
+    }
 
-  /* All private regions are cleared and globally unset. Only now release
-   * their descriptors. A failed unset above must not free even earlier ones. */
-  for (i = 0; i < ENCLAVE_REGIONS_MAX; i++) {
-    if (enclaves[eid].regions[i].type == REGION_INVALID ||
-        enclaves[eid].regions[i].type == REGION_UTM)
-      continue;
-    if (pmp_region_free_atomic(enclaves[eid].regions[i].pmp_rid))
-      return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
-  }
+    // 2. free pmp region for UTM
+    rid = get_enclave_region_index(eid, REGION_UTM);
+    if (rid != -1 &&
+	pmp_region_free_atomic(enclaves[eid].regions[rid].pmp_rid)) {
+	return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
+    }
 
-  // 2. free pmp region for UTM
-  rid = get_enclave_region_index(eid, REGION_UTM);
-  if(rid != -1 && pmp_region_free_atomic(enclaves[eid].regions[rid].pmp_rid))
-    return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
+    rid = get_enclave_region_index(eid, REGION_BACKING);
+    if (rid != -1 &&
+	pmp_region_free_atomic(enclaves[eid].regions[rid].pmp_rid)) {
+	return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
+    }
+    enclaves[eid].encl_satp = 0;
+    enclaves[eid].n_thread = 0;
+    enclaves[eid].params = (struct runtime_params_t){0};
+    for (i = 0; i < ENCLAVE_REGIONS_MAX; i++) {
+	enclaves[eid].regions[i].type = REGION_INVALID;
+    }
 
-  enclaves[eid].encl_satp = 0;
-  enclaves[eid].n_thread = 0;
-  enclaves[eid].params = (struct runtime_params_t) {0};
-  for(i=0; i < ENCLAVE_REGIONS_MAX; i++){
-    enclaves[eid].regions[i].type = REGION_INVALID;
-  }
+    // 3. release eid
+    encl_free_eid(eid);
 
-  // 3. release eid
-  encl_free_eid(eid);
-
-  return SBI_ERR_SM_ENCLAVE_SUCCESS;
+    return SBI_ERR_SM_ENCLAVE_SUCCESS;
 }
 
 unsigned long run_enclave(struct sbi_trap_regs *regs, enclave_id eid)
@@ -801,4 +872,148 @@ int keystone_security_snapshot(unsigned int eid, unsigned char hash[64],
     }
     spin_unlock(&encl_lock);
     return rc;
+}
+
+/* Legacy CREATE remains byte-for-byte compatible. */
+unsigned long create_enclave(unsigned long *eid,
+			     struct keystone_sbi_create_t args)
+{
+    struct keystone_sbi_pregion_t none = {0};
+
+    return create_enclave_internal(eid, args, none);
+}
+
+unsigned long create_enclave_backed(unsigned long *eid,
+				    struct keystone_sbi_create_t args,
+				    struct keystone_sbi_pregion_t backing)
+{
+#ifdef PLUGIN_ENABLE_MULTIMEM
+    uintptr_t end;
+    uintptr_t fw_base;
+    size_t fw_size;
+
+    if (!backing.size || !backing.paddr ||
+	((backing.paddr | backing.size) & (RISCV_PGSIZE - 1)) ||
+	backing.paddr > (uintptr_t)-1 - backing.size ||
+	!is_create_args_valid(&args)) {
+	return SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT;
+    }
+    end = backing.paddr + backing.size;
+    if ((backing.paddr < args.epm_region.paddr + args.epm_region.size &&
+	 args.epm_region.paddr < end) ||
+	(backing.paddr < args.utm_region.paddr + args.utm_region.size &&
+	 args.utm_region.paddr < end)) {
+	return SBI_ERR_SM_ENCLAVE_REGION_OVERLAPS;
+    }
+#ifdef KEYSTONE_K3_PMP_N_REG
+    if (k3_sm_firmware_range(&fw_base, &fw_size) ||
+	(backing.paddr < fw_base + fw_size && fw_base < end)) {
+	return SBI_ERR_SM_ENCLAVE_REGION_OVERLAPS;
+    }
+#else
+    (void)fw_base;
+    (void)fw_size;
+#endif
+    if (!sbi_domain_check_addr_range(sbi_domain_thishart_ptr(), backing.paddr,
+				     backing.size, PRV_S,
+				     SBI_DOMAIN_READ | SBI_DOMAIN_WRITE)) {
+	return SBI_ERR_SM_ENCLAVE_NOT_ACCESSIBLE;
+    }
+    return create_enclave_internal(eid, args, backing);
+#else
+    return SBI_ERR_SM_NOT_IMPLEMENTED;
+#endif
+}
+
+static int multimem_in_epm(uintptr_t pa, size_t len, uintptr_t base,
+			   size_t size)
+{
+    return pa >= base && len <= size && pa - base <= size - len;
+}
+
+/* Keep the original virtual-output-pointer ABI. Accept only an aligned word
+ * in writable private EPM. Each page-table page must itself be private EPM.
+ * A running enclave is pinned against DESTROY and has one execution thread. */
+static int multimem_output_valid(uintptr_t va, uintptr_t base, size_t size)
+{
+    uintptr_t satp;
+    uintptr_t table;
+    uintptr_t entry;
+    uintptr_t pa;
+    uintptr_t mask;
+    int level;
+
+    if (!va || (va & (sizeof(uintptr_t) - 1))) {
+	return 0;
+    }
+    satp = csr_read(satp);
+    if (!satp) {
+	return multimem_in_epm(va, sizeof(uintptr_t), base, size);
+    }
+    if ((satp >> 60) != 8 || (uintptr_t)((intptr_t)(va << 25) >> 25) != va) {
+	return 0;
+    }
+    table = (satp & ((1UL << 44) - 1)) << RISCV_PGSHIFT;
+    for (level = 2; level >= 0; level--) {
+	if (!multimem_in_epm(table, RISCV_PGSIZE, base, size)) {
+	    return 0;
+	}
+	entry = ((uintptr_t *)table)[(va >> (12 + 9 * level)) & 511];
+	if (!(entry & PTE_V) || (entry >> 54) ||
+	    ((entry & PTE_W) && !(entry & PTE_R))) {
+	    return 0;
+	}
+	pa = (entry >> PTE_PPN_SHIFT) << RISCV_PGSHIFT;
+	if (entry & (PTE_R | PTE_X)) {
+	    mask = (1UL << (12 + 9 * level)) - 1;
+	    return (entry & PTE_W) && !(pa & mask) &&
+		   multimem_in_epm(pa | (va & mask), sizeof(uintptr_t), base,
+				   size);
+	}
+	table = pa;
+    }
+    return 0;
+}
+
+unsigned long multimem_query(enclave_id eid, uintptr_t call, uintptr_t output)
+{
+    uintptr_t base;
+    uintptr_t value;
+    size_t size;
+    int epm;
+    int backing;
+
+    if (call != SM_MULTIMEM_CALL_GET_SIZE &&
+	call != SM_MULTIMEM_CALL_GET_ADDR) {
+	return SBI_ERR_SM_NOT_IMPLEMENTED;
+    }
+    if (!cpu_is_enclave_context() || cpu_get_enclave_id() != eid ||
+	!ENCLAVE_EXISTS(eid) || enclaves[eid].state != RUNNING) {
+	return SBI_ERR_SM_ENCLAVE_SBI_PROHIBITED;
+    }
+    backing = get_enclave_region_index(eid, REGION_BACKING);
+#ifndef KEYSTONE_K3_PMP_N_REG
+    if (backing < 0) {
+	backing = get_enclave_region_index(eid, REGION_OTHER);
+    }
+#endif
+    if (backing < 0) {
+	return SBI_ERR_SM_ENCLAVE_NOT_ACCESSIBLE;
+    }
+    epm = get_enclave_region_index(eid, REGION_EPM);
+    if (epm < 0) {
+	return SBI_ERR_SM_ENCLAVE_NOT_ACCESSIBLE;
+    }
+    base = get_enclave_region_base(eid, epm);
+    size = get_enclave_region_size(eid, epm);
+    if (!multimem_output_valid(output, base, size)) {
+	return SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT;
+    }
+    value = call == SM_MULTIMEM_CALL_GET_SIZE
+		? get_enclave_region_size(eid, backing)
+		: get_enclave_region_base(eid, backing);
+    if (copy_word_from_sm(output, &value)) {
+	return SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT;
+    }
+    return SBI_ERR_SM_ENCLAVE_SUCCESS;
 }

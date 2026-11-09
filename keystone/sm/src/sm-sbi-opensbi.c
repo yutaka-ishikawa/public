@@ -14,6 +14,8 @@
 #include "sm-sbi.h"
 #include "sm.h"
 #include "cpu.h"
+#include "enclave.h"
+#include "mprv.h"
 
 /* Keystone's legacy ABI uses positive status codes. New OpenSBI accepts only
  * standard SBI errors from handle(), so complete the frame explicitly and ask
@@ -101,6 +103,20 @@ static int sbi_ecall_keystone_enclave_handler(unsigned long extid,
 	 * Do not let sbi_ecall_handler overwrite mepc/a0/a1. */
 	out->skip_regs_update = (retval == 0);
 	break;
+    case SBI_SM_CREATE_ENCLAVE_V2: {
+	struct keystone_sbi_create_v2 args;
+
+	if (regs->a1 || regs->a2 || regs->a3 ||
+	    copy_to_sm(&args, regs->a0, sizeof args) ||
+	    args.version != KEYSTONE_CREATE_V2_VERSION ||
+	    args.bytes != sizeof args) {
+	    retval = SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT;
+	} else {
+	    retval =
+		create_enclave_backed(&out->value, args.base, args.backing);
+	}
+	break;
+    }
     case SBI_SM_CALL_PLUGIN:
 	retval = sbi_sm_call_plugin(regs->a0, regs->a1, regs->a2, regs->a3);
 	break;

@@ -1,0 +1,9 @@
+results*/
+kernel/*.o
+kernel/*.ko
+kernel/*.mod
+kernel/*.mod.c
+kernel/Module.symvers
+kernel/modules.order
+kernel/.*.cmd
+kernel/.*.d

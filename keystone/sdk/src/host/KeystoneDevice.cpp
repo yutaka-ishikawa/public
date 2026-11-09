@@ -38,22 +38,36 @@ KeystoneDevice::initUTM(size_t size) {
   return encl.utm_paddr;
 }
 
-Error
-KeystoneDevice::finalize(
-    uintptr_t runtimePhysAddr, uintptr_t eappPhysAddr, uintptr_t freePhysAddr,
-    uintptr_t freeRequested) {
-  struct keystone_ioctl_create_enclave encl;
-  encl.eid            = eid;
-  encl.runtime_paddr  = runtimePhysAddr;
-  encl.user_paddr     = eappPhysAddr;
-  encl.free_paddr     = freePhysAddr;
-  encl.free_requested = freeRequested;
+Error KeystoneDevice::finalize(uintptr_t runtimePhysAddr,
+			       uintptr_t eappPhysAddr, uintptr_t freePhysAddr,
+			       uintptr_t freeRequested)
+{
+    struct keystone_ioctl_create_enclave encl;
+    encl.eid = eid;
+    encl.runtime_paddr = runtimePhysAddr;
+    encl.user_paddr = eappPhysAddr;
+    encl.free_paddr = freePhysAddr;
+    encl.free_requested = freeRequested;
 
-  if (ioctl(fd, KEYSTONE_IOC_FINALIZE_ENCLAVE, &encl)) {
-    perror("ioctl error");
-    return Error::IoctlErrorFinalize;
-  }
-  return Error::Success;
+    if (backingSize) {
+	struct keystone_ioctl_backing backing = {};
+
+	backing.version = KEYSTONE_CREATE_V2_VERSION;
+	backing.bytes = sizeof backing;
+	backing.eid = eid;
+	backing.requested = backingSize;
+	if (ioctl(fd, KEYSTONE_IOC_BACKING_INIT, &backing)) {
+	    perror("BACKING_INIT ioctl");
+	    return Error::IoctlErrorFinalize;
+	}
+	backingAddr = backing.paddr;
+	backingAllocated = backing.allocated;
+    }
+    if (ioctl(fd, KEYSTONE_IOC_FINALIZE_ENCLAVE, &encl)) {
+	perror("ioctl error");
+	return Error::IoctlErrorFinalize;
+    }
+    return Error::Success;
 }
 
 Error KeystoneDevice::destroy()
@@ -132,15 +146,16 @@ KeystoneDevice::map(uintptr_t addr, size_t size) {
   return ret;
 }
 
-bool
-KeystoneDevice::initDevice(Params params) { // TODO: why does this need params
-  /* open device driver */
-  fd = open(KEYSTONE_DEV_PATH, O_RDWR);
-  if (fd < 0) {
-    PERROR("cannot open device file");
-    return false;
-  }
-  return true;
+bool KeystoneDevice::initDevice(Params params)
+{ // TODO: why does this need params
+    /* open device driver */
+    backingSize = params.getBackingMemSize();
+    fd = open(KEYSTONE_DEV_PATH, O_RDWR);
+    if (fd < 0) {
+	PERROR("cannot open device file");
+	return false;
+    }
+    return true;
 }
 
 Error

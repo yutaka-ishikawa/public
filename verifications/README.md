@@ -163,3 +163,7 @@ Linux SstcとSM M_TIMERの共存試験は [設計・手順](../doc/keystone-sstc
 package展開は `extract-package.sh` がlocal snapshotの長さ・checksum・gzipを検査して実施する。
 makeselfのpipe/dd短読取り経路を避ける。SMの模擬処理ではない。
 [offログ調査と実Linux on/off結果](../doc/keystone-verification-off-log-followup.md) を参照。
+
+FID 4000（multimem）の登録・照会・解放と拡張CREATE 2006は
+[sbi-4000/README.md](sbi-4000/README.md)を参照。
+`run-all.sh`にも含まれる。paging/hash/cryptoの検証とは別である。

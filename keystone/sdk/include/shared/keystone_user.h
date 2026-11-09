@@ -27,6 +27,18 @@
 #define KEYSTONE_IOC_UTM_INIT \
   _IOR(KEYSTONE_IOC_MAGIC, 0x07, struct keystone_ioctl_create_enclave)
 
+/* Allocate a non-secret, contiguous backing store before FINALIZE. */
+#define KEYSTONE_IOC_BACKING_INIT \
+  _IOWR(KEYSTONE_IOC_MAGIC, 0x08, struct keystone_ioctl_backing)
+struct keystone_ioctl_backing {
+  uintptr_t version;
+  uintptr_t bytes;
+  uintptr_t eid;
+  uintptr_t requested;
+  uintptr_t paddr;
+  uintptr_t allocated;
+};
+
 #define RT_NOEXEC 0
 #define USER_NOEXEC 1
 #define RT_FULL 2

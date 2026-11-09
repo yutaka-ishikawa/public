@@ -1,0 +1,19 @@
+[SM/TIMER] host=sstc enclave=mtimer slice-us=10000
+[SM/CRYPTO] provider=unavailable attestation=0 sealing=0
+h --disabled; rc=$?; printf "\nMULTIMEM_EXIT=%d\n" "$rc"
+FID 4000 guest kernel: 6.18.3
+0aeb039caed488b0c2c36a7baae847258f33ae40068bed17d27630d2518a2451  /usr/lib/modules/6.18.3/extra/keystone-driver.ko
+PASS GUEST SBI 4000: invalid request case=0 status=100014
+PASS GUEST SBI 2006: invalid request case=1 status=100008
+PASS GUEST SBI 2006: invalid request case=2 status=100008
+PASS GUEST SBI 2006: invalid request case=3 status=100100
+PASS GUEST SBI 2006: invalid request case=4 status=100100
+PASS GUEST SBI 2006: invalid request case=5 status=100100
+PASS GUEST SBI 2006: invalid request case=6 status=100100
+PASS GUEST SBI 2006: invalid request case=7 status=100100
+PASS GUEST SBI 2006: invalid request case=8 status=100100
+PASS GUEST SBI 2006: invalid request case=9 status=100008
+PASS PACKAGE: multimem.ke; size=194421 md5=cdae6c6a056886ce6a2b3458e8b3a694
+PASS GUEST SBI 4000: exact registered PA/size=0, 8 error probes, 3 OCALL/RESUME, timer stops=4, CPU choices=16
+PASS GUEST SBI 4000: disabled plugin rejected, legacy CREATE works
+MULTIMEM_EXIT=0

@@ -1,7 +1,8 @@
 # FID 4000（CALL_PLUGIN / multimem）実装計画
 
-作成日：2026-11-09。状態：計画策定、実装・追加試験は未実施。
-既存の全PASS結果は、この未統合機能の完了を意味しない。
+作成日：2026-11-09。状態：P0〜P2の登録・照会・解放を実装済み。P3（paging）とP4（hash/crypto）は未統合。
+実装詳細と試験は[ソース検証](../verifications/sbi-4000/source-review.md)、
+[結果](../verifications/sbi-4000/results.md)を参照。
 
 ## 目的と範囲
 
@@ -15,7 +16,7 @@ FID 4000の完成とページングの完成を分ける。4000は領域照会�
 それ自体でswap、暗号化、動的EPM拡張を実行するものではない。
 本計画の初版はCREATE時の固定登録とし、RUN中の領域追加・resizeは対象外とする。
 
-## 調査した既存実装
+## 実装前に調査した既存実装
 
 - `keystone/sm/src/sm-sbi-opensbi.c`：4000からSMへのdispatcherがある。
 - `keystone/sm/src/sm-sbi.c`：現在のenclave IDをpluginへ渡す。
@@ -125,4 +126,15 @@ QEMUの結果でJupiter2実機のPMP・CMA・cache整合性まで確認済みと
 
 P0〜P2と照会・解放のguest試験が完了した時点でFID 4000 / multimem登録を完了とする。
 P3とP4は別に進捗を記録する。各工程の実装commitと試験証跡を本書および
-[移植計画](keystone-porting-plan.md)へ追記する。現時点では完了commitはない。
+[移植計画](keystone-porting-plan.md)へ追記する。P0〜P2の実装commitは移植計画に記載する。
+
+## P0〜P2で確定した仕様
+
+- 新規K3拡張CREATEはFID 2006、構造体version=1。旧FID 2001は変更しない。
+- driverのBACKING_INIT IOCTLはnr 0x08。実長とPAを返す。SDKに任意PA指定APIを追加しない。
+- `REGION_BACKING`を新設し、FU540固有の`REGION_OTHER`転用とは区別する。
+- 4000の既存の仮想出力ポインタABIを維持し、private EPMの書込み可能範囲だけを許可する。
+- host-visibleなbackingのPMPはhost復帰時にOFFへ戻し、DESTROYでも全hartの解除を確認する。
+- K3は既定で有効。`KEYSTONE_MULTIMEM=0`と別firmware出力で無効profileも試験する。
+
+この完了はbackingへのページ退避・復元、暗号化、実機動作を意味しない。
