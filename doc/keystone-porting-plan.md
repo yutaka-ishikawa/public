@@ -159,6 +159,9 @@ SBI 3002/3003自体をもう一度新規実装する段階ではない。
 
 ### N2：SBI 4000／multimemとbacking storeの接続
 
+詳細は[FID 4000実装計画](keystone-fid-4000-plan.md)を参照。
+P0のABI確定からP2の登録・解放を先行し、pagingと暗号化は別工程で検証する。
+
 1. Keystoneのmultimemと通常CREATEにおける`REGION_OTHER`の扱いを再調査する。
 2. driver／SDK／SM間でbacking領域の割当・登録・PMP方針・所有者・解放ABIを設計する。
    外部swap領域をEPMと同じ秘密保持領域として扱わず、露出可能な内容を定義する。
