@@ -43,3 +43,7 @@ CREATE/RUN/RESUME/DESTROYの正常経路はedgecall試験で確認する。
 実ゲストでの新規試験結果は未確認。
 
 3004追加でioctl構造体を拡張した。古い.koを再利用せず、再ビルドしてゲストを再起動する。
+
+Sstc共存対応ではioctl結果にhost timer情報も追加した。
+SstcがLinuxに認識されている場合だけS-modeでstimecmpを読み、アクセス可能なことを表示する。
+非対応profileではCSRに触れない。新しいtest／.koを同じソースからbuildする。

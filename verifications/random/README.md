@@ -127,3 +127,7 @@ FAILだけではSMの実装不具合とは断定できません。
 `scause=0xf`、障害アドレス `0x3ffdfff0`、callbacks=0で停止する場合は、
 [SDK memsetの自己再帰修正](../../doc/keystone-sdk-string-recursion.md) を参照し、
 SDKとrandom.keを再ビルドしてください。
+
+`run-qemu-matrix.py --sstc on|off` でhost timer profileも選べる（既定on）。
+乱数7ケースの検査であり、単独実行では3004のtimer共存suiteを代替しない。
+全suiteは [Sstc共存手順](../../doc/keystone-sstc-coexistence.md) を参照。

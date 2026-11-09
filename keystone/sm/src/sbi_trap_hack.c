@@ -1,3 +1,6 @@
+#ifdef KEYSTONE_K3_PMP_N_REG
+#include <spacemit/k3_keystone_timer.h>
+#endif
 #include "enclave.h"
 #include "sm_trace.h"
 #include <sbi/riscv_asm.h>
@@ -113,29 +116,32 @@ void sbi_trap_handler_keystone_enclave(struct sbi_trap_regs *regs)
 	previous = sbi_trap_get_context(scratch);
 	context.prev_context = previous;
 
-	if (mcause & (1UL << (__riscv_xlen - 1))) {
-		mcause &= ~(1UL << (__riscv_xlen - 1));
-		switch (mcause) {
-		case IRQ_M_TIMER:
-		case IRQ_M_SOFT:
-      SM_TRACE_VALUES("STOP asynchronous cause", mcause, regs->mepc);
-      /* RESUME adds four to the saved enclave PC, hence this bias only
-       * applies to the interrupted enclave frame. STOP itself advances the
-       * restored host ECALL PC exactly once. Unlike old sbi_trap_exit(), the
-       * ported helper returns here: do not advance the host PC a second time. */
-      regs->mepc -= 4;
-      rc = sbi_sm_stop_enclave(regs, STOP_TIMER_INTERRUPT);
-      if (rc) {
-        msg = "enclave interrupt stop failed";
-        goto trap_error;
-      }
-      break;
-		default:
-			msg = "unhandled external interrupt";
-			goto trap_error;
-		};
-		return;
+    if (mcause & (1UL << (__riscv_xlen - 1))) {
+	mcause &= ~(1UL << (__riscv_xlen - 1));
+	switch (mcause) {
+	case IRQ_M_TIMER:
+	case IRQ_M_SOFT:
+#ifdef KEYSTONE_K3_PMP_N_REG
+	    if (mcause == IRQ_M_TIMER) {
+		k3_keystone_timer_fired();
+	    }
+#endif
+	    SM_TRACE_VALUES("STOP asynchronous cause", mcause, regs->mepc);
+	    /* RESUME adds four to the saved enclave PC. Bias only that frame;
+	     * STOP itself advances the restored host ECALL PC exactly once. */
+	    regs->mepc -= 4;
+	    rc = sbi_sm_stop_enclave(regs, STOP_TIMER_INTERRUPT);
+	    if (rc) {
+		msg = "enclave interrupt stop failed";
+		goto trap_error;
+	    }
+	    break;
+	default:
+	    msg = "unhandled external interrupt";
+	    goto trap_error;
 	}
+	return;
+    }
 
 	sbi_trap_set_context(scratch, &context);
 	switch (mcause) {

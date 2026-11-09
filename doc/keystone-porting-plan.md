@@ -99,7 +99,8 @@ Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり�
 | 上流attestor.ke／tests.ke | ビルド・組み込み未統合 | 現スクリプトの対象はhelloとhello-native。専用crypto verificationの成功とは別。 |
 | samples/sealing・samples/attestation | 未追加 | 現在のsamplesはhelloworldのみ。 |
 | IO／LINUX／NET syscallオプション | optional・範囲確認待ち | Eyrieに既存実装あり。全Linux syscallの移植という要求とは分け、必要なAPIを選ぶ。 |
-| CPU hotplug／suspend、Sstc直接利用 | 現在の固定オンライン・M_TIMER方針の対象外 | 拒否解除だけではPMP状態とHSMの整合が保証されない。 |
+| CPU hotplug／suspend | 現在の固定オンライン方針の対象外 | 拒否解除だけではPMP状態とHSMの整合が保証されない。 |
+| Linux Sstc／SM M_TIMER共存 | 実装済み、Linux全suite再実行待ち | [共存実装](keystone-sstc-coexistence.md)。QEMU最小実行でon/off、host期限復元・取消し後の中断を確認。enclaveへSstcを直接公開する拡張は対象外。 |
 | FPU／Vectorの状態管理 | 対応範囲の調査・拡張待ち | 汎用整数contextの動作からFP/Vectorの保存・復元成功は推定しない。 |
 | DMA／IOPMP | 実機向け未整備 | CPU PMPの試験ではデバイスDMA隔離を検証できない。 |
 | 単一enclaveの多スレッド | 上流にもある制約 | `MAX_ENCL_THREADS=1`。複数enclaveの実行と別の拡張で、K3だけの移植漏れとはしない。 |
@@ -193,7 +194,7 @@ QEMUにもproviderの正常／失敗profileを用意できるが、実ハード�
 - IO／NET syscall：必要APIを選び、既存Eyrie実装を有効化して成功・エラー・OCALL復帰を試験。
 - FPU／Vector：対象ISAを決め、host/enclave間の保存・復元、初期値、中断後の計算結果を試験。
 - hotplug／suspend：OpenSBI HSMとPMP世代replay、offline hartの復帰を整合させてから有効化。
-- Sstc：M_TIMERとの切替・stimecmpとpending状態を設計して独立profileで試験。
+- enclaveへのSstc直接公開：Linuxとの共存は実装済み。Eyrieにstimecmpを使わせる場合は、独立した状態管理・割込み配送を追加設計する。
 - DMA／IOPMP：実機デバイスの利用モデルを先に決め、IOPMP設定と実DMAアクセスで確認。
 - 単一enclave多スレッド：上流制約を超える追加設計として、通常の移植から独立させる。
 

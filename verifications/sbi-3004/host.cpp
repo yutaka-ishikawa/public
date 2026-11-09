@@ -1,6 +1,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <cerrno>
+#include <time.h>
 #include "host/Enclave.hpp"
 #include "edge/edge_call.h"
 #include "shared/sm_err.h"
@@ -49,7 +51,7 @@ static void dispatch(void *buffer)
 		       message.status !=
 			   SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT)) ||
 	(calls >= 3 && (message.request != 0 || message.status != 0)) ||
-	(calls == 7 && timer_interrupted < 3)) {
+	((calls == 7 || calls == 9) && timer_interrupted < 3)) {
 	failed = true;
 	return;
     }
@@ -73,15 +75,39 @@ static void dispatch(void *buffer)
     } else if (calls < 6) {
 	printf("PASS GUEST SBI 3004/2005: explicit timer-yield/resume %u\n",
 	       calls - 2);
-    } else if (calls == 6) {
+    } else if (calls == 6 || calls == 8) {
 	timer_interrupted = 0;
 	timer_interval = true;
-    } else if (calls == 7) {
+    } else if (calls == 7 || calls == 9) {
 	timer_interval = false;
-	printf("PASS GUEST SBI 3004/2005: timer-armed interval, "
-	       "asynchronous interruptions/resumes=%u\n", timer_interrupted);
+	printf("PASS GUEST SBI 3004/2005: SM preemption interval, "
+	       "guest-timer=%s interruptions/resumes=%u\n",
+	       calls == 7 ? "armed" : "cancelled", timer_interrupted);
     }
     calls++;
+}
+
+static bool host_timer_wakeup(void)
+{
+    struct timespec before;
+    struct timespec after;
+    struct timespec delay = {0, 20000000};
+    long long elapsed;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &before)) {
+	return false;
+    }
+    while (nanosleep(&delay, &delay)) {
+	if (errno != EINTR) {
+	    return false;
+	}
+    }
+    if (clock_gettime(CLOCK_MONOTONIC, &after)) {
+	return false;
+    }
+    elapsed = (after.tv_sec - before.tv_sec) * 1000000000LL +
+	      after.tv_nsec - before.tv_nsec;
+    return elapsed >= 20000000;
 }
 
 int main(int argc, char **argv)
@@ -94,6 +120,10 @@ int main(int argc, char **argv)
     if (argc != 4) {
 	fprintf(stderr, "Usage: runner EAPP RUNTIME LOADER\n");
 	return 2;
+    }
+    if (!host_timer_wakeup()) {
+	fprintf(stderr, "FAIL HOST TIMER: sleep/wakeup before RUN\n");
+	return 1;
     }
     params.setFreeMemSize(2 * 1024 * 1024);
     params.setUntrustedSize(256 * 1024);
@@ -124,7 +154,12 @@ int main(int argc, char **argv)
 	fprintf(stderr, "FAIL SBI 2002: STOP test cleanup\n");
 	return 1;
     }
-    printf("PASS GUEST SBI 3004: STOP/RESUME, 9 OCALL round trips, "
+    if (!host_timer_wakeup()) {
+	fprintf(stderr, "FAIL HOST TIMER: sleep/wakeup after EXIT\n");
+	return 1;
+    }
+    printf("PASS GUEST HOST TIMER: sleep/wakeup before RUN and after EXIT\n");
+    printf("PASS GUEST SBI 3004: STOP/RESUME, 11 OCALL round trips, "
 	   "stack/global preservation, explicit DESTROY\n");
     return 0;
 }

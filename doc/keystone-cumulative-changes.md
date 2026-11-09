@@ -361,3 +361,14 @@ RESUME→EXIT→DESTROYと中断1を確認。Linux全suiteの再実行とは区�
 snapshotしてからchecksum検査・展開する対策を追加した。
 [実装記録](keystone-sbi-3004-implementation.md) と
 [観測記録](../verifications/sbi-3004/evidence/timer-preemption.md) を参照。
+
+## Linux Sstc／SM M_TIMERの共存
+
+LinuxのISAからsstcを取り除く旧方式を置き換え、RUN/RESUMEでLinux timerを保存して
+独立MTIMERを設定、STOP/EXITでhostのstimecmp・STCE・MTIE・保留状態を復元する。
+既存OpenSBI timer device・scratch・TIME共通処理を再利用する。
+SM実行期限は10msで、enclaveのtimer取消しでは解除されない。
+QEMU `--sstc on|off` と検証profileを追加。Sstc読出し確認とLinux sleep/wakeup、
+guest timer取消し後の中断試験を追加し、3004専用試験は11 OCALLになった。
+最小の実SM/Eyrie経路でon/offの反復中断・host期限復元を確認。
+Linux全suiteの実行と実機動作は未確認。[設計・手順](keystone-sstc-coexistence.md) を参照。

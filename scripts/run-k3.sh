@@ -20,6 +20,7 @@ APPEND_SET=0
 CRYPTO=""
 RNG=""
 ZKR=""
+SSTC=""
 WTM=""
 WTM_FAULT=none
 ROOTFS_FORMAT=raw
@@ -34,6 +35,7 @@ Usage: bash scripts/run-k3.sh [options]
   --rootfs FILE            Raw guest rootfs image (default: selected profile image)
   --crypto unavailable|qemu-dev  Choose normal or explicit development crypto firmware
   --rng auto|zkr|jupiter2|counter  Select matching RNG firmware and devices
+  --sstc on|off            Select host Sstc support (default: CPU model)
   --zkr on|off             Override Zkr CPU extension for negative tests
   --wtm-rng on|off         Override WTM MMIO peripheral
   --wtm-rng-fault none|not-ready|zero  WTM fault injection (QEMU only)
@@ -55,10 +57,10 @@ EOF
 }
 while (($#)); do
  case "$1" in
-  --crypto|--rng|--zkr|--wtm-rng|--wtm-rng-fault|--rootfs-format|--image|--prefix|--qemu|--kernel|--bios|--rootfs|--hostfs|--gdb-port|--monitor-port|--smp|--memory|--append)
+  --sstc|--crypto|--rng|--zkr|--wtm-rng|--wtm-rng-fault|--rootfs-format|--image|--prefix|--qemu|--kernel|--bios|--rootfs|--hostfs|--gdb-port|--monitor-port|--smp|--memory|--append)
    (($#>=2)) || { echo "Missing value for $1" >&2; exit 2; }
    case "$1" in
-    --crypto) CRYPTO=$2;; --rng) RNG=$2;; --zkr) ZKR=$2;; --wtm-rng) WTM=$2;;
+    --sstc) SSTC=$2;; --crypto) CRYPTO=$2;; --rng) RNG=$2;; --zkr) ZKR=$2;; --wtm-rng) WTM=$2;;
     --wtm-rng-fault) WTM_FAULT=$2;; --rootfs-format) ROOTFS_FORMAT=$2;;
     --image) IMAGE=$2;; --qemu) QEMU=$2;; --kernel) KERNEL=$2;; --bios) BIOS=$2;;
     --prefix) PREFIX=$2;; --rootfs) ROOTFS=$2;; --hostfs) HOSTFS=$2;;
@@ -94,6 +96,7 @@ case "$RNG" in
  *) echo 'Invalid --rng' >&2; exit 2;;
 esac
 case "$ROOTFS_FORMAT" in raw|qcow2) :;; *) echo 'Invalid disk format' >&2; exit 2;; esac
+case "$SSTC" in ""|on|off) :;; *) echo 'Invalid --sstc; use on or off' >&2; exit 2;; esac
 case "$WTM_FAULT" in none|not-ready|zero) :;; *) echo 'Invalid WTM fault' >&2; exit 2;; esac
 if [[ -n $RNG ]]; then
  case "$RNG" in zkr|auto) : "${ZKR:=on}";; *) : "${ZKR:=off}";; esac
@@ -134,6 +137,7 @@ HOSTFS="$(realpath -e "$HOSTFS")"
 args=(-accel tcg -smp "$SMP" -m "$MEM" -bios "$BIOS" -kernel "$KERNEL")
 machine=jupiter2
 cpu=rva23s64,k3-pmacfg=true,pmp=true,num-pmp-regions=16,pmp-granularity=16
+if [[ -n $SSTC ]]; then cpu+=",sstc=$SSTC"; fi
 if [[ -n $ZKR ]]; then cpu+=",zkr=$ZKR"; fi
 if [[ -n $WTM || $WTM_FAULT != none ]]; then
  machine+=",wtm-rng=${WTM:-on},wtm-rng-fault=$WTM_FAULT"

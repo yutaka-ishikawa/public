@@ -18,6 +18,10 @@
 #include <sbi/sbi_scratch.h>
 #include <sbi/sbi_timer.h>
 
+#ifdef CONFIG_K3_KEYSTONE_SM
+#include <spacemit/k3_keystone_timer.h>
+#endif
+
 static unsigned long time_delta_off;
 static u64 (*get_time_val)(void);
 static const struct sbi_timer_device *timer_dev = NULL;
@@ -133,6 +137,11 @@ void sbi_timer_set_delta_upper(ulong delta_upper)
 void sbi_timer_event_start(u64 next_event)
 {
 	sbi_pmu_ctr_incr_fw(SBI_PMU_FW_SET_TIMER);
+#ifdef CONFIG_K3_KEYSTONE_SM
+    if (k3_keystone_timer_event(next_event)) {
+	return;
+    }
+#endif
 
 	/**
 	 * Update the stimecmp directly if available. This allows
@@ -210,7 +219,11 @@ int sbi_timer_init(struct sbi_scratch *scratch, bool cold_boot)
 			return ret;
 	}
 
+#ifdef CONFIG_K3_KEYSTONE_SM
+	return k3_keystone_timer_init(cold_boot);
+#else
 	return 0;
+#endif
 }
 
 void sbi_timer_exit(struct sbi_scratch *scratch)

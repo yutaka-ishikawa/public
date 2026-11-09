@@ -67,6 +67,9 @@ struct csrs
 /* enclave thread state */
 struct thread_state
 {
+#ifdef KEYSTONE_K3_PMP_N_REG
+    u64 enclave_timer_deadline;
+#endif
   int prev_mpp;
   uintptr_t prev_mepc;
   uintptr_t prev_mstatus;

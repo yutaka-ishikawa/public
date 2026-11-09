@@ -60,3 +60,10 @@ Linux suiteの全PASSは未確認なので、全firmwareをbuild/install後に�
 
 MD5不一致は原因未確定（KSB-029）。guest runnerは共有上のパッケージをローカルへ
 snapshotしてからchecksum検査・展開する。checksum不一致は引き続き失敗とする。
+
+## Linux SstcとSM M_TIMERの共存への更新
+
+全体のSstc抑止は、LinuxにSstcを維持する [共存方式](keystone-sstc-coexistence.md) に置換した。
+RUN/RESUMEで独立MTIMERを設定し、STOP/EXITでhost timerを復元する。
+最初の9 OCALL試験は、guest timerキャンセル後の中断とhost sleep/wakeupを含む11 OCALLへ拡張。
+QEMU最小実行のon/off確認と、未実行のLinux全suiteを区別して記録する。

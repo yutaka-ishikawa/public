@@ -7,6 +7,8 @@
 struct keystone_verify_sbi {
     __s64 error[KEYSTONE_VERIFY_SBI_COUNT];
     __s64 value[KEYSTONE_VERIFY_SBI_COUNT];
+    __u64 has_sstc;
+    __u64 stimecmp;
 };
 
 #define KEYSTONE_VERIFY_SBI _IOR('K', 0xe2, struct keystone_verify_sbi)

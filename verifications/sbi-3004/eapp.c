@@ -69,6 +69,18 @@ int EAPP_ENTRY main(void)
     }
     message.sequence++;
     report(&message);
+    /* Cancelling the enclave timer must not cancel SM preemption. */
+    message.sequence++;
+    report(&message);
+    if (SYSCALL_2(STOP_VERIFY_SYSCALL, 2, 0)) {
+	EAPP_RETURN(7);
+    }
+    start = ticks();
+    while (ticks() - start < 4000000) {
+	__asm__ volatile("" : : : "memory");
+    }
+    message.sequence++;
+    report(&message);
     for (i = 0; i < 32; i++) {
 	if (stack_canary[i] != (STOP_VERIFY_REPLY ^ i)) {
 	    EAPP_RETURN(5);

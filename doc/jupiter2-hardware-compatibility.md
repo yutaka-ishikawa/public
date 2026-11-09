@@ -12,7 +12,7 @@
 1. 照合したローカルバイナリは532,320バイトで、実機DTと起動引数にあるOpenSBI用NOR領域393,216バイト（384 KiB）に収まらない。
 2. Linuxから取得したDTBのroot compatibleは`spacemit,k3-pico-itx`のみで、現在のOpenSBI K3 platform overrideの対応文字列と一致しない。OpenSBIに最初に渡されるDTBが同じかは未確認。
 3. 実機はX100とA100の混成であり、現在のSMが固定している16 PMPエントリ等の前提を、両種類のCPUのM-mode実測値で確認できていない。
-4. 工場出荷側のLinuxはSstcを利用している。今回のSMが必要とするM-modeタイマー経路への変更、M-mode IPIによる全hartのPMP更新、実機のRPMI電源断は未実行。
+4. 工場出荷側のLinuxはSstcを利用している。今回のLinux Sstc／SM M_TIMER共存、M-mode IPIによる全hartのPMP更新、実機のRPMI電源断は未実行。
 
 OpenSBIのベースがMilk-Vと同じK3ブランチであることはユーザーから確認済みである。K3固有の初期化を一から実装し直す話ではない。ただし、ブランチの一致はコミット・設定・起動用DT・Keystone追加部分・書き込み形式の一致を意味しない。
 
@@ -168,7 +168,7 @@ model = "SpacemiT K3 Pico ITX";
 compatible = "spacemit,k3-pico-itx";
 ```
 
-`fw_platform_lookup_special()`はrootのcompatibleを照合してplatform overrideを選ぶ。**このDTBをそのまま現在のOpenSBIへ渡した場合、K3 overrideは選ばれない。** その場合はCCI、クラスタ起動等だけでなく、K3 overrideに登録されたSstc制御・DT fixupも呼ばれない。
+`fw_platform_lookup_special()`はrootのcompatibleを照合してplatform overrideを選ぶ。**このDTBをそのまま現在のOpenSBIへ渡した場合、K3 overrideは選ばれない。** その場合はCCI、クラスタ起動等の実機overrideも呼ばれない。以前のSstc抑止hookもこの影響を受けたが、現在のtimer共存処理はgeneric共通経路とSMの切替へ接続している。
 
 ただし、今回のDTBはLinux側で採取したものであり、OpenSBIが先に受け取ったDTBと同一かは分からない。U-Boot等がLinux用DTBを別途渡す構成もある。実際のOpenSBI入力DTBを確認する前に、compatibleの追加だけで問題を解決したとは判断しない。
 
@@ -189,9 +189,13 @@ compatible = "spacemit,k3-pico-itx";
 
 ### 4. Sstcと固定オンラインポリシー
 
-工場出荷側のLinuxはSstcを利用している。現在のKeystone構成はSMのプリエンプションをM_TIMERで扱うため、K3 overrideでSstcへのアクセスを無効にし、Linuxへ渡すISA情報からも取り除く設計である。
+工場出荷側のLinuxはSstcを利用している。現在はLinuxのSstcを維持し、
+enclave/Eyrie実行中だけstimecmpを退避してSTCEを無効化、SM用MTIMERを設定する
+[共存方式](keystone-sstc-coexistence.md) に変更した。ISA情報からsstcを削除しない。
+実機でもSM用のMTIMERドライバ・DT・周波数・割込み配線の確認が必要で、共存動作は未確認。
 
-この変更後に、実機LinuxのタイマーがSBI TIME経路へ切り替わり、enclave実行中にも必要なタイマー割り込みが届くかは未確認。また、Keystone構成ではhart STOP/SUSPENDを拒否するため、工場出荷側と同じCPU hotplug・省電力動作を保証するものではない。
+Keystone構成ではhart STOP/SUSPENDを拒否するため、工場出荷側と同じCPU hotplug・
+省電力動作を保証するものではない。
 
 ### 5. shutdown／rebootは実機のデバイスで確認する
 

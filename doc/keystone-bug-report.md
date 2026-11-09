@@ -411,6 +411,11 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
 - 検証：修正後の実QEMU起動でBoot HARTのsstc非表示を確認。全hartのfeature初期化と
   渡すDTの両方に既存hookを接続。Linux suiteの再実行は未確認。
 
+- 現在の方式：全体抑止の対策は、Linux Sstcを維持する
+  [共存方式](keystone-sstc-coexistence.md) に置換。enclaveのTIME要求だけMTIMERへ振り分け、
+  RUN/RESUMEで独立期限を設定し、STOP/EXITでhost状態を復元する。
+  最小の実SM経路でon/off・host期限復元を確認。Linux全suiteと実機は未確認。
+
 ## KSB-029: 共有パッケージの断続的MD5不一致
 
 - 状態：要確認。対象はゲストのmakeself展開と9p共有。

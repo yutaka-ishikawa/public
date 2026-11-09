@@ -7,6 +7,8 @@
 #include <linux/module.h>
 #include <linux/uaccess.h>
 #include <asm/sbi.h>
+#include <asm/csr.h>
+#include <asm/cpufeature.h>
 #include "abi.h"
 #include "sm_call.h"
 
@@ -29,6 +31,10 @@ static long verify_ioctl(struct file *file, unsigned int command,
     }
     if (!capable(CAP_SYS_RAWIO)) {
 	return -EPERM;
+    }
+    result.has_sstc = riscv_has_extension_unlikely(RISCV_ISA_EXT_SSTC);
+    if (result.has_sstc) {
+	result.stimecmp = csr_read(CSR_STIMECMP);
     }
     for (i = 0; i < KEYSTONE_VERIFY_SBI_COUNT; i++) {
 	arg0 = i == 0 ? (unsigned long)&invalid_layout : ~0UL;

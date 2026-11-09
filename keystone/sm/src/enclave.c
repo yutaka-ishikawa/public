@@ -1,3 +1,6 @@
+#ifdef KEYSTONE_K3_PMP_N_REG
+#include <spacemit/k3_keystone_timer.h>
+#endif
 #include "sm_trace.h"
 //******************************************************************************
 // Copyright (c) 2018, The Regents of the University of California (Regents).
@@ -46,124 +49,126 @@ extern byte dev_public_key[PUBLIC_KEY_SIZE];
  *
  * Expects that eid has already been valided, and it is OK to run this enclave
 */
-static inline unsigned long context_switch_to_enclave(struct sbi_trap_regs* regs,
-                                                enclave_id eid,
-                                                int load_parameters){
-  SM_TRACE_STAGE("RUN switch begin");
-  /* Prepare permissions before changing the host trap frame or CSRs. A
-   * failed local update can then return to that unchanged host context. */
-  if (k3_keystone_pmp_assert_active())
-    sbi_hart_hang();
-  if (osm_pmp_set(PMP_NO_PERM))
-    goto restore_host_pmp;
-  for (int memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
-    if (enclaves[eid].regions[memid].type != REGION_INVALID &&
-        pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_ALL_PERM))
-      goto restore_host_pmp;
-  }
+static inline unsigned long
+context_switch_to_enclave(struct sbi_trap_regs *regs, enclave_id eid,
+			  int load_parameters)
+{
+    unsigned long switch_error;
+    uintptr_t interrupts;
+    int memid;
 
-  /* save host context */
-  swap_prev_state(&enclaves[eid].threads[0], regs, 1);
-  swap_prev_mepc(&enclaves[eid].threads[0], regs, regs->mepc);
-  swap_prev_mstatus(&enclaves[eid].threads[0], regs, regs->mstatus);
-
-  uintptr_t interrupts = 0;
-  csr_write(mideleg, interrupts);
-
-  if(load_parameters) {
-    // passing parameters for a first run
-    regs->mepc = (uintptr_t) enclaves[eid].params.dram_base - 4; // regs->mepc will be +4 before sbi_ecall_handler return
-    regs->mstatus = (1 << MSTATUS_MPP_SHIFT);
-    // $a1: (PA) DRAM base,
-    regs->a1 = (uintptr_t) enclaves[eid].params.dram_base;
-    // $a2: DRAM size,
-    regs->a2 = (uintptr_t) enclaves[eid].params.dram_size;
-    // $a3: (PA) kernel location,
-    regs->a3 = (uintptr_t) enclaves[eid].params.runtime_base;
-    // $a4: (PA) user location,
-    regs->a4 = (uintptr_t) enclaves[eid].params.user_base;
-    // $a5: (PA) freemem location,
-    regs->a5 = (uintptr_t) enclaves[eid].params.free_base;
-    // $a6: (PA) utm base,
-    regs->a6 = (uintptr_t) enclaves[eid].params.untrusted_base;
-    // $a7: utm size
-    regs->a7 = (uintptr_t) enclaves[eid].params.untrusted_size;
-
-    // enclave will only have physical addresses in the first run
-    csr_write(satp, 0);
-  }
-
-  switch_vector_enclave();
-
-  // Setup any platform specific defenses
-  platform_switch_to_enclave(&(enclaves[eid]));
-  cpu_enter_enclave_context(eid);
-  SM_TRACE_STAGE("RUN switch end");
-  return SBI_ERR_SM_ENCLAVE_SUCCESS;
+    switch_error = SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
+    SM_TRACE_STAGE("RUN switch begin");
+    /* A failed PMP update must leave the host frame and timer unchanged. */
+    if (k3_keystone_pmp_assert_active()) {
+	sbi_hart_hang();
+    }
+    if (osm_pmp_set(PMP_NO_PERM)) {
+	goto restore_host_pmp;
+    }
+    for (memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
+	if (enclaves[eid].regions[memid].type != REGION_INVALID &&
+	    pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid,
+			     PMP_ALL_PERM)) {
+	    goto restore_host_pmp;
+	}
+    }
+#ifdef KEYSTONE_K3_PMP_N_REG
+    if (k3_keystone_timer_enter(
+	    &enclaves[eid].threads[0].enclave_timer_deadline)) {
+	switch_error = SBI_ERR_SM_ENCLAVE_NOT_RUNNABLE;
+	goto restore_host_pmp;
+    }
+#endif
+    swap_prev_state(&enclaves[eid].threads[0], regs, 1);
+    swap_prev_mepc(&enclaves[eid].threads[0], regs, regs->mepc);
+    swap_prev_mstatus(&enclaves[eid].threads[0], regs, regs->mstatus);
+    interrupts = 0;
+    csr_write(mideleg, interrupts);
+    if (load_parameters) {
+	/* The RUN helper advances mepc once before OpenSBI performs mret. */
+	regs->mepc = (uintptr_t)enclaves[eid].params.dram_base - 4;
+	regs->mstatus = 1 << MSTATUS_MPP_SHIFT;
+	regs->a1 = (uintptr_t)enclaves[eid].params.dram_base;
+	regs->a2 = (uintptr_t)enclaves[eid].params.dram_size;
+	regs->a3 = (uintptr_t)enclaves[eid].params.runtime_base;
+	regs->a4 = (uintptr_t)enclaves[eid].params.user_base;
+	regs->a5 = (uintptr_t)enclaves[eid].params.free_base;
+	regs->a6 = (uintptr_t)enclaves[eid].params.untrusted_base;
+	regs->a7 = (uintptr_t)enclaves[eid].params.untrusted_size;
+	csr_write(satp, 0);
+    }
+    switch_vector_enclave();
+    platform_switch_to_enclave(&enclaves[eid]);
+    cpu_enter_enclave_context(eid);
+#ifdef KEYSTONE_K3_PMP_N_REG
+    k3_keystone_timer_arm();
+#endif
+    SM_TRACE_STAGE("RUN switch end");
+    return SBI_ERR_SM_ENCLAVE_SUCCESS;
 
 restore_host_pmp:
-  /* Revoke every enclave mapping, including ones already applied, before
-   * restoring the OS mapping. Unknown permissions must never reach S-mode. */
-  for (int memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
-    if (enclaves[eid].regions[memid].type != REGION_INVALID &&
-        pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_NO_PERM))
-      sbi_hart_hang();
-  }
-  if (osm_pmp_set(PMP_ALL_PERM))
-    sbi_hart_hang();
-  return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
+    /* Unknown permissions must never reach S-mode after an update failure. */
+    for (memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
+	if (enclaves[eid].regions[memid].type != REGION_INVALID &&
+	    pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid,
+			     PMP_NO_PERM)) {
+	    sbi_hart_hang();
+	}
+    }
+    if (osm_pmp_set(PMP_ALL_PERM)) {
+	sbi_hart_hang();
+    }
+    return switch_error;
 }
 
 static inline void context_switch_to_host(struct sbi_trap_regs *regs,
-    enclave_id eid,
-    int return_on_resume){
+					 enclave_id eid, int return_on_resume)
+{
+    uintptr_t interrupts;
+    uintptr_t pending;
+    int memid;
 
-  /* K3 ADR-001: local PMP writes must never imply INACTIVE protection.
-   * A concurrent HSM admission is not allowed to race this switch. */
-  if (k3_keystone_pmp_assert_active())
-    sbi_hart_hang();
-  // set PMP
-  int memid;
-  for(memid=0; memid < ENCLAVE_REGIONS_MAX; memid++) {
-    if(enclaves[eid].regions[memid].type != REGION_INVALID) {
-      if (pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_NO_PERM))
-        sbi_hart_hang();
+    if (k3_keystone_pmp_assert_active()) {
+	sbi_hart_hang();
     }
-  }
-  if (osm_pmp_set(PMP_ALL_PERM))
-    sbi_hart_hang();
-
-  uintptr_t interrupts = MIP_SSIP | MIP_STIP | MIP_SEIP;
-  csr_write(mideleg, interrupts);
-
-  /* restore host context */
-  swap_prev_state(&enclaves[eid].threads[0], regs, return_on_resume);
-  swap_prev_mepc(&enclaves[eid].threads[0], regs, regs->mepc);
-  swap_prev_mstatus(&enclaves[eid].threads[0], regs, regs->mstatus);
-
-  switch_vector_host();
-
-  uintptr_t pending = csr_read(mip);
-
-  if (pending & MIP_MTIP) {
-    csr_clear(mip, MIP_MTIP);
-    csr_set(mip, MIP_STIP);
-  }
-  if (pending & MIP_MSIP) {
-    csr_clear(mip, MIP_MSIP);
-    csr_set(mip, MIP_SSIP);
-  }
-  if (pending & MIP_MEIP) {
-    csr_clear(mip, MIP_MEIP);
-    csr_set(mip, MIP_SEIP);
-  }
-
-  // Reconfigure platform specific defenses
-  platform_switch_from_enclave(&(enclaves[eid]));
-
-  cpu_exit_enclave_context();
-
-  return;
+    for (memid = 0; memid < ENCLAVE_REGIONS_MAX; memid++) {
+	if (enclaves[eid].regions[memid].type != REGION_INVALID) {
+	    if (pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid,
+				 PMP_NO_PERM)) {
+		sbi_hart_hang();
+	    }
+	}
+    }
+    if (osm_pmp_set(PMP_ALL_PERM)) {
+	sbi_hart_hang();
+    }
+    interrupts = MIP_SSIP | MIP_STIP | MIP_SEIP;
+    csr_write(mideleg, interrupts);
+    swap_prev_state(&enclaves[eid].threads[0], regs, return_on_resume);
+    swap_prev_mepc(&enclaves[eid].threads[0], regs, regs->mepc);
+    swap_prev_mstatus(&enclaves[eid].threads[0], regs, regs->mstatus);
+    switch_vector_host();
+    pending = csr_read(mip);
+#ifndef KEYSTONE_K3_PMP_N_REG
+    if (pending & MIP_MTIP) {
+	csr_clear(mip, MIP_MTIP);
+	csr_set(mip, MIP_STIP);
+    }
+#endif
+    if (pending & MIP_MSIP) {
+	csr_clear(mip, MIP_MSIP);
+	csr_set(mip, MIP_SSIP);
+    }
+    if (pending & MIP_MEIP) {
+	csr_clear(mip, MIP_MEIP);
+	csr_set(mip, MIP_SEIP);
+    }
+    platform_switch_from_enclave(&enclaves[eid]);
+#ifdef KEYSTONE_K3_PMP_N_REG
+    k3_keystone_timer_exit();
+#endif
+    cpu_exit_enclave_context();
 }
 
 

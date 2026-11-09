@@ -74,7 +74,7 @@ def run_case(args, case):
         subprocess.run([str(args.qemu_img), "create", "-f", "qcow2", "-F", "raw",
                         "-b", str(args.rootfs.resolve()), str(disk)], check=True)
         command = ["bash", str(ROOT / "scripts/run-k3.sh"), "--prefix", str(prefix),
-                   "--rng", backend, "--rootfs", str(disk), "--rootfs-format", "qcow2",
+                   "--rng", backend, "--sstc", args.sstc, "--rootfs", str(disk), "--rootfs-format", "qcow2",
                    "--hostfs", str(ROOT), *overrides]
         record["command"] = command
         process = subprocess.Popen(command, stdin=subprocess.PIPE,
@@ -128,6 +128,7 @@ def main():
     parser.add_argument("--rootfs", type=Path)
     parser.add_argument("--qemu-img", type=Path)
     parser.add_argument("--logs", type=Path, default=ROOT / "verifications/random/results")
+    parser.add_argument("--sstc", choices=["on", "off"], default="on")
     parser.add_argument("--timeout", type=int, default=240)
     parser.add_argument("--case", choices=[case[0] for case in CASES], action="append")
     args = parser.parse_args()

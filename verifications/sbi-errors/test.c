@@ -31,6 +31,12 @@ int main(void)
 	return 1;
     }
     close(fd);
+    if (result.has_sstc) {
+	printf("PASS GUEST HOST SSTC: stimecmp readable in Linux S-mode, "
+	       "compare=%llu\n", (unsigned long long)result.stimecmp);
+    } else {
+	printf("INFO HOST TIMER: sstc=0; using SBI timer profile\n");
+    }
     failed = 0;
     for (i = 0; i < KEYSTONE_VERIFY_SBI_COUNT; i++) {
 	printf("%s GUEST SBI %u: error=%ld expected=%ld value=%ld\n",

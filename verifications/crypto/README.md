@@ -162,3 +162,10 @@ python3 scripts/tests/test-keystone-native-entry.py
 ```
 
 この補助テストはnative入口だけを検査し、ゲストのOpenSBI/SM統合試験を代用しません。
+
+## Linux SstcとSM M_TIMERの2 profile
+
+`run-qemu.py --all` の既定は `--sstc on`。従来経路は `--sstc off` で検査する。
+両方の結果を残すには `--logs results/sstc-on` / `--logs results/sstc-off` のように分ける。
+rootからの完全なコマンドは [共存手順](../../doc/keystone-sstc-coexistence.md) を参照。
+`--all` はhost timer profileとSstc確認表示も検査する。

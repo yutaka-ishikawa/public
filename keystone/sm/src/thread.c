@@ -85,16 +85,20 @@ void swap_prev_mepc(struct thread_state* thread, struct sbi_trap_regs* regs, uin
 }
 
 
-void clean_state(struct thread_state* state){
-  int i;
-  uintptr_t* prev = (uintptr_t*) &state->prev_state;
-  for(i=1; i<32; i++)
-  {
-    prev[i] = 0;
-  }
+void clean_state(struct thread_state *state)
+{
+    int i;
+    uintptr_t *prev;
 
-  state->prev_mpp = -1; // 0x800;
-  clean_smode_csrs(state);
+    prev = (uintptr_t *)&state->prev_state;
+#ifdef KEYSTONE_K3_PMP_N_REG
+    state->enclave_timer_deadline = ~(u64)0;
+#endif
+    for (i = 1; i < 32; i++) {
+	prev[i] = 0;
+    }
+    state->prev_mpp = -1;
+    clean_smode_csrs(state);
 }
 
 void clean_smode_csrs(struct thread_state* state){

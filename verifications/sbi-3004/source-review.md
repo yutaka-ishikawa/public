@@ -39,3 +39,11 @@ KSB-027を修正。不正requestで先に状態変更・host復帰してUNKNOWN_
 本書はソース上の確認であり、競合、全hart、PMP失敗注入、実機の動作完了を意味しない。
 専用試験は実SBIを呼ぶが、ここでのクロスビルド成功だけをゲストPASSとはしない。
 [README](README.md) に試験コード・build・実行・期待結果を記載する。
+
+## Linux Sstc／SM M_TIMERの共存追加
+
+`opensbi/lib/sbi/sbi_timer.c`の共通event入口でenclaveのTIME要求だけを振り分ける。
+SMはRUN/RESUMEごとに独立のMTIMER期限を設定し、guestのUINT64_MAX要求で取り消させない。
+host timer状態はhartのscratch、guest絶対期限はSM thread metadataで保持する。
+STOP/EXITでhostの比較値・STCE・MTIE・必要な保留STIPを復元する。
+[共存設計・検証限界](../../doc/keystone-sstc-coexistence.md) を参照。

@@ -26,6 +26,10 @@ unsigned long stop_verify_control(unsigned long operation,
 	csr_set(sie, SIE_STIE);
 	return 0;
     }
+    if (operation == 2) {
+	sbi_set_timer(UINT64_MAX);
+	return 0;
+    }
     return (unsigned long)-1;
 }
 #endif

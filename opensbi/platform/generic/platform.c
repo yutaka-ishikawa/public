@@ -34,10 +34,6 @@
 #include <sbi_utils/reset/fdt_reset.h>
 #include <sbi_utils/serial/semihosting.h>
 
-#ifdef CONFIG_K3_KEYSTONE_SM
-#include <spacemit/k3_keystone_timer.h>
-#endif
-
 /* List of platform override modules generated at compile time */
 extern const struct platform_override *const platform_override_modules[];
 
@@ -297,11 +293,7 @@ static int generic_final_init(bool cold_boot)
 	    return rc;
 	}
     }
-#ifdef CONFIG_K3_KEYSTONE_SM
-    return k3_keystone_timer_fdt_fixup(fdt, generic_plat_match);
-#else
     return 0;
-#endif
 }
 
 static bool generic_vendor_ext_check(void)
@@ -345,12 +337,7 @@ static int generic_extensions_init(struct sbi_hart_features *hfeatures)
 	    return rc;
 	}
     }
-#ifdef CONFIG_K3_KEYSTONE_SM
-    /* SM preemption uses M_TIMER even with the QEMU generic DT. */
-    return k3_keystone_timer_extensions(generic_plat_match, hfeatures);
-#else
     return 0;
-#endif
 }
 
 static int generic_domains_init(void)

@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def run(args, name, provider):
-    record = {'case': name, 'provider': provider, 'pass': False}
+    record = {'case': name, 'provider': provider, 'sstc': args.sstc, 'pass': False}
     log = args.logs / (name + '.log')
     record['log'] = str(log)
     prefix = args.prefix.resolve()
@@ -30,7 +30,7 @@ def run(args, name, provider):
             subprocess.run([str(prefix / 'bin/qemu-img'), 'create', '-f', 'qcow2', '-F', 'raw',
                             '-b', str(args.rootfs.resolve()), str(overlay)], check=True)
             command = ['bash', str(ROOT / 'scripts/run-k3.sh'), '--prefix', str(prefix),
-                       '--crypto', provider, '--rootfs', str(overlay), '--rootfs-format', 'qcow2']
+                       '--crypto', provider, '--sstc', args.sstc, '--rootfs', str(overlay), '--rootfs-format', 'qcow2']
             record['command'] = command
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT)
@@ -67,13 +67,19 @@ def run(args, name, provider):
                             banner = f'[SM/CRYPTO] provider={provider} '.encode()
                             minimum = 3 if provider == 'qemu-dev' else 1
                             record['guest_exit'] = int(match[1])
+                            timer_banner = (b'host=sstc enclave=mtimer' if args.sstc == 'on'
+                                            else b'host=sbi-mtimer enclave=mtimer')
+                            host_marker = (b'PASS GUEST HOST SSTC:' if args.sstc == 'on'
+                                           else b'INFO HOST TIMER: sstc=0')
+                            suite_markers = [b'PASS GUEST SBI 3004: STOP/RESUME,',
+                                             b'PASS GUEST SUITE SBI ', timer_banner, host_marker]
+                            suite_complete = (not args.all or
+                                              all(marker in captured for marker in suite_markers))
                             record['pass'] = (int(match[1]) == 0 and banner in captured and
                                               captured.count(b'PASS GUEST CRYPTO:') >= minimum and
-                                              (not args.all or
-                                               (b'PASS GUEST SBI 3004: STOP/RESUME,' in captured and
-                                                b'PASS GUEST SUITE SBI ' in captured)))
+                                              suite_complete)
                             if not record['pass']:
-                                record['error'] = 'Guest failure, provider mismatch or incomplete crypto/STOP suite'
+                                record['error'] = 'Guest failure, provider/timer mismatch or incomplete crypto/STOP suite'
                             return record
                     raise TimeoutError('Timed out waiting for ' + ('test result' if sent else 'root prompt'))
             finally:
@@ -95,6 +101,7 @@ def main():
     parser.add_argument('--rootfs', type=Path)
     parser.add_argument('--logs', type=Path, default=ROOT / 'verifications/crypto/results')
     parser.add_argument('--timeout', type=int, default=300)
+    parser.add_argument('--sstc', choices=['on', 'off'], default='on')
     parser.add_argument('--all', action='store_true', help='Run the existing guest suite each boot and the seven-case RNG matrix')
     args = parser.parse_args()
     # Guest metadata paths use the repository's standard installation.
@@ -128,7 +135,7 @@ def main():
         rng_logs = args.logs / 'rng'
         result = subprocess.run(['python3', str(ROOT / 'verifications/random/run-qemu-matrix.py'),
                                  '--prefix', str(args.prefix), '--rootfs', str(args.rootfs),
-                                 '--logs', str(rng_logs), '--timeout', str(args.timeout)])
+                                 '--logs', str(rng_logs), '--timeout', str(args.timeout), '--sstc', args.sstc])
         records.append({'case': 'rng-matrix-regression', 'pass': result.returncode == 0,
                         'log': str(rng_logs / 'manifest.json')})
         (args.logs / 'manifest.json').write_text(json.dumps(records, indent=2) + '\n')

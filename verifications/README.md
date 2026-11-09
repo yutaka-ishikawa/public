@@ -156,3 +156,7 @@ SBI 3001の [検証手順](random/README.md) を追加した。run-all.shは現�
 `--crypto qemu-dev` で明示的に起動します。既定unavailable試験のPASSと区別してください。
 
 STOPの追加試験・source確認・未実行範囲は [SBI 3004](sbi-3004/README.md) を参照。
+
+Linux SstcとSM M_TIMERの共存試験は [設計・手順](../doc/keystone-sstc-coexistence.md) を参照。
+自動runnerは `--sstc on`（既定）／`--sstc off` を指定できる。3004の現在の専用試験は
+11 OCALL、通常timer区間とguest timer取消し区間、host sleep/wakeupを含む。
