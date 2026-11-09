@@ -78,7 +78,7 @@ if [[ $ONLY != guest && $ONLY != overlay ]]; then
 # sm_call.h currently needs cstdint visible to SDK C++ users.
 CMAKE_ARGS=(-DKEYSTONE_BITS=64 -DKEYSTONE_SDK_DIR="$SDK" -DCMAKE_BUILD_TYPE=Release
  -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=riscv64
- -DCMAKE_C_COMPILER=riscv64-buildroot-linux-gnu-gcc -DCMAKE_CXX_COMPILER=riscv64-buildroot-linux-gnu-g++
+ "-DCMAKE_C_COMPILER=$BUILD_DIR/toolchain/riscv64-buildroot-linux-gnu-gcc" "-DCMAKE_CXX_COMPILER=$BUILD_DIR/toolchain/riscv64-buildroot-linux-gnu-g++"
  "-DCMAKE_C_FLAGS=${CFLAGS:-}" "-DCMAKE_CXX_FLAGS=${CXXFLAGS:-} -include cstdint")
 (cd "$BUILD_DIR"; cmake -S "$ROOT/keystone/sdk" -B "$BUILD_DIR/sdk" "${CMAKE_ARGS[@]}")
 cmake --build "$BUILD_DIR/sdk" --parallel "$JOBS"
@@ -87,18 +87,15 @@ python3 "$ROOT/scripts/check-keystone-eapp-string.py" \
  "$(command -v riscv64-buildroot-linux-gnu-objdump)" "$SDK/lib/libkeystone-eapp.a"
 python3 "$ROOT/scripts/check-keystone-native-crypto.py" \
  "$(command -v "${CROSS_COMPILE:-riscv64-linux-gnu-}nm")" "$SDK/lib/libkeystone-verifier-eapp.a"
-(cd "$BUILD_DIR"; cmake -S "$ROOT/keystone/examples" -B "$BUILD_DIR/examples" "${CMAKE_ARGS[@]}" -DKEYSTONE_EYRIE_RUNTIME="$ROOT/keystone/runtime")
-# ExternalProject copies Eyrie only once. Refresh existing generated copies so
-# source fixes are not silently hidden by a cached download stamp.
-for name in hello hello-native; do
- runtime_copy="$BUILD_DIR/examples/$name/runtime/src/eyrie-$name-eyrie"
- if [[ -d $runtime_copy ]]; then cp -a "$ROOT/keystone/runtime/." "$runtime_copy/"; fi
-done
-cmake --build "$BUILD_DIR/examples" --target hello-package hello-native-package --parallel "$JOBS"
+bash "$ROOT/scripts/build-sample-runtimes.sh" "$BUILD_DIR" "$JOBS"
+make -C "$ROOT/samples" all KEYSTONE_BUILD_DIR="$BUILD_DIR"
+# Keep established package paths for guest overlay and install consumers.
+cp "$ROOT/samples/helloworld/build/hello.ke" "$BUILD_DIR/examples/hello/hello.ke"
+cp "$ROOT/samples/hello-native/build/hello-native.ke" "$BUILD_DIR/examples/hello-native/hello-native.ke"
 fi
 if [[ $ONLY != guest && $ONLY != overlay ]]; then
  python3 "$ROOT/scripts/check-keystone-native-entry.py" \
-  "$(command -v "${CROSS_COMPILE:-riscv64-linux-gnu-}nm")" "$BUILD_DIR/examples/hello-native/hello-native"
+  "$(command -v "${CROSS_COMPILE:-riscv64-linux-gnu-}nm")" "$ROOT/samples/hello-native/build/hello-native"
 fi
 if [[ $ONLY == sdk ]]; then echo "SDK and examples built at $BUILD_DIR"; exit 0; fi
 if [[ $ONLY != guest && $ONLY != overlay ]]; then

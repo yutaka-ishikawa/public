@@ -1,0 +1,20 @@
+[SM/TIMER] host=sbi-mtimer enclave=mtimer slice-us=10000
+[SM/CRYPTO] provider=unavailable attestation=0 sealing=0
+PASS PACKAGE: hello.ke; size=1043774 md5=2d7cef29135c4224c0df4bbdc9c63e19
+PASS SAMPLE hello: enclave exit=0 DESTROY
+PASS PACKAGE: hello-native.ke; size=747368 md5=2c87977f39a4dba85a39d17402a3292b
+PASS SAMPLE hello-native: enclave exit=0 DESTROY
+SKIP SAMPLE attestation: explicit --basic mode
+PASS PACKAGE: tests.ke; size=776152 md5=ca65b6dd66db7e2d758b21f947483810
+PASS SAMPLE test-stack: enclave exit=12345 DESTROY
+PASS SAMPLE test-loop: enclave exit=54321 DESTROY
+PASS SAMPLE test-malloc: enclave exit=11411 DESTROY
+PASS SAMPLE test-long-nop: enclave exit=12345 DESTROY
+PASS SAMPLE test-fibonacci: enclave exit=14930352 DESTROY
+PASS SAMPLE test-fib-bench: enclave exit=2953799 DESTROY
+PASS SAMPLE test-untrusted: enclave exit=13 DESTROY
+SKIP SAMPLE test-attestation: explicit --basic mode
+SKIP SAMPLE test-data-sealing: explicit --basic mode
+PASS SAMPLE tests: selected cases completed (basic=1)
+PASS SAMPLE SUITE: selected examples completed (basic=1)
+SAMPLE_CASE_EXIT=0

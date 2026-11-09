@@ -34,7 +34,7 @@ installは古い成果物の鮮度まで判定しません。ソース変更後�
 | 乱数3方式 | `make rng` | `make install-rng` | Zkr/Jupiter2/counter版firmware。build時に乱数検証パッケージも作る |
 | 3002/3003開発profile | `make crypto` | `make install-crypto` | QEMU開発鍵firmware、公開pin/measurement、専用verification |
 | verifications | `make verifications` | `make install-verifications` | ゲスト検証プログラムと検証用カーネルモジュール |
-| samples | `make samples` | `make install-samples` | `samples/*/Makefile` を持つサンプルをビルド |
+| samples | `make samples` | `make install-samples` | `samples/Makefile`からhello／native／attestor／testsをビルド |
 
 `make sdk` はSDK/Eyrie/examplesのbuild、`make firmware` は `make opensbi` の別名です。
 綴りの別名として `make erie` / `make install-erie`、
@@ -155,3 +155,14 @@ FID 4000のSDK・driver・firmware更新にも`make build-install`を使う。
 `make install-verifications`はそれらも配置する。
 既定のK3 firmwareではmultimemが有効。無効profileの作り方と個別試験は
 [FID 4000 README](../verifications/sbi-4000/README.md)を参照。
+
+## samplesへのexample統合
+
+`make sdk`はSDKとhello/nativeのEyrie profileを準備し、`samples/Makefile`で全アプリを作る。
+アプリだけの変更後は`make -C samples`、個別なら`make -C samples/attestation`等でよい。
+`make install-samples`は共通runner・実行script・README・4パッケージもまとめて配置する。
+
+Eyrie作業ディレクトリは`.build-keystone/sample-runtimes/{hello,hello-native}/{src,build}`。
+従来の`.build-keystone/examples/{hello,hello-native}`には互換用runtime/packageを置く。
+元の`keystone/examples/`のCMakeアプリビルドは通常workflowから呼ばない。
+[samples手順](../samples/README.md)と[互換性差分](keystone-examples-integration.md)を参照。

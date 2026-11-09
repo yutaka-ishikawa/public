@@ -121,8 +121,9 @@ Linuxゲスト→driver→OpenSBI→SM→Eyrie/enclaveを通る試験であり�
 | CALL_PLUGIN／multimem | K3統合済み・QEMU検証済み | P0〜P2完了。[実装・検証](../verifications/sbi-4000/README.md)。実機・PMP失敗注入・同時実行等の網羅試験は残る。 |
 | paging | コードあり・K3未統合 | FID 4000計画P3。runtimeのPAGINGは既定OFF。 |
 | PAGE_HASH／PAGE_CRYPTO | コードあり・未統合 | pagingとswap領域、乱数供給への接続が前提。乱数移植だけでpaging完了とはならない。 |
-| 上流attestor.ke／tests.ke | ビルド・組み込み未統合 | 現スクリプトの対象はhelloとhello-native。専用crypto verificationの成功とは別。 |
-| samples/sealing・samples/attestation | 未追加 | 現在のsamplesはhelloworldのみ。 |
+| 上流attestor.ke／tests.ke相当 | samplesへ統合済み | samples/attestationとsamples/testsでMakefile化。外部pin・正規report・期待retvalへ適合。[統合記録](keystone-examples-integration.md)。 |
+| samples/attestation | 追加済み | challenge/reportのMakefile版。qemu-dev profileで検査。 |
+| samples/sealing | 独立アプリは未追加 | samples/testsのdata-sealing例は統合済み。保存・再起動後の復元・認証付き暗号例とは別。 |
 | IO／LINUX／NET syscallオプション | optional・範囲確認待ち | Eyrieに既存実装あり。全Linux syscallの移植という要求とは分け、必要なAPIを選ぶ。 |
 | CPU hotplug／suspend | 現在の固定オンライン方針の対象外 | 拒否解除だけではPMP状態とHSMの整合が保証されない。 |
 | Linux Sstc／SM M_TIMER共存 | [bff3e8dcb](https://github.com/yutaka-ishikawa/public/commit/bff3e8dcb)で実装済み、現行QEMU全verificationはユーザーPASS確認済み | [共存実装](keystone-sstc-coexistence.md)。最小実行でon/offを確認し、その後Linux全suiteの全PASS報告を受領。追加のクラウドLinux実行でon/off全suiteを確認済み。提供offログの失敗後、ユーザー再実行でも全PASS。過去原因は未確定。実機とenclaveへのSstc直接公開は対象外。 |
@@ -148,17 +149,17 @@ QEMU作業列と実機作業列は並行可能だが、実機資料がない部�
 完了条件：各条件で期待status・データ・復帰・資源再利用を検査できること。
 対象SBI番号と試験名を表示し、未実行をPASSにしない。模擬SM試験は追加しない。
 
-### N1：アプリ開発用サンプルと上流exampleの統合
+### N1：アプリ開発用サンプル（example統合済み、sealing利用例は残る）
 
-1. 既存crypto API・外部pin verifierを使い、`samples/attestation`へMakefile版を追加する。
-2. `samples/sealing`へ取得鍵を使ったデータ保存・復元例を追加する。
-   認証付き暗号ライブラリの利用可否を先に調べ、暗号方式を独自設計しない。
-3. 上流attestorの旧鍵・旧fw_jump.bin・旧測定padding前提を現在の公開manifest入力へ変更する。
-4. 上流tests.keの生成スクリプト・retval判定を確認し、非暗号から順にbuild対象へ追加する。
+hello（samples/helloworld）、hello-native、attestation、上流testsの9例を
+samplesへ統合した。Makefile、共通runner、期待終了値、外部公開metadataの検査と
+guest実行scriptを用意し、元のkeystone/examplesは変更せず残す。
+旧固定鍵・fw_jump padding・native entryの差は[統合記録](keystone-examples-integration.md)を参照。
 
-完了条件：各READMEのbuild／実行手順が通り、正常系・改変拒否・再起動後の復元を
-検査する。開発用qemu-dev identityであることを結果に明示する。
-SBI 3002/3003自体をもう一度新規実装する段階ではない。
+残作業：`samples/sealing`へ取得鍵によるデータ保存・復元例を追加する。
+認証付き暗号ライブラリを調査し、改変拒否と再起動後の復元を検査する。
+統合済みdata-sealing例は鍵取得の確認であり、この保存・復元例の完成ではない。
+SBI 3002/3003自体を新規実装する段階ではない。
 
 ### N2：SBI 4000／multimemの登録・照会・解放（完了）
 

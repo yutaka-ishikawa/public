@@ -1,0 +1,9 @@
+[SM/TIMER] host=sstc enclave=mtimer slice-us=10000
+[SM/CRYPTO] provider=qemu-dev attestation=1 sealing=1 DEV-ONLY
+PASS PACKAGE: hello.ke; size=1043774 md5=2d7cef29135c4224c0df4bbdc9c63e19
+PASS SAMPLE hello: enclave exit=0 DESTROY
+PASS PACKAGE: hello-native.ke; size=747368 md5=2c87977f39a4dba85a39d17402a3292b
+PASS SAMPLE hello-native: enclave exit=0 DESTROY
+PASS PACKAGE: attestor.ke; size=745418 md5=27be15da79476582224e10e1202539c2
+FAIL SAMPLE attestor: SDK=0 exit=2 expected=0
+SAMPLE_CASE_EXIT=1

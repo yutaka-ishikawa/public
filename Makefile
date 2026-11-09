@@ -51,9 +51,7 @@ verifications: linux eyrie
 	$(MAKE) -C "$(ROOT)/verifications" guest $(VERIFY_ARGS)
 	$(MAKE) -C "$(ROOT)/verifications" kernel-modules $(VERIFY_ARGS)
 samples: eyrie
-	@set -e; for directory in "$(ROOT)"/samples/*; do \
-	    if test -f "$$directory/Makefile"; then $(MAKE) -C "$$directory" KEYSTONE_BUILD_DIR="$(KEYSTONE_BUILD_DIR)"; fi; \
-	done
+	$(MAKE) -C "$(ROOT)/samples" all KEYSTONE_BUILD_DIR="$(KEYSTONE_BUILD_DIR)"
 install: $(addprefix install-,$(COMPONENTS))
 $(addprefix install-,$(COMPONENTS)):
 	bash "$(ROOT)/scripts/install-built-keystone.sh" "$(@:install-%=%)" "$(STAGE)" "$(PREFIX)" "$(KEYSTONE_BUILD_DIR)" "$(ROOTFS_ARCHIVE)" "$(ROOTFS_SHA256)"

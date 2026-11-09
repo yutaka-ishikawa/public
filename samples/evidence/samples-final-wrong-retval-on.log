@@ -1,0 +1,5 @@
+[SM/TIMER] host=sstc enclave=mtimer slice-us=10000
+[SM/CRYPTO] provider=qemu-dev attestation=1 sealing=1 DEV-ONLY
+PASS PACKAGE: tests.ke; size=776152 md5=ca65b6dd66db7e2d758b21f947483810
+FAIL SAMPLE test-stack: SDK=0 exit=12345 expected=0
+SAMPLE_CASE_EXIT=1

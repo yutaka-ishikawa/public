@@ -71,12 +71,11 @@ case "$component" in
   done
   copy_tree "$root/verifications" "$prefix/share/keystone/verifications";;
  samples)
-  for directory in "$root"/samples/*; do
-   if [[ -f "$directory/Makefile" ]]; then
-    test -d "$directory/build"
-    copy_tree "$directory" "$prefix/share/keystone/samples/$(basename "$directory")"
-   fi
-  done;;
+  for file in helloworld/build/hello.ke hello-native/build/hello-native.ke \
+   attestation/build/attestor.ke tests/build/tests.ke; do
+   test -s "$root/samples/$file" || { echo "Missing sample output: $file" >&2; exit 3; }
+  done
+  copy_tree "$root/samples" "$prefix/share/keystone/samples";;
  *) echo "Unknown component: $component" >&2; exit 2;;
 esac
 printf 'Installed %s at %s\n' "$component" "$prefix"

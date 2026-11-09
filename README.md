@@ -6,7 +6,7 @@
 
 The `main` branch contains `qemu/`, `opensbi/`, `keystone/`, and `linux-k3/`. Original patches are under `patches/`.
 
-独立したアプリ開発用サンプルは、[samples/helloworld/README.md](samples/helloworld/README.md)を参照してください。通常のMakefileでhelloをビルド・パッケージ化できます。
+アプリ開発用サンプルは、[samples/README.md](samples/README.md)を参照してください。上流examplesのhello、hello-native、attestation、testsをMakefile版へ統合しています。`keystone/examples/`は比較用に保持します。
 
 実機情報と現在のファームウェアの適合性は、[Milk-V Jupiter 2実機調査](doc/jupiter2-hardware-compatibility.md)にまとめています。
 
@@ -58,7 +58,7 @@ bash scripts/build-install-k3.sh --prefix /path/to/bianbu --jobs 5 \
 bash scripts/build-install-keystone.sh --jobs 5
 ```
 
-This builds the SDK, Eyrie and `hello.ke`/`hello-native.ke` using the distro RISC-V toolchain. It reuses K3 QEMU/kernel artifacts from `install/bianbu/` when present, builds missing components using the existing K3 scripts, and always rebuilds firmware from the current SM/OpenSBI sources. The OpenSBI link also tracks the external SM object so an SM-only update cannot silently reuse an older firmware ELF. It builds `keystone-driver.ko` against the **same kernel build output** as the installed Image and creates a separate rootfs using `scripts/build-rootfs-keystone.sh`. The Bianbu guest filesystem is not modified.
+This builds the SDK and Eyrie, then all four example packages through `samples/Makefile` using the distro RISC-V toolchain. The original `keystone/examples/` remains unchanged; CMake is used for SDK/Eyrie preparation, and GNU Make compiles the applications. It reuses K3 QEMU/kernel artifacts from `install/bianbu/` when present, builds missing components using the existing K3 scripts, and always rebuilds firmware from the current SM/OpenSBI sources. The OpenSBI link also tracks the external SM object so an SM-only update cannot silently reuse an older firmware ELF. It builds `keystone-driver.ko` against the **same kernel build output** as the installed Image and creates a separate rootfs using `scripts/build-rootfs-keystone.sh`. The Bianbu guest filesystem is not modified.
 
 Keystone build outputs live in `.build-keystone/`; the shared K3 build output remains `.build-k3/`. The rootfs overlay is populated without loop mounts or sudo and every imported file's content is verified. A pre-existing Keystone image is never overwritten: choose a new `--prefix` for a fresh installation. Generated SDK tool aliases and CMake compatibility flags avoid changing the system toolchain.
 

@@ -407,3 +407,10 @@ Eyrieの既存multimem照会ABIは維持し、専用runtimeに実SMへ送信す�
 [ソース検証](../verifications/sbi-4000/source-review.md)、
 [検証結果](../verifications/sbi-4000/results.md)を参照。
 KSB-032〜034を修正。SDKの既存host資源寿命の課題はKSB-035として未修正で記録した。
+
+## upstream examplesのsamples統合（2026-11-09）
+
+hello、hello-native、attestation、testsをリポジトリ直下samplesのMakefileへ統合した。
+元のkeystone/examplesは保持。Eyrieは専用scriptで2 profileを準備し、アプリはMakeで作る。
+attestorは外部公開metadataと正規report長へ適合し、旧testsはCRT・期待終了値・heapを整理した。
+詳細は[ソース差分](keystone-examples-integration.md)、[使い方](../samples/README.md)。

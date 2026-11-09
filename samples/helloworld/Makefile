@@ -17,7 +17,7 @@ endif
 MAKESELF ?= makeself
 CFLAGS ?= -O2 -g -Wall -Wextra
 CXXFLAGS ?= -O2 -g -Wall -Wextra
-SDK_LIBS := $(SDK_DIR)/lib/libkeystone-host.a $(SDK_DIR)/lib/libkeystone-edge.a
+SDK_LIBS := $(SDK_DIR)/lib/libkeystone-host.a $(SDK_DIR)/lib/libkeystone-edge.a $(SDK_DIR)/lib/libkeystone-verifier.a
 RUNTIME_FILES := $(addprefix $(RUNTIME_DIR)/,eyrie-rt loader.bin .options_log)
 PACKAGE := $(BUILD_DIR)/hello.ke
 
@@ -31,8 +31,8 @@ $(BUILD_DIR):
 $(BUILD_DIR)/hello: $(SAMPLE_DIR)/eapp/hello.c $(SAMPLE_DIR)/Makefile | $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -MF "$@.d" $(LDFLAGS) -static "$<" -o "$@" $(LDLIBS)
 
-$(BUILD_DIR)/hello-runner: $(SAMPLE_DIR)/host/host.cpp $(SDK_LIBS) $(SAMPLE_DIR)/Makefile | $(BUILD_DIR)
-	$(CXX) $(CPPFLAGS) -I"$(SDK_DIR)/include" -include cstdint $(CXXFLAGS) -MMD -MP -MF "$@.d" $(LDFLAGS) "$<" -o "$@" $(SDK_LIBS) $(LDLIBS)
+$(BUILD_DIR)/hello-runner: $(SAMPLE_DIR)/host/host.cpp $(SDK_LIBS) $(SAMPLE_DIR)/Makefile $(REPO_DIR)/samples/common/runner.hpp | $(BUILD_DIR)
+	$(CXX) $(CPPFLAGS) -I"$(SDK_DIR)/include" -I"$(REPO_DIR)/samples/common" -include cstdint $(CXXFLAGS) -MMD -MP -MF "$@.d" $(LDFLAGS) "$<" -o "$@" $(SDK_LIBS) $(LDLIBS)
 
 # Make missing prerequisites actionable without invoking CMake implicitly.
 $(SDK_LIBS) $(RUNTIME_FILES):
@@ -41,17 +41,18 @@ $(SDK_LIBS) $(RUNTIME_FILES):
 	@echo "For another build tree, set KEYSTONE_BUILD_DIR, SDK_DIR or RUNTIME_DIR." >&2
 	@exit 1
 
-$(PACKAGE): $(BUILD_DIR)/hello $(BUILD_DIR)/hello-runner $(RUNTIME_FILES) $(SAMPLE_DIR)/Makefile
+$(PACKAGE): $(BUILD_DIR)/hello $(BUILD_DIR)/hello-runner $(RUNTIME_FILES) $(SAMPLE_DIR)/Makefile $(SAMPLE_DIR)/LICENSE
 	mkdir -p "$(BUILD_DIR)/pkg"
-	cp "$(BUILD_DIR)/hello" "$(BUILD_DIR)/hello-runner" $(foreach file,$(RUNTIME_FILES),"$(file)") "$(BUILD_DIR)/pkg/"
+	cp "$(BUILD_DIR)/hello" "$(BUILD_DIR)/hello-runner" "$(SAMPLE_DIR)/LICENSE" $(foreach file,$(RUNTIME_FILES),"$(file)") "$(BUILD_DIR)/pkg/"
 	$(MAKESELF) --noprogress "$(BUILD_DIR)/pkg" "$@" "Keystone Enclave Package" ./hello-runner hello eyrie-rt loader.bin
 
 check: $(PACKAGE)
-	bash "$(PACKAGE)" --check
+	@work=$$(mktemp -d); trap 'rm -rf "$$work"' EXIT; \
+	    bash "$(REPO_DIR)/samples/common/extract-package.sh" "$(PACKAGE)" "$$work"
 
 clean:
 	rm -f "$(PACKAGE)" "$(BUILD_DIR)/hello" "$(BUILD_DIR)/hello-runner" "$(BUILD_DIR)/hello.d" "$(BUILD_DIR)/hello-runner.d"
-	rm -f $(addprefix "$(BUILD_DIR)/pkg/,$(addsuffix ",hello hello-runner eyrie-rt loader.bin .options_log))
+	rm -f $(addprefix "$(BUILD_DIR)/pkg/,$(addsuffix ",hello hello-runner eyrie-rt loader.bin .options_log LICENSE))
 	-rmdir "$(BUILD_DIR)/pkg" "$(BUILD_DIR)"
 
 -include $(BUILD_DIR)/hello.d $(BUILD_DIR)/hello-runner.d

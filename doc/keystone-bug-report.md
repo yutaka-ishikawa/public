@@ -61,6 +61,11 @@
 | KSB-033 | FINALIZE失敗後のdriver IDR | 既存Linux driver | 修正済・実QEMU PASS |
 | KSB-034 | 新規backingのhost復帰時PMP | 本作業の未公開草稿 | 修正済・実QEMU反復PASS |
 | KSB-035 | SDKのhost資源の解放不足 | 既存SDK・ソース確認 | 未修正・4000のページ回収とは別 |
+| KSB-036 | untrusted例のcount未初期化 | 上流サンプル取込ソース | samples側修正済・実QEMU PASS（元版保持） |
+| KSB-037 | tests runnerが失敗でも0、retval探索先の不一致 | 上流examples/tests | samples側修正済・実QEMU PASS（元版保持） |
+| KSB-038 | fib-benchのrdcycleがillegal instruction | hostのcounter許可に依存 | samplesをrdtimeへ適合・実QEMU PASS |
+| KSB-039 | 新共通runnerがLinux syscall OCALLを配送しない | 本作業の草稿 | 修正済・実QEMU PASS |
+| KSB-040 | attestor自身の2048-byte転送・status未検査 | 上流examples/attestation | samples側修正済・実QEMU PASS（元版保持） |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
 KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
@@ -96,6 +101,9 @@ KSB-010以外の上流所在・上流最新の修正状態は、この台帳で�
 更新（3002/3003共通実装）：成功時のみ共通reportサイズ1352 bytesをコピーし、copy結果も確認。
 実装箇所とbuild結果は [実装記録](keystone-sbi-3002-3003-implementation.md) を参照。
 新しいゲスト正常・異常系はコード作成済みだが、統合実行は未確認。修正commitは本更新の履歴を参照。
+
+samples統合時の追記：元attestor自身にも2048-byte OCALL転送が残る点をKSB-040として
+別登録した。統合コピーでは正規型と成功検査へ適合したが、元examplesを変更したとはしない。
 
 ## KSB-003: attestation入力コピー前の検査不足
 
@@ -383,6 +391,9 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
   乱数eapp本体の停止原因KSB-001とは区別する。
 - 本書は既知の発見と修正記録の整理。新たな網羅的な不具合調査を完了したものではない。
 
+2026-11-09追記：samples統合でattestorと旧testsのコピーも専用CRTへ適合した。
+元のkeystone/examplesは保持し、そちらのlink設定を変更したとはしない。
+
 ## KSB-027: STOP要求の事前検査と戻り値の明確化
 
 - 状態：修正済（SBI 3004実装完了作業で登録）。
@@ -564,3 +575,52 @@ KeystoneDeviceのdestructorも空である。host側のdevice/memoryオブジェ
 影響は長寿命hostプロセスでの資源増加。今回のbacking_bytes回復はdriverが所有する
 backingページの回収を検証するものであり、SDKの全資源解放の証明にはしない。
 既存SDKに確認した問題で、上流releaseごとの影響範囲は未調査。今回は未修正。
+
+## KSB-036: untrustedサンプルのcount未初期化
+
+`keystone/examples/tests/untrusted/untrusted.c`は`int ct;`のまま文字数計算で`ct++`する。
+ソースで確認した既存サンプルの未定義動作。samples側は0初期化し、mallocと共有コピーも検査する。
+上流ディレクトリは比較用に保持し変更しない。修正後のguest結果を本作業記録へ記載する。
+
+## KSB-037: 上流example runnerの失敗が終了statusに反映されない
+
+`keystone/examples/tests/test-runner.cpp`はinit/runのエラーを検査せず、retval不一致も
+表示だけで最後は0を返す。CMakeLists.txtは`test-stack/retval`等を探すが実ファイルは
+`stack/retval`等で、期待値が指定されない。ソース確認で判明した上流取込サンプルの問題。
+attestation/host/verifier.cppにも不一致を表示するだけの経路がある。
+samples側は期待値を明示し、SDK status・enclave値・OCALL・DESTROY失敗を非0で返し、
+実行スクリプトも失敗で停止する。上流側は比較用として残す。
+
+## KSB-038: fib-benchのrdcycleと継承scounterenの不整合
+
+`examples/tests/fib-bench/fib-bench.c`はU-modeでrdcycleを実行するが、SMの
+`clean_smode_csrs()`はLinuxのscounterenを継承する。現K3 QEMU guestではCYが
+許可されず、pc=0x103b0、mtval相当=0xc00029f3、scause=2を観測した。
+アドレスをsample ELFへ照合してread_cycles()と特定。Keystone全機種共通の欠陥とは
+断定せず、counterアクセス方針との適合問題として分類する。samples側は許可済みの
+rdtimeでtimebase tickを計測し、cyclesという表示をしない。SMのcounter権限は変更しない。
+
+## KSB-039: 新規共通sample runnerのLinux syscall配送漏れ
+
+本作業の未公開草稿に限定。nativeの1〜4番OCALLだけを配送し、glibc helloの
+EDGECALL_SYSCALLを拒否していた。guestではSDK=0 exit=0でもrunnerが失敗と判定。
+既存SDKのincoming_call_dispatchへsyscall OCALLを渡すよう修正した。
+上流の不具合ではない。修正後、全12アプリがSstc on/off両方でPASSした。
+
+## KSB-040: attestorサンプル自身のreport転送長と失敗処理
+
+`examples/attestation/eapp/attestor.c`はnonce上限を2048とし、attest_enclaveの結果を
+確認せず2048-byte buffer全体をOCALLする。正規reportは1352 bytesなので、
+余分な696 bytesも送る。Eyrieが2048 bytes書いていたKSB-002とは別の層の問題。
+samples版では上限1024、checked API、sizeof共通report型、成功時だけOCALLへ変更した。
+上流ソースは比較用に保持し、変更していない。鍵・SM hashの旧前提は別途
+[互換性記録](keystone-examples-integration.md)にまとめた。
+
+### samples統合の最終検証（KSB-036〜040）
+
+[検証記録](../samples/results.md)に示すとおり、Sstc on/offの実QEMUで
+全12アプリを確認した。--basicでは暗号例をSKIPとして区別した。
+誤retval、誤った外部device pin、unavailable providerの完全実行は非0となる。
+KSB-036/037/040はsamplesコピー側の修正で、元のkeystone/examplesは変更していない。
+KSB-038はcounterアクセス方針への適合、KSB-039は本作業の草稿に限定した不具合。
+実装commitは統合記録に追記する。
