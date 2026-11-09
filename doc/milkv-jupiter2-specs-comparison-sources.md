@@ -194,3 +194,11 @@ Jupiter2：Bianbu4.0.1、文書更新2026-07-22。P550：Fedora44、2026-09-17�
 - S29 [U-Boot：K3 BootROM認証形式](https://docs.u-boot.org/en/latest/board/spacemit/smtimage.html)
 - S30 [OP-TEE K3 platform（WTM／TE200）](https://github.com/spacemit-com/optee_os/blob/2fbd6ae54d89ff8621cdc1b5379c6bbe6f2d3c59/core/arch/riscv/plat-k3/platform_config.h)
 - S31 [OP-TEE K3 RNG driver](https://github.com/spacemit-com/optee_os/blob/2fbd6ae54d89ff8621cdc1b5379c6bbe6f2d3c59/core/arch/riscv/plat-k3/k3_prng.c)
+
+## テンプレート適用
+
+- ユーザー提供 `Milk-V-jupiter2.pptx` を使用。
+- 表紙の所属・氏名・ロゴ、マスター・テーマ・レイアウトを保持。
+- 内容ページのタイトル・本文はプレースホルダーからマスター書式を継承。
+- 表はPowerPoint標準表、グラフは標準グラフへ変更。表文字はマスターのMeiryo UI・18ptを使用。
+- 元の24枚の情報と出典を維持。長いタイトルの説明はスピーカーノートにも保存。
