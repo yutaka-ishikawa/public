@@ -42,6 +42,8 @@ statusはM_TIMERとM_SOFTで共通なので、原因まで確認する場合はt
 
 ## 最新ログに基づくtimer修正（KSB-028／030）
 
+修正コミット：[e4a736519](https://github.com/yutaka-ishikawa/public/commit/e4a736519)。
+
 ユーザーの全3bootでは、不正request3件・直接yield3回・host側3004拒否はPASS。
 timer区間は中断0でexit=18、suiteはそこで停止した。後続cryptoとedgecallを
 今回のログでPASS扱いしない。乱数は6件PASS、wtm-not-readyは展開時MD5不一致で未到達。

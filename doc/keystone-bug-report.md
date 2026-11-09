@@ -399,7 +399,7 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
 
 ## KSB-028: QEMUでSstc抑止が適用されない
 
-- 状態：修正済。対象はOpenSBI generic初期化とK3 timer hooks。
+- 状態：修正済（[e4a736519](https://github.com/yutaka-ishikawa/public/commit/e4a736519)）。対象はOpenSBI generic初期化とK3 timer hooks。
 - 根拠：ユーザーログで3004直接yieldは3回成功、timer区間は全3bootで0回。
   QEMU root compatibleはriscv-virtio,qemuだが、Sstc抑止はspacemit,k3等のoverrideのみ。
   同じ構成を実QEMU起動するとBoot HART ISA Extensionsにsstcが残ることを再現。
@@ -425,7 +425,7 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
 
 ## KSB-030: enclave trap vectorの4-byte整列不足
 
-- 状態：修正済。対象はSM trap.Sと最終link。
+- 状態：修正済（[e4a736519](https://github.com/yutaka-ishikawa/public/commit/e4a736519)）。対象はSM trap.Sと最終link。
 - 根拠：実firmwareのtrap_vector_enclave=0x33d56（低2bit=2）。mtvecはBASEが4-byte境界、
   低2bitはMODEのため、このアドレスは正しいDirect handlerを指定しない。
   実QEMUでenclave実行中のmtvecは通常OpenSBI handlerの0x1020005f0のまま。
