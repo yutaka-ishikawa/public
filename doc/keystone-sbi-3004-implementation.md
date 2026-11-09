@@ -39,3 +39,22 @@ SM/OpenSBI trace版firmware、S-mode拒否試験のkernel objectのbuild。
 statusはM_TIMERとM_SOFTで共通なので、原因まで確認する場合はtrace版の
 `STOP asynchronous cause a=7`（M_TIMER）を確認する。
 この試験だけで全hart・全割込み原因・実機を網羅したとはしない。
+
+## 最新ログに基づくtimer修正（KSB-028／030）
+
+ユーザーの全3bootでは、不正request3件・直接yield3回・host側3004拒否はPASS。
+timer区間は中断0でexit=18、suiteはそこで停止した。後続cryptoとedgecallを
+今回のログでPASS扱いしない。乱数は6件PASS、wtm-not-readyは展開時MD5不一致で未到達。
+
+原因は2点。Sstc抑止がK3実機overrideにだけ接続され、QEMU generic DTに適用されて
+いなかった。さらにtrap_vector_enclaveが4-byte未整列でmtvec設定が反映されず、
+通常OpenSBI handlerがM_TIMERを処理していた。
+
+既存timer hooksをKeystone有効時のgeneric共通経路へ移し、vectorを4-byte整列、
+最終ELF symbol整列検査を追加した。実機専用のearly/final initをQEMUへ強制しない。
+実SM/Eyrieの最小実行でM_TIMER→STOP→RESUME→EXIT→DESTROYを確認した。
+[観測記録](../verifications/sbi-3004/evidence/timer-preemption.md) を参照。
+Linux suiteの全PASSは未確認なので、全firmwareをbuild/install後に再実行する。
+
+MD5不一致は原因未確定（KSB-029）。guest runnerは共有上のパッケージをローカルへ
+snapshotしてからchecksum検査・展開する。checksum不一致は引き続き失敗とする。

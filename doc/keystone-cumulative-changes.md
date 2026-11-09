@@ -349,3 +349,15 @@ SM/OpenSBI・SDK・パッケージ・kernel objectのbuildを確認。
 追加試験の実ゲスト実行と.koリンクは未確認。過去の全PASSとは区別する。
 [実装記録](keystone-sbi-3004-implementation.md)、
 [専用試験](../verifications/sbi-3004/README.md)、KSB-027を参照。
+
+## SBI 3004 timer区間0回の修正
+
+ユーザーログでは直接yield等は成功しtimer区間だけ0回だった。
+QEMU generic DTにもSstc抑止を適用し（KSB-028）、SM trap vectorへ4-byte整列を指定、
+最終ELFのsymbol検査を追加した（KSB-030）。整列前はmtvecに通常handlerが残っていた。
+実QEMUの最小S-mode runner＋実SM/Eyrie/enclaveで、修正前中断0、修正後M_TIMER→STOP→
+RESUME→EXIT→DESTROYと中断1を確認。Linux全suiteの再実行とは区別する。
+展開時の断続的MD5不一致（KSB-029）は原因未確定で、共有packageをゲストlocalへ
+snapshotしてからchecksum検査・展開する対策を追加した。
+[実装記録](keystone-sbi-3004-implementation.md) と
+[観測記録](../verifications/sbi-3004/evidence/timer-preemption.md) を参照。

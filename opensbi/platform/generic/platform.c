@@ -34,6 +34,10 @@
 #include <sbi_utils/reset/fdt_reset.h>
 #include <sbi_utils/serial/semihosting.h>
 
+#ifdef CONFIG_K3_KEYSTONE_SM
+#include <spacemit/k3_keystone_timer.h>
+#endif
+
 /* List of platform override modules generated at compile time */
 extern const struct platform_override *const platform_override_modules[];
 
@@ -272,29 +276,32 @@ static int generic_early_init(bool cold_boot)
 
 static int generic_final_init(bool cold_boot)
 {
-	void *fdt = fdt_get_address_rw();
-	int rc;
+    void *fdt = fdt_get_address_rw();
+    int rc;
 
-	if (generic_plat && generic_plat->final_init) {
-		rc = generic_plat->final_init(cold_boot, fdt, generic_plat_match);
-		if (rc)
-			return rc;
+    if (generic_plat && generic_plat->final_init) {
+	rc = generic_plat->final_init(cold_boot, fdt, generic_plat_match);
+	if (rc) {
+	    return rc;
 	}
-
-	if (!cold_boot)
-		return 0;
-
-	fdt_cpu_fixup(fdt);
-	fdt_fixups(fdt);
-	fdt_domain_fixup(fdt);
-
-	if (generic_plat && generic_plat->fdt_fixup) {
-		rc = generic_plat->fdt_fixup(fdt, generic_plat_match);
-		if (rc)
-			return rc;
-	}
-
+    }
+    if (!cold_boot) {
 	return 0;
+    }
+    fdt_cpu_fixup(fdt);
+    fdt_fixups(fdt);
+    fdt_domain_fixup(fdt);
+    if (generic_plat && generic_plat->fdt_fixup) {
+	rc = generic_plat->fdt_fixup(fdt, generic_plat_match);
+	if (rc) {
+	    return rc;
+	}
+    }
+#ifdef CONFIG_K3_KEYSTONE_SM
+    return k3_keystone_timer_fdt_fixup(fdt, generic_plat_match);
+#else
+    return 0;
+#endif
 }
 
 static bool generic_vendor_ext_check(void)
@@ -325,20 +332,25 @@ static void generic_final_exit(void)
 
 static int generic_extensions_init(struct sbi_hart_features *hfeatures)
 {
-	int rc;
+    int rc;
 
-	/* Parse the ISA string from FDT and enable the listed extensions */
-	rc = fdt_parse_isa_extensions(fdt_get_address(), current_hartid(),
-				      hfeatures->extensions);
-
-	if (rc)
-		return rc;
-
-	if (generic_plat && generic_plat->extensions_init)
-		return generic_plat->extensions_init(generic_plat_match,
-						     hfeatures);
-
-	return 0;
+    rc = fdt_parse_isa_extensions(fdt_get_address(), current_hartid(),
+				hfeatures->extensions);
+    if (rc) {
+	return rc;
+    }
+    if (generic_plat && generic_plat->extensions_init) {
+	rc = generic_plat->extensions_init(generic_plat_match, hfeatures);
+	if (rc) {
+	    return rc;
+	}
+    }
+#ifdef CONFIG_K3_KEYSTONE_SM
+    /* SM preemption uses M_TIMER even with the QEMU generic DT. */
+    return k3_keystone_timer_extensions(generic_plat_match, hfeatures);
+#else
+    return 0;
+#endif
 }
 
 static int generic_domains_init(void)

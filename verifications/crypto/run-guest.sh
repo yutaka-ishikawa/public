@@ -14,7 +14,9 @@ if [[ ! -e /dev/keystone_enclave ]]; then
 fi
 work=$(mktemp -d /tmp/crypto-verify.XXXXXX)
 trap 'rm -rf "$work"' EXIT
-bash build/crypto.ke --noexec --target "$work/payload"
+# Snapshot before makeself checksum/seek operations; keep checksum failures fatal.
+cp -- "build/crypto.ke" "$work/package.ke"
+bash "$work/package.ke" --noexec --target "$work/payload"
 cd "$work/payload"
 if [[ $mode == unavailable ]]; then
  ./runner eapp-unavailable eyrie-rt loader.bin - - -

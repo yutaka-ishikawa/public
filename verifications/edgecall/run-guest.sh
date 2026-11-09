@@ -22,6 +22,8 @@ if [[ ${1:-} != --data-only && ! -e /dev/keystone_edge_probe ]]; then
 fi
 workdir=$(mktemp -d /tmp/edgecall-verify.XXXXXX)
 trap 'rm -rf "$workdir"' EXIT
-bash "${EDGE_VERIFY_PACKAGE:-build/guest/edgecall.ke}" --noexec --target "$workdir/payload"
+# Snapshot before makeself checksum/seek operations; keep checksum failures fatal.
+cp -- "${EDGE_VERIFY_PACKAGE:-build/guest/edgecall.ke}" "$workdir/package.ke"
+bash "$workdir/package.ke" --noexec --target "$workdir/payload"
 cd "$workdir/payload"
 ./runner eapp eyrie-rt loader.bin "$@"

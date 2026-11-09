@@ -53,6 +53,9 @@
 | KSB-025 | hosted verifierをnative eappへリンクしてcanary参照が未解決 | 今回のverification統合 | 修正済 |
 | KSB-026 | native入口でgp未初期化のまま緩和済み命令を実行 | SDK/native build統合 | 修正済 |
 | KSB-027 | STOPの要求検査前の状態変更・未使用a1の不定値 | SM取込／OpenSBI移植契約 | 修正済 |
+| KSB-028 | QEMUでM_TIMER方針のplatform hookが未適用 | OpenSBI移植 | 修正済 |
+| KSB-029 | 共有上のmakeselfパッケージで断続的MD5不一致 | 試験環境・原因未確定 | 要確認 |
+| KSB-030 | trap_vector_enclaveが4-byte未整列でmtvecへ設定されない | SM/OpenSBIリンク移植 | 修正済 |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
 KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
@@ -393,6 +396,49 @@ build確認済み、report末尾0の実guest試験は作成済み・実行未確
 - 未確認：対応Linux Image/rootfsと完全なModule.symversがないため、追加試験の実ゲスト実行、
   .koリンクは未実施。timer区間の非同期statusだけでM_TIMERとM_SOFTは区別できず、
   原因特定はSM traceのcauseを確認する。既存全PASS報告を新試験のPASSには流用しない。
+
+## KSB-028: QEMUでSstc抑止が適用されない
+
+- 状態：修正済。対象はOpenSBI generic初期化とK3 timer hooks。
+- 根拠：ユーザーログで3004直接yieldは3回成功、timer区間は全3bootで0回。
+  QEMU root compatibleはriscv-virtio,qemuだが、Sstc抑止はspacemit,k3等のoverrideのみ。
+  同じ構成を実QEMU起動するとBoot HART ISA Extensionsにsstcが残ることを再現。
+- 原因：OpenSBIがSstcでstimecmpを設定する一方、SMはmidelegを0にしM_TIMER経路を前提にする。
+  enclaveへの切替時にSTIEが無効になり、enclaveのsie操作では委譲されていないbitを有効化できない。
+- 由来：本リポジトリのK3/OpenSBI移植。上流Keystoneのバグとはしない。
+- 方針：CONFIG_K3_KEYSTONE_SM時、全generic platformで既存のSstc抑止とDT修正を実施。
+  QEMUに実機用のearly/final initを強制しない。
+- 検証：修正後の実QEMU起動でBoot HARTのsstc非表示を確認。全hartのfeature初期化と
+  渡すDTの両方に既存hookを接続。Linux suiteの再実行は未確認。
+
+## KSB-029: 共有パッケージの断続的MD5不一致
+
+- 状態：要確認。対象はゲストのmakeself展開と9p共有。
+- 根拠：最新ユーザーlogの乱数7ケース中wtm-not-readyだけが、SBI実行前のMD5不一致で終了2。
+  他6ケースは同じrandom.keでPASS。ホスト側ファイルの同時更新や読み取り条件は不明。
+- 原因：未確定。makeselfのMS_ddはpipe上のddに固定block数を指定しfullblockを指定しない。
+  短いreadの扱いや共有上の変更を調べる必要があり、MD5不一致だけでSM故障とはしない。
+- 対策実装済み：4つのguest runnerでパッケージをゲストローカルへsnapshotし、
+  既存checksum検査を維持して展開する。共有からのコピー後も不一致なら失敗する。
+  不一致を無視したり、成功へ置き換えたりしない。
+- 未確認：元の断続的現象の再現と解消。ローカルsnapshotだけで全原因を解消したとはしない。
+
+## KSB-030: enclave trap vectorの4-byte整列不足
+
+- 状態：修正済。対象はSM trap.Sと最終link。
+- 根拠：実firmwareのtrap_vector_enclave=0x33d56（低2bit=2）。mtvecはBASEが4-byte境界、
+  低2bitはMODEのため、このアドレスは正しいDirect handlerを指定しない。
+  実QEMUでenclave実行中のmtvecは通常OpenSBI handlerの0x1020005f0のまま。
+  M_TIMER後にmie.MTIE=0、mcause=interrupt7となり、STOP traceも中断statusも発生しない。
+- 由来：本リポジトリの圧縮命令を含むOpenSBIとSMのリンク配置。
+  trap.Sのnorvc指定だけではsection先頭の4-byte整列を保証しない。
+- 方針：vectorへ.balign 4を指定し、最終firmware ELFのsymbol整列をbuild時に検査する。
+- 修正：.balign 4と最終ELF symbolのbuild時検査。修正後vector=0x33d58。
+- 検証：実QEMUに既存のSM/Eyrieとnative eappをロードし、調査用S-mode runnerから
+  CREATE/RUNを実行。修正前は非同期中断0（F0）。整列修正後はcause=7→STOP→2005 RESUME
+  →3006 EXIT→2002 DESTROY成功、中断1（P1）を観測。Linux/driverを使わない調査経路であり、
+  9回OCALL・3回timer等を含むLinux専用verificationのPASSではない。
+  記録は [timer evidence](../verifications/sbi-3004/evidence/timer-preemption.md)。
 
 ## 今後の必須更新手順
 

@@ -83,3 +83,11 @@ callbackは短い観測処理に使い、enclaveのdestroy／run／resumeを再�
 SM/OpenSBI firmwareをビルドした。実Linuxゲストからの本試験の実行は、対応Image/rootfsと
 完全なModule.symversがないため未確認。過去の全PASSはこの新試験のPASSではない。
 ユーザー環境で上記コマンドを実行し、serialログとmanifestを保存する。
+
+## timer区間が0回で失敗した場合
+
+`exit=18 calls=7 ... timed=0` はstage 8のtimer区間判定失敗。
+KSB-028（QEMUでSstc抑止未適用）とKSB-030（mtvec handler未整列）を修正した。
+再度 `make build` / `make install` を実行し、3つのcrypto bootとRNG全profileの
+firmwareを更新する。パッケージだけの再buildでは直らない。
+[調査記録](evidence/timer-preemption.md) を参照。

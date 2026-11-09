@@ -13,7 +13,9 @@ if [[ ! -e /dev/keystone_enclave ]]; then
 fi
 work=$(mktemp -d /tmp/rng-verify.XXXXXX)
 trap 'rm -rf "$work"' EXIT
-bash build/random.ke --noexec --target "$work/payload"
+# Snapshot before makeself checksum/seek operations; keep checksum failures fatal.
+cp -- "build/random.ke" "$work/package.ke"
+bash "$work/package.ke" --noexec --target "$work/payload"
 cd "$work/payload"
 eapp=eapp
 if [[ $expected != 0 ]]; then eapp=eapp-error; fi

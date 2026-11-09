@@ -6,6 +6,8 @@
   .section .text.init,"ax",@progbits
   .globl trap_vector_enclave
 
+  /* mtvec low bits encode MODE, not part of the handler address. */
+  .balign 4
 trap_vector_enclave:
     /* Swap TP and MSCRATCH */
     csrrw    tp, CSR_MSCRATCH, tp

@@ -16,6 +16,16 @@ make -C "$S" -j"${JOBS:-$(nproc)}" LLVM=1 PLATFORM=generic PLATFORM_RISCV_XLEN=6
 for ext in elf bin; do test -s "$O/platform/generic/firmware/fw_dynamic.$ext" || { echo "ERROR: missing fw_dynamic.$ext" >&2; exit 4; }; done
 readelf -h "$O/platform/generic/firmware/fw_dynamic.elf" | grep -E 'Class:|Machine:'
 nm "$O/platform/generic/firmware/fw_dynamic.elf" | grep -E ' (sm_init|sbi_sm_create_enclave)$' || true
+python3 - "$O/platform/generic/firmware/fw_dynamic.elf" <<'PY_VECTOR'
+import subprocess
+import sys
+symbols = subprocess.check_output(['nm', sys.argv[1]], text=True).splitlines()
+vector = [int(line.split()[0], 16) for line in symbols
+          if len(line.split()) == 3 and line.split()[2] == 'trap_vector_enclave']
+if len(vector) != 1 or vector[0] % 4:
+    raise SystemExit('ERROR: enclave mtvec handler must be 4-byte aligned')
+print(f'PASS enclave mtvec alignment: {vector[0]:#x}')
+PY_VECTOR
 sha256sum "$O/platform/generic/firmware/fw_dynamic.elf" "$O/platform/generic/firmware/fw_dynamic.bin" | tee "$W/fw-sha256.txt"
 echo 'NOTE: successful link does not validate PMP/IOPMP or enclave operation.'
 

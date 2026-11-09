@@ -11,6 +11,8 @@ if [[ ! -e /dev/keystone_enclave ]]; then
 fi
 work=$(mktemp -d /tmp/stop-verify.XXXXXX)
 trap 'rm -rf "$work"' EXIT
-bash build/stop.ke --noexec --target "$work/payload"
+# Snapshot before makeself checksum/seek operations; keep checksum failures fatal.
+cp -- "build/stop.ke" "$work/package.ke"
+bash "$work/package.ke" --noexec --target "$work/payload"
 cd "$work/payload"
 ./runner eapp eyrie-rt loader.bin
