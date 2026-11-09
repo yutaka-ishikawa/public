@@ -66,6 +66,9 @@
 | KSB-038 | fib-benchのrdcycleがillegal instruction | hostのcounter許可に依存 | samplesをrdtimeへ適合・実QEMU PASS |
 | KSB-039 | 新共通runnerがLinux syscall OCALLを配送しない | 本作業の草稿 | 修正済・実QEMU PASS |
 | KSB-040 | attestor自身の2048-byte転送・status未検査 | 上流examples/attestation | samples側修正済・実QEMU PASS（元版保持） |
+| KSB-042 | EXIT後のRESUMEが再進入を許す | SM状態遷移・由来未確定 | 実QEMUで再現・未修正 |
+| KSB-043 | 並行PMP更新の一時競合でDESTROYが回収不能になる | K3移植のHSM/PMP admission | 実QEMUで再現・未修正 |
+| KSB-044 | CREATE失敗時のPMP rollback結果を検査しない | SM CREATE cleanup・由来未確定 | ソース確認・障害注入による実証前 |
 | KSB-041 | attestor統合時に負荷・2 OCALLのループを削除 | samples統合の変更 | 復元済・Sstc on/off実QEMU PASS |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
@@ -637,3 +640,42 @@ OCALL失敗時の非0終了は維持する。時間計測は元にもなく、�
 証跡は[samples/evidence/loop-restored.json](../samples/evidence/loop-restored.json)。
 
 復元・差分評価のcommit：[715228dcf](https://github.com/yutaka-ishikawa/public/commit/715228dcf7ca4aeb3b1694fb4e69f58dde4cab74)。
+
+
+## KSB-042: EXIT済みenclaveをRESUMEすると再進入する
+
+新C検証 `A-2005-02/after-exit` で再現。`enclave.c:exit_enclave()` は
+`n_thread` を0にして状態をSTOPPEDとする。一方 `resume_enclave()` は
+STOPPEDかつ `n_thread < MAX_ENCL_THREADS` を受理するため、EXIT済みcontextも
+再開可能と判定する。EXIT後のRUNはNOT_FRESHとなるが、RESUMEはNOT_RESUMABLEに
+ならず、実QEMUで `[runtime] page fault ... scause: 0xd` に到達した。
+これは新C clientがSMを模擬した結果ではなく、production driver→実SM/Eyrieでの再現。
+原版との差分照合前なので上流由来とは断定しない。通常のEXIT→DESTROYだけの
+既存試験では検出されなかった。未修正。再開禁止と破棄可能状態を区別する必要がある。
+再現手順・採用成果物hashは [robustness](../verifications/robustness/README.md) と
+同ディレクトリのevidenceに記録する。新試験はこの挙動をFAILのまま扱う。
+
+## KSB-043: 並行CREATE/DESTROYのPMP admission競合で回収不能
+
+別file・別CPUのC workerによるCREATE→RUN→OCALL/RESUME→EXIT→DESTROYを
+並行実行すると `pmp_unset_global:HSM Start in progress`、SBI error 100003、
+次回DESTROY 100005を実QEMUで観測した。`ipi.c` のHSM/PMP admissionは
+`k3_hsm_gate_acquire()` と `k3_policy_lock()` の非待機try-lockで競合を拒否する。
+`pmp_unset_global()` はこれをPMP失敗にするが、`destroy_enclave()` は既に
+DESTROYINGを公開しているため、その後の通常DESTROYでは回収できない。
+競合相手がHSM Startだったとログだけで断定できない。PMP更新同士でも同じgateを使う。
+K3移植固有のadmission経路。driverは保護不明のページをquarantineしており、
+テストの都合で再利用させてはならない。未修正。安全な更新直列化と、更新前の
+一時拒否／部分更新後の失敗を区別した状態遷移・rollbackの設計が必要。
+初回失敗ログと最終再現はrobustness evidenceに保存する。
+
+## KSB-044: CREATE失敗cleanupが全hartの保護解除を確認しない
+
+`enclave.c:create_enclave_internal()` の失敗経路で、
+`pmp_set_global()` 失敗時は `free_shared_region` へ進み、
+`unset_region` からの `pmp_unset_global(region)` の結果も検査しない。
+その後にPMP descriptorとEIDを解放する。全hart更新は途中失敗し得るため、
+更新前拒否と部分適用後の失敗を同一cleanupで扱うと保護状態との整合を保証できない。
+戻り値無視と経路はソースで確認したが、部分適用を注入した実QEMU再現は未実施。
+上流にも同等問題があるかは未照合。未修正。F-PMP/F-IPIの詳細試験を増やす前に、
+解除確認不能時のdescriptor/EID/物理ページの保持契約を確定する必要がある。

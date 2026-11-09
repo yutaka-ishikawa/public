@@ -1,0 +1,12 @@
+.sh --workers 2 --cycles 4 --rng 32 --raw-only; rc=$?; printf "\nROBUSTNESS_EXIT=
+PASS RAW SBI 2003 x 2003 same-enclave stage=1 entered=1 contender-returned-during-gate=1 holder-status=100002 contender-status=100016 expected=100016
+PASS RAW SBI 2003 x 2005 same-enclave stage=1 entered=1 contender-returned-during-gate=1 holder-status=100002 contender-status=100010 expected=100010
+PASS RAW SBI 2003 x 2002 same-enclave stage=1 entered=1 contender-returned-during-gate=1 holder-status=100002 contender-status=100005 expected=100005
+PASS RAW SBI 2005 x 2005 same-enclave stage=2 entered=1 contender-returned-during-gate=1 holder-status=100002 contender-status=100010 expected=100010
+PASS RAW SBI 2005 x 2003 same-enclave stage=2 entered=1 contender-returned-during-gate=1 holder-status=100002 contender-status=100016 expected=100016
+PASS RAW SBI 2005 x 2002 same-enclave stage=2 entered=1 contender-returned-during-gate=1 holder-status=100002 contender-status=100005 expected=100005
+PASS RAW SBI 2002 x 2002 same-enclave stage=3 entered=1 contender-returned-during-gate=1 holder-status=0 contender-status=100005 expected=100005
+PASS RAW SBI 2002 x 2003 same-enclave stage=3 entered=1 contender-returned-during-gate=1 holder-status=0 contender-status=100016 expected=100016
+PASS RAW SBI 2002 x 2005 same-enclave stage=3 entered=1 contender-returned-during-gate=1 holder-status=0 contender-status=100010 expected=100010
+PASS ROBUSTNESS raw C integration
+ROBUSTNESS_EXIT=0

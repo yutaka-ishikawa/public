@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 SOURCES = [
-    'security/security.c', 'rng/rng.c', 'attest.c', 'cpu.c', 'crypto.c', 'enclave.c', 'ipi.c',
+    'verification.c', 'security/security.c', 'rng/rng.c', 'attest.c', 'cpu.c', 'crypto.c', 'enclave.c', 'ipi.c',
     'k3_pmp_ipi_transport.c', 'pmp.c', 'sm.c', 'sm-sbi.c',
     'sm-sbi-opensbi.c', 'sbi_trap_hack.c', 'thread.c',
     'plugins/multimem.c', 'plugins/plugins.c',
@@ -56,6 +56,8 @@ def main():
         flags.append("-DPLUGIN_ENABLE_MULTIMEM=1")
     elif os.environ.get("KEYSTONE_MULTIMEM") != "0":
         raise SystemExit("KEYSTONE_MULTIMEM must be 0 or 1")
+    if os.environ.get("KEYSTONE_VERIFICATION") == "1":
+        flags.append("-DKEYSTONE_VERIFICATION=1")
     if a.trace:
         flags.append("-DKEYSTONE_SM_TRACE=1")
     if a.dev_embedded_key:

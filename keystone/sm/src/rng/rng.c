@@ -1,3 +1,5 @@
+#include "verification.h"
+#include "cpu.h"
 /* SPDX-License-Identifier: BSD-2-Clause */
 #include "rng.h"
 #include "sm_err.h"
@@ -237,7 +239,11 @@ int keystone_rng_read64(uint64_t *value)
     spin_lock(&rng_lock);
     rc = init_status;
     if (!rc && selected) {
-	rc = selected->read64(value);
+        if (sm_verify_fault(10, cpu_get_enclave_id())) {
+            rc = SBI_ERR_SM_RNG_FAILURE;
+        } else {
+            rc = selected->read64(value);
+        }
     }
     if (rc) {
 	*value = 0;

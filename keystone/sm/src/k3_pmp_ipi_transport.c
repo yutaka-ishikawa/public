@@ -1,3 +1,4 @@
+#include "verification.h"
 #include "sm_trace.h"
 /* SPDX-License-Identifier: BSD-2-Clause */
 /* K3 IPI transport. This adapter is not part of the production SM build until
@@ -135,6 +136,7 @@ int k3_pmp_ipi_transport_send(ulong mask, ulong base,
   rc = sbi_ipi_send_many(mask, base, (u32)k3_pmp_ipi_event, (void *)request);
   SM_TRACE_RESULT("PMP send result", rc);
   if (rc) return rc;
+  if (sm_verify_ipi_fault()) return SBI_EFAIL;
   /* A send is never an ACK. Observe every target's exact generation. */
   for (i = 0; i <= sbi_scratch_last_hartindex(); i++) {
     struct sbi_scratch *remote = sbi_hartindex_to_scratch(i);

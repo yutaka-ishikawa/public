@@ -1,4 +1,5 @@
 #include "sm_trace.h"
+#include "verification.h"
 #include <sbi/sbi_trap.h>
 #include <sbi/sbi_error.h>
 #include <sbi/sbi_tlb.h>
@@ -48,6 +49,13 @@ static int sbi_ecall_keystone_enclave_handler(unsigned long extid,
 	return keystone_ecall_return(regs, out, SBI_ERR_SM_NOT_IMPLEMENTED);
     }
 
+#endif
+#ifdef KEYSTONE_VERIFICATION
+    if (funcid == SM_VERIFY_FID) {
+        retval = sm_verify_control(regs->a0, regs->a1, regs->a2, regs->a3,
+                                   &out->value);
+        return keystone_ecall_return(regs, out, retval);
+    }
 #endif
     if (funcid <= FID_RANGE_DEPRECATED) {
 	return keystone_ecall_return(regs, out, SBI_ERR_SM_DEPRECATED);

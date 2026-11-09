@@ -1,3 +1,4 @@
+#include "verification.h"
 /* SPDX-License-Identifier: BSD-2-Clause */
 #include "security.h"
 #include "crypto.h"
@@ -185,7 +186,8 @@ unsigned long keystone_security_call(unsigned long fid, uintptr_t output,
     spin_lock(&security_lock);
     sbi_memset(&workspace, 0, sizeof workspace);
     rc = SBI_ERR_SM_ENCLAVE_ILLEGAL_ARGUMENT;
-    if (copy_pa(workspace.id, input, length, 0)) {
+    if (sm_verify_fault(11, cpu_get_enclave_id()) ||
+        copy_pa(workspace.id, input, length, 0)) {
 	goto out;
     }
     if (fid == SBI_SM_ATTEST_ENCLAVE) {
@@ -202,7 +204,8 @@ unsigned long keystone_security_call(unsigned long fid, uintptr_t output,
     } else {
 	sbi_memcpy(workspace.info, measurement, 64);
 	sbi_memcpy(workspace.info + 64, workspace.id, length);
-	if (kdf(NULL, 0, sm_private_key, 64, workspace.info, 64 + length,
+	if (sm_verify_fault(13, cpu_get_enclave_id()) ||
+            kdf(NULL, 0, sm_private_key, 64, workspace.info, 64 + length,
 		workspace.seal.key, SEALING_KEY_SIZE)) {
 	    rc = SBI_ERR_SM_ENCLAVE_UNKNOWN_ERROR;
 	    goto out;
@@ -210,7 +213,8 @@ unsigned long keystone_security_call(unsigned long fid, uintptr_t output,
 	sm_sign(workspace.seal.signature, workspace.seal.key, SEALING_KEY_SIZE);
 	result = &workspace.seal;
     }
-    if (!copy_pa(result, output, result_size, 1)) {
+    if (!sm_verify_fault(12, cpu_get_enclave_id()) &&
+        !copy_pa(result, output, result_size, 1)) {
 	rc = SBI_ERR_SM_ENCLAVE_SUCCESS;
     }
 out:

@@ -1,0 +1,9 @@
+hex; rc=$?; printf "\nROBUSTNESS_EXIT=%d\n" "$rc"
+PASS F-RNG SBI 3001 stage=10 fired=1 first-fails-second-recovers exit=0 status=0
+PASS F-COPY SBI 3002 stage=11 fired=1 first-fails-second-recovers exit=0 status=0
+PASS F-COPY SBI 3002 stage=12 fired=1 first-fails-second-recovers exit=0 status=0
+PASS F-COPY SBI 3003 stage=11 fired=1 first-fails-second-recovers exit=0 status=0
+PASS F-COPY SBI 3003 stage=12 fired=1 first-fails-second-recovers exit=0 status=0
+PASS F-CRYPTO SBI 3003 stage=13 fired=1 first-fails-second-recovers exit=0 status=0
+PASS ROBUSTNESS fault C integration
+ROBUSTNESS_EXIT=0

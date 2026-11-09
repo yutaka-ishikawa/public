@@ -1,0 +1,6 @@
+ins/sm.hex; rc=$?; printf "\nROBUSTNESS_EXIT=%d\n" "$rc"
+PASS X-16/dup-close-original SBI 2001/2002/2003/2005
+PASS X-16/sigkill-stopped SBI 2002/2004/2006
+PASS X-16/recreate-after-sigkill SBI 2001/2002/2006
+PASS ROBUSTNESS finite C integration
+ROBUSTNESS_EXIT=0

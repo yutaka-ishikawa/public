@@ -1,3 +1,4 @@
+#include "verification.h"
 #ifdef KEYSTONE_K3_PMP_N_REG
 #include <spacemit/k3_keystone_timer.h>
 #endif
@@ -577,6 +578,7 @@ unsigned long destroy_enclave(enclave_id eid)
     void *base;
     size_t size;
     region_id rid;
+    int unset_rc;
 
     spin_lock(&encl_lock);
     destroyable = (ENCLAVE_EXISTS(eid) && (enclaves[eid].state == FRESH ||
@@ -591,6 +593,8 @@ unsigned long destroy_enclave(enclave_id eid)
     if (!destroyable) {
 	return SBI_ERR_SM_ENCLAVE_NOT_DESTROYABLE;
     }
+
+    sm_verify_gate(SM_VERIFY_DESTROY, eid);
 
     // 0. Let the platform specifics do cleanup/modifications
     platform_destroy_enclave(&enclaves[eid]);
@@ -611,7 +615,10 @@ unsigned long destroy_enclave(enclave_id eid)
 
 	// 1.b globally unset the region; free descriptors only after all
 	// succeed
-	if (pmp_unset_global(rid)) {
+        sm_verify_transaction(eid, 1);
+        unset_rc = sm_verify_fault(14, eid) ? -1 : pmp_unset_global(rid);
+        sm_verify_transaction(eid, 0);
+        if (unset_rc) {
 	    /* Keep DESTROYING and all allocations quarantined. In particular,
 	     * the driver must not receive success and recycle these pages. */
 	    return SBI_ERR_SM_ENCLAVE_PMP_FAILURE;
@@ -678,6 +685,8 @@ unsigned long run_enclave(struct sbi_trap_regs *regs, enclave_id eid)
   if(!runable) {
     return SBI_ERR_SM_ENCLAVE_NOT_FRESH;
   }
+
+  sm_verify_gate(SM_VERIFY_RUN, eid);
 
   // Enclave is OK to run, context switch to it
   unsigned long ret = context_switch_to_enclave(regs, eid, 1);
@@ -757,6 +766,8 @@ unsigned long resume_enclave(struct sbi_trap_regs *regs, enclave_id eid)
     enclaves[eid].state = RUNNING;
   }
   spin_unlock(&encl_lock);
+
+  sm_verify_gate(SM_VERIFY_RESUME, eid);
 
   // Enclave is OK to resume, context switch to it
   unsigned long ret = context_switch_to_enclave(regs, eid, 0);

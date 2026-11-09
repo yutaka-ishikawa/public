@@ -1,6 +1,6 @@
 # Keystone実装済み機能の異常系・競合検証コード作成計画
 
-作成：2026-11-09（日本時間）。**計画書であり、新規試験コードはまだ実装・実行していない。**
+作成：2026-11-09（日本時間）。**計画全体は未完了。Cの中間実装と実行結果は[robustness](../verifications/robustness/README.md)を参照。**
 対象ソースの基準commitは`6ac052bc1`。以後の実装では対象commitと成果物hashを更新する。
 対象はK3 QEMU上の実LinuxのC検証client → driver → OpenSBI → SM → Eyrie/enclave。
 既存SDK経由の回帰結果は基礎資料として使うが、新規clientはC++ SDK classを直接呼ばない。
@@ -234,7 +234,7 @@ SDK固有の反復init/destroy検証には既存SDKを呼ぶ経路が必要で�
 
 ## 8. 作成するコードと配置案
 
-以下は**将来作るファイル**。現時点でこれらのmake targetやCLIが使えるという意味ではない。
+以下は当初の配置案。現在の実装済みファイル・利用可能なCLI・未了部分は[中間実装README](../verifications/robustness/README.md)に記載する。全ファイルを作成済みという意味ではない。
 
 ```text
 verifications/robustness/

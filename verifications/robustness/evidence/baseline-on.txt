@@ -1,0 +1,26 @@
+.sh --workers 2 --cycles 2 --rng 32; rc=$?; printf "\nROBUSTNESS_EXIT=%d\n" "$rc"
+PASS A-2005-01/fresh SBI 2005
+PASS A-DRV-01/foreign-file SBI 2003
+PASS X-17/utm-after-finalize SBI 2001
+PASS X-17/backing-after-finalize SBI 2006
+PASS A-DRV-02/oversized-mmap SBI 2001
+PASS A-DRV-03/copy-from-user SBI 2003
+PASS A-3006-01/exit SBI 2003/2005/3004/3006
+PASS A-2003-01/after-exit SBI 2003
+[runtime] page fault at 0x1042e on 0x0 (scause: 0xd)
+FAIL A-2005-02/after-exit SBI 2005
+PASS A-2002-01/destroy SBI 2002
+PASS A-2002-02/double-destroy-driver SBI 2002
+PASS X-16/dup-close-original SBI 2001/2002/2003/2005
+PASS X-16/sigkill-stopped SBI 2002/2004/2006
+PASS X-16/recreate-after-sigkill SBI 2001/2002/2006
+pmp_unset_global:HSM Start in progress
+[    6.738876] keystone_enclave: fatal: cannot destroy enclave: SBI failed with error code 100003
+[    6.740999] keystone_enclave: fatal: cannot destroy enclave: SBI failed with error code 100005
+[    6.748878] keystone_enclave: fatal: cannot destroy enclave: SBI failed with error code 100005
+OBS worker=0 cpu=0 begin_ns=6043877835 end_ns=6653847919 completed=1 callbacks=17 interrupts=1 failed=1
+OBS worker=1 cpu=1 begin_ns=6043085835 end_ns=0 completed=1 callbacks=17 interrupts=1 failed=0
+INCONCLUSIVE no overlapping worker lifetime
+FAIL S-01/S-02 SBI 2001/2002/2003/2005/2006/3001/3002/3003/3004/3006: different-enclave concurrent requests, overlap_ns=0
+FAIL ROBUSTNESS finite C integration
+ROBUSTNESS_EXIT=1

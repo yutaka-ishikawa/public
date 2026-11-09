@@ -1,0 +1,14 @@
+PASS A-2005-01/fresh SBI 2005
+PASS A-DRV-01/foreign-file SBI 2003
+PASS X-17/utm-after-finalize SBI 2001
+PASS X-17/backing-after-finalize SBI 2006
+PASS A-DRV-02/oversized-mmap SBI 2001
+PASS A-DRV-03/copy-from-user SBI 2003
+PASS A-3006-01/exit SBI 2003/2005/3004/3006
+PASS A-2003-01/after-exit SBI 2003
+[runtime] page fault at 0x10526 on 0x0 (scause: 0xd)
+FAIL A-2005-02/after-exit SBI 2005
+PASS A-2002-01/destroy SBI 2002
+PASS A-2002-02/double-destroy-driver SBI 2002
+FAIL ROBUSTNESS finite C integration
+ROBUSTNESS_EXIT=1

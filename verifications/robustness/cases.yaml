@@ -1,0 +1,465 @@
+# Declarative coverage ledger; PLANNED/BLOCKED entries are NOT executed or PASS.
+# This is a YAML 1.2 JSON-compatible document to avoid a PyYAML dependency.
+{
+  "schema": 1,
+  "cases": [
+    {
+      "id": "A-2005-01/fresh",
+      "fids": [
+        2005
+      ],
+      "category": "A",
+      "implementation": "workers/lifecycle.c",
+      "scope": "same-enclave",
+      "oracle": "100010",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "A-2003-01/after-exit",
+      "fids": [
+        2003
+      ],
+      "category": "A",
+      "implementation": "workers/lifecycle.c",
+      "scope": "same-enclave",
+      "oracle": "100016",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "A-2005-02/after-exit",
+      "fids": [
+        2005
+      ],
+      "category": "A",
+      "implementation": "workers/lifecycle.c",
+      "scope": "same-enclave",
+      "oracle": "100010; known FAIL KSB-042",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "A-2002-02/double-destroy-driver",
+      "fids": [
+        2002
+      ],
+      "category": "A",
+      "implementation": "workers/lifecycle.c",
+      "scope": "same-enclave",
+      "oracle": "Linux rejects; not raw-SM double DESTROY",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "A-DRV-01/foreign-file",
+      "fids": [
+        2003
+      ],
+      "category": "A",
+      "implementation": "workers/lifecycle.c",
+      "scope": "same-enclave",
+      "oracle": "EPERM",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "X-17/utm-after-finalize",
+      "fids": [
+        2001
+      ],
+      "category": "X",
+      "implementation": "workers/lifecycle.c",
+      "scope": "same-enclave",
+      "oracle": "EBUSY",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "X-17/backing-after-finalize",
+      "fids": [
+        2006
+      ],
+      "category": "X",
+      "implementation": "workers/lifecycle.c",
+      "scope": "same-enclave",
+      "oracle": "EBUSY",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "A-DRV-02/oversized-mmap",
+      "fids": [
+        2001
+      ],
+      "category": "A",
+      "implementation": "workers/lifecycle.c",
+      "scope": "same-enclave",
+      "oracle": "MAP_FAILED",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "A-DRV-03/copy-from-user",
+      "fids": [
+        2003
+      ],
+      "category": "A",
+      "implementation": "workers/lifecycle.c",
+      "scope": "same-enclave",
+      "oracle": "EFAULT",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "RAW-2003-2003",
+      "fids": [
+        2003,
+        2003
+      ],
+      "category": "R",
+      "implementation": "workers/raw.c + kernel/probe.c + SM verification gate",
+      "scope": "same-enclave",
+      "oracle": "entered=2 before AND after contender returns; contender=100016; holder succeeds/stops; fresh or OCALL-stopped fixture",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "RAW-2003-2005",
+      "fids": [
+        2003,
+        2005
+      ],
+      "category": "X",
+      "implementation": "workers/raw.c + kernel/probe.c + SM verification gate",
+      "scope": "same-enclave",
+      "oracle": "entered=2 before AND after contender returns; contender=100010; holder succeeds/stops; fresh or OCALL-stopped fixture",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "RAW-2003-2002",
+      "fids": [
+        2003,
+        2002
+      ],
+      "category": "X",
+      "implementation": "workers/raw.c + kernel/probe.c + SM verification gate",
+      "scope": "same-enclave",
+      "oracle": "entered=2 before AND after contender returns; contender=100005; holder succeeds/stops; fresh or OCALL-stopped fixture",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "RAW-2005-2003",
+      "fids": [
+        2005,
+        2003
+      ],
+      "category": "X",
+      "implementation": "workers/raw.c + kernel/probe.c + SM verification gate",
+      "scope": "same-enclave",
+      "oracle": "entered=2 before AND after contender returns; contender=100016; holder succeeds/stops; fresh or OCALL-stopped fixture",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "RAW-2005-2005",
+      "fids": [
+        2005,
+        2005
+      ],
+      "category": "R",
+      "implementation": "workers/raw.c + kernel/probe.c + SM verification gate",
+      "scope": "same-enclave",
+      "oracle": "entered=2 before AND after contender returns; contender=100010; holder succeeds/stops; fresh or OCALL-stopped fixture",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "RAW-2005-2002",
+      "fids": [
+        2005,
+        2002
+      ],
+      "category": "X",
+      "implementation": "workers/raw.c + kernel/probe.c + SM verification gate",
+      "scope": "same-enclave",
+      "oracle": "entered=2 before AND after contender returns; contender=100005; holder succeeds/stops; fresh or OCALL-stopped fixture",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "RAW-2002-2003",
+      "fids": [
+        2002,
+        2003
+      ],
+      "category": "X",
+      "implementation": "workers/raw.c + kernel/probe.c + SM verification gate",
+      "scope": "same-enclave",
+      "oracle": "entered=2 before AND after contender returns; contender=100016; holder succeeds/stops; fresh or OCALL-stopped fixture",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "RAW-2002-2005",
+      "fids": [
+        2002,
+        2005
+      ],
+      "category": "X",
+      "implementation": "workers/raw.c + kernel/probe.c + SM verification gate",
+      "scope": "same-enclave",
+      "oracle": "entered=2 before AND after contender returns; contender=100010; holder succeeds/stops; fresh or OCALL-stopped fixture",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "RAW-2002-2002",
+      "fids": [
+        2002,
+        2002
+      ],
+      "category": "R",
+      "implementation": "workers/raw.c + kernel/probe.c + SM verification gate",
+      "scope": "same-enclave",
+      "oracle": "entered=2 before AND after contender returns; contender=100005; holder succeeds/stops; fresh or OCALL-stopped fixture",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "F-10-3001",
+      "fids": [
+        3001
+      ],
+      "category": "F",
+      "implementation": "enclave/fault.c + workers/raw.c + SM real boundary",
+      "scope": "same-enclave",
+      "oracle": "one-shot fired=5; first fails; untouched output; next succeeds; canaries; EXIT=0; seal=False",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "F-11-3002",
+      "fids": [
+        3002
+      ],
+      "category": "F",
+      "implementation": "enclave/fault.c + workers/raw.c + SM real boundary",
+      "scope": "same-enclave",
+      "oracle": "one-shot fired=5; first fails; untouched output; next succeeds; canaries; EXIT=0; seal=False",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "F-12-3002",
+      "fids": [
+        3002
+      ],
+      "category": "F",
+      "implementation": "enclave/fault.c + workers/raw.c + SM real boundary",
+      "scope": "same-enclave",
+      "oracle": "one-shot fired=5; first fails; untouched output; next succeeds; canaries; EXIT=0; seal=False",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "F-11-3003",
+      "fids": [
+        3003
+      ],
+      "category": "F",
+      "implementation": "enclave/fault.c + workers/raw.c + SM real boundary",
+      "scope": "same-enclave",
+      "oracle": "one-shot fired=5; first fails; untouched output; next succeeds; canaries; EXIT=0; seal=True",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "F-12-3003",
+      "fids": [
+        3003
+      ],
+      "category": "F",
+      "implementation": "enclave/fault.c + workers/raw.c + SM real boundary",
+      "scope": "same-enclave",
+      "oracle": "one-shot fired=5; first fails; untouched output; next succeeds; canaries; EXIT=0; seal=True",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "F-13-3003",
+      "fids": [
+        3003
+      ],
+      "category": "F",
+      "implementation": "enclave/fault.c + workers/raw.c + SM real boundary",
+      "scope": "same-enclave",
+      "oracle": "one-shot fired=5; first fails; untouched output; next succeeds; canaries; EXIT=0; seal=False",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "A-UTM/overflow-return",
+      "fids": [
+        3004,
+        2005
+      ],
+      "category": "A",
+      "implementation": "common/client.c + enclave/workload.c",
+      "scope": "same-enclave",
+      "oracle": "SDK rejects SIZE_MAX-1 offset, output unchanged",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "S-01/S-02",
+      "fids": [
+        2001,
+        2002,
+        2003,
+        2005,
+        2006,
+        3001,
+        3002,
+        3003,
+        3004,
+        3006,
+        4000
+      ],
+      "category": "S",
+      "implementation": "coordinator.c + common/client.c + enclave/workload.c",
+      "scope": "different enclaves/files/CPUs; worker-lifetime overlap only",
+      "oracle": "all cycles; exact data; signatures/pins if enabled; backing owner; every worker progresses; known FAIL KSB-043",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "X-16/dup-close-original",
+      "fids": [
+        2001,
+        2002,
+        2003,
+        2005
+      ],
+      "category": "X",
+      "implementation": "workers/lifecycle.c",
+      "scope": "same file; original fd closed before RUN",
+      "oracle": "dup retains file; full workload succeeds",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "X-16/sigkill-stopped",
+      "fids": [
+        2002,
+        2006
+      ],
+      "category": "X",
+      "implementation": "workers/lifecycle.c",
+      "scope": "child owns one enclave; kill while stopped, not in-flight",
+      "oracle": "OCALL stop observed; child SIGKILL; successful recreate",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "S-04",
+      "fids": [
+        2001,
+        2002,
+        2006
+      ],
+      "category": "S",
+      "implementation": "coordinator.c + common/client.c",
+      "scope": "C client and production driver; not C++ SDK lifetime",
+      "oracle": "open fd count and driver backing_bytes return to baseline; not all SM resource accounting",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "id": "F-ALLOC",
+      "fids": [
+        2001,
+        2006
+      ],
+      "category": "F",
+      "implementation": null,
+      "scope": "same-enclave",
+      "oracle": "exact production allocator stages",
+      "status": "PLANNED"
+    },
+    {
+      "id": "F-PMP/F-IPI",
+      "fids": [
+        2001,
+        2002,
+        2003,
+        2005,
+        2006
+      ],
+      "category": "F",
+      "implementation": null,
+      "scope": "same-enclave",
+      "oracle": "resolve KSB-043/044 before partial PMP failure injection",
+      "status": "BLOCKED"
+    },
+    {
+      "id": "X-19",
+      "fids": [
+        2002,
+        2003,
+        2005,
+        3002,
+        3003,
+        4000
+      ],
+      "category": "X",
+      "implementation": null,
+      "scope": "same-enclave",
+      "oracle": "shutdown/HSM while active",
+      "status": "PLANNED"
+    },
+    {
+      "id": "X-20",
+      "fids": [
+        2001,
+        2002,
+        2006
+      ],
+      "category": "X",
+      "implementation": null,
+      "scope": "same-enclave",
+      "oracle": "OOM/CMA pressure/recovery",
+      "status": "PLANNED"
+    },
+    {
+      "id": "S-03",
+      "fids": [
+        2001,
+        2002,
+        3001,
+        3002,
+        3003,
+        4000
+      ],
+      "category": "S",
+      "implementation": null,
+      "scope": "same-enclave",
+      "oracle": "combined faults and full resource/event ledger",
+      "status": "PLANNED"
+    },
+    {
+      "id": "R-services-lock-proof",
+      "fids": [
+        3001,
+        3002,
+        3003,
+        4000
+      ],
+      "category": "R",
+      "implementation": null,
+      "scope": "same-enclave",
+      "oracle": "per-hart lock attempt/acquire evidence; process overlap alone insufficient",
+      "status": "PLANNED"
+    },
+    {
+      "id": "X-16-inflight",
+      "fids": [
+        2002,
+        2003,
+        2005
+      ],
+      "category": "X",
+      "implementation": null,
+      "scope": "same-enclave",
+      "oracle": "all close/SIGKILL instruction windows",
+      "status": "PLANNED"
+    },
+    {
+      "id": "SM-STOP-EXIT-publication",
+      "fids": [
+        3004,
+        3006,
+        2005,
+        2002
+      ],
+      "category": "SM",
+      "implementation": null,
+      "scope": "same-enclave",
+      "oracle": "return-state publication and teardown ordering",
+      "status": "PLANNED"
+    }
+  ]
+}
