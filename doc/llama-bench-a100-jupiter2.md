@@ -217,7 +217,7 @@ A100では`-v`でIME状態を出力し、完了後に`use_ime2: 1`が見つか�
 ```bash
 cat > run-a100-bench.sh <<'RUN'
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 cd -- "$(dirname -- "$(realpath -- "$0")")"
 target=${1:-a100}
 suite=${2:-qwen}
@@ -235,7 +235,12 @@ expected=107ead2f23b83f1ab9da06d317558ec159e0f9be
 build_dir="build-$target"
 mkdir -p results
 run_dir=$(mktemp -d "results/${target}-${suite}-t${threads}-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
+# 事前チェックで停止しても保存場所と状態を残す。
+: > "$run_dir/bench.log"
+printf 'preflight\n' > "$run_dir/status.txt"
 exec > >(tee "$run_dir/run.log") 2>&1
+phase=preflight
+trap 'error_status=$?; printf "ERROR phase=%s line=%s status=%s command=%q\n" "$phase" "$LINENO" "$error_status" "$BASH_COMMAND" >&2' ERR
 snapshot() {
   date -u --iso-8601=seconds
   free -h
@@ -249,10 +254,14 @@ snapshot() {
 }
 finish() {
   status=$?
-  trap - EXIT
+  trap - EXIT ERR
   set +e
   echo '=== after ==='; snapshot
-  printf 'exit_status=%s run_directory=%s\n' "$status" "$run_dir"
+  printf 'phase=%s exit_status=%s\n' "$phase" "$status" > "$run_dir/status.txt"
+  if [[ $phase == preflight ]]; then
+    echo 'Benchmark was NOT started. bench.log is empty; inspect ERROR in run.log.'
+  fi
+  printf 'phase=%s exit_status=%s run_directory=%s\n' "$phase" "$status" "$run_dir"
   exit "$status"
 }
 trap finish EXIT
@@ -268,6 +277,7 @@ test "$(git rev-parse HEAD)" = "$expected"
 git diff --quiet
 git diff --cached --quiet
 test "$(cat "$build_dir/source-commit.txt")" = "$expected"
+cat "$build_dir/binary.sha256"
 sha256sum --check "$build_dir/binary.sha256"
 cat models/SOURCES.tsv
 args=()
@@ -307,9 +317,13 @@ cmd=("${envargs[@]}" "${launcher[@]}" "$build_dir/bin/llama-bench"
 echo '=== exact command ==='
 printf '%q ' "${cmd[@]}"; printf '\n'
 echo '=== stdout + stderr ==='
+phase=benchmark
+printf 'benchmark\n' > "$run_dir/status.txt"
 set +e
 "${cmd[@]}" 2>&1 | tee "$run_dir/bench.log"
-status=${PIPESTATUS[0]}
+pipeline_status=("${PIPESTATUS[@]}")
+status=${pipeline_status[0]}
+if [[ $status == 0 ]]; then status=${pipeline_status[1]}; fi
 set -e
 test "$status" -eq 0 || exit "$status"
 if [[ $target == a100 ]]; then
@@ -317,6 +331,7 @@ if [[ $target == a100 ]]; then
     echo 'UNVERIFIED: no use_ime2: 1; do not report as IME2 result'; exit 3;
   }
 fi
+phase=completed
 echo 'Benchmark completed; review core mask, output rows, and correctness separately.'
 RUN
 bash -n run-a100-bench.sh
@@ -328,7 +343,7 @@ bash run-a100-bench.sh x100 qwen 8
 ```
 
 `run.log`には環境、日時、完全なコマンド、ソース版、モデルrevision / SHA-256、バイナリハッシュ、CMake設定、結果と終了コードが入ります。
-`bench.log`はllama-benchの標準出力・標準エラーのみです。診断を残すため`2>/dev/null`にしません。
+`bench.log`は最初に空ファイルを作り、実行開始後にllama-benchの標準出力・標準エラーを保存します。事前チェックで停止した場合は空です。`status.txt`に段階（preflight / benchmark / completed）と終了コード、`run.log`に失敗した行番号とコマンドを記録します。診断を残すため`2>/dev/null`にしません。
 同じ測定フォルダーにビルド・configureログ、compile_commands.json、実行スクリプトも保存します。
 IME設定の`mem_backend`はこの版の既定値を使い、実際の値を起動ログで確認します。TCMは無効にしています。
 `use_ime2: 1`はbackendの初期化を示し、全ての演算や全量子化がIME2で処理されたことまでは保証しません。
@@ -344,6 +359,21 @@ cpu_mask: ff00
 
 内部ワーカーの配置に疑義がある場合は実行中に別端末で`ps -eLo pid,tid,psr,comm`で確認し、対象TIDに`taskset -pc TID`を実行してください。
 実行前後の温度・周波数だけでは、実行中にスロットリングがなかったとは判断できません。
+
+### bench.logがない、または空の場合
+
+旧スクリプトはベンチマーク直前で初めて`bench.log`を作るため、版・ハッシュ・必要ファイル等の事前チェックで停止するとファイルが存在しません。
+ファイルがないという情報だけでは、どのチェックで停止したかは特定できません。
+実際の作業ツリーの`src`内で、該当する`run.log`末尾を確認してください。
+
+```bash
+tail -n 80 results/a100-qwen-t8-20261110T040719Z-e6is4V/run.log
+```
+
+新しい版の本節のブロックで`run-a100-bench.sh`を再生成してください。文書を更新するだけでは実行スクリプトは変更されません。
+成功したビルド完了前の実行では`source-commit.txt`や`binary.sha256`が未生成の場合があります。先に修正版`build-a100.sh`を最後まで完了させます。
+ハッシュやcommitチェックを削除して回避しないでください。
+測定途中の失敗では結果行が一部だけ残る場合もあるため、終了コードと期待する全結果行を確認してください。
 
 ## 8. 1 / 2 / 4 / 8コア測定とLlama 2 7B
 
