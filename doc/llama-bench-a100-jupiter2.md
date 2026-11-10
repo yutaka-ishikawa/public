@@ -105,7 +105,8 @@ for target in a100 x100; do
       -DGGML_RV_ZVFBFWMA=OFF -DGGML_XTHEADVECTOR=OFF \
       -DGGML_OPENMP=OFF -DGGML_BLAS=OFF -DGGML_CUDA=OFF -DGGML_VULKAN=OFF \
       -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF \
-      -DLLAMA_BUILD_SERVER=OFF -DLLAMA_BUILD_TOOLS=ON
+      -DLLAMA_BUILD_SERVER=ON -DLLAMA_BUILD_TOOLS=ON \
+      -DLLAMA_BUILD_UI=OFF -DLLAMA_USE_PREBUILT_UI=OFF
   ) 2>&1 | tee "results/configure-$target.log"
   if [[ $target == a100 ]]; then
     grep -E '^RISCV64_SPACEMIT_IME_SPEC:.*RISCV64_SPACEMIT_IME2' \
@@ -124,6 +125,15 @@ BUILD
 bash -n build-a100.sh
 bash build-a100.sh
 ```
+
+この固定forkでは`tools/CMakeLists.txt`が`LLAMA_BUILD_SERVER=ON`の場合にだけ`tools/cli`を追加します。
+そのため`llama-cli`のビルドには`LLAMA_BUILD_SERVER=ON`が必要です。
+UIのビルド・取得は`LLAMA_BUILD_UI=OFF`、`LLAMA_USE_PREBUILT_UI=OFF`で無効にします。
+`--target llama-bench llama-cli`で必要なターゲットと依存ライブラリをビルドします。サーバーを起動する必要はありません。
+
+旧版の本手順で`No rule to make target 'llama-cli'`が出た場合、`llama-bench`は既に成功している場合があります。
+`build-a100.sh`内のSERVER指定を上記に修正し、`bash build-a100.sh`を再実行してください。
+同じビルドディレクトリのCMake再設定で既存オブジェクトを再利用でき、完了時にハッシュ記録も更新されます。
 
 `GGML_CPU_REPACK=OFF`はこのforkのSpacemiT用ビルド手順に合わせています。対照X100も同じ値にします。
 そのため過去の上流X100ビルドと条件が全て同一ではありません。
@@ -404,6 +414,7 @@ cmd=(env SPACEMIT_DISABLE_TCM=1 SPACEMIT_PERFER_CORE_ARCH=a064
 
 | 症状 | 確認・対応 |
 |---|---|
+| `No rule to make target llama-cli` | `LLAMA_BUILD_SERVER=ON`でCMakeを再設定。上記ビルドスクリプトを再実行 |
 | IME2がCMakeで検出されない | 対応するBianbu gcc / g++ / assemblerか。configureエラーと実際の-marchを確認 |
 | `/proc/set_ai_thread`がない | 対応するベンダーカーネルが必要。tasksetだけで代用しない |
 | sudo認証エラー | A100起動直前に`sudo -v`。ログを確認して再実行 |
@@ -429,3 +440,5 @@ Jupiter2上でのコンパイル・モデル取得・IME2実行・正確性・�
 - [Discussion #4167](https://github.com/ggml-org/llama.cpp/discussions/4167)
 - [Qwenの固定revision](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/tree/7dabda4d13d513e3e842b20f0d435c732f172cbe)
 - [Llama 2の固定revision](https://huggingface.co/ggml-org/Llama-2-7B-GGUF/tree/89336df15f5c87d43a345a4830e4b6a97a0001b4)
+
+- [CLIターゲットの有効化条件](https://github.com/opensolvers/llama.cpp/blob/107ead2f23b83f1ab9da06d317558ec159e0f9be/tools/CMakeLists.txt)
