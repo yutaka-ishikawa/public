@@ -1,10 +1,15 @@
-# OpenSBI＋Keystone SMのTPM 2.0形式Quote設計
+# OpenSBI＋Keystone SMのPCR・Linux IMA・TPM 2.0形式Quote統合設計
 
-- 作成日：2026年11月10日（日本時間）
-- 調査基準：`dfd3cf0e0`。**設計段階。Quote・AK管理は未実装、動作検証も未実施。**
+- Quote設計作成日・PCR設計統合日：2026年11月10日（日本時間）
+- 統合元PCR設計：2026年11月9日作成、調査基準`ba27803c8`、Linux 6.18.3。
+- 調査基準：`dfd3cf0e0`。**設計段階。PCR・IMA連携・Quote・AK管理はいずれも未実装、動作検証も未実施。**
 - 対象：K3 QEMUとMilk-V Jupiter2／SpacemiT K3。
-- 前提：[ソフトウェアPCR・IMA設計](../com/keystone-pcr-ima-design.md)。このPCR機能も設計段階。
-- 今回の追加要件：`TPM2B_ATTEST`と`TPMT_SIGNATURE`によるQuote、Jupiter2のAK秘密鍵管理。
+- 正本：本書。従来の`com/keystone-pcr-ima-design.md`の設計内容は第2節へ統合した。
+- 対象範囲：PCR保持・EXTEND/READ、Linux IMA、`TPM2B_ATTEST`／`TPMT_SIGNATURE`によるQuote、Jupiter2のAK秘密鍵管理。
+
+本書ではPCRの更新・IMAログから、同一snapshotのQuote生成、AK管理、外部検証までを扱う。
+第2節がPCR・IMAの詳細、第3〜8節がQuoteの経路・構造・ABI、第9節がJupiter2のAK管理、
+第10〜12節が検証者・実装計画・参照である。
 
 ## 1. 採用方針と互換性の範囲
 
@@ -30,9 +35,308 @@ SMが保持するSHA-256 PCR 24本からQuoteを作り、独立したAttestation
 既存reportを`TPM2B_ATTEST`で包んだり、Ed25519をECDSAと表示したりしない。
 PCR Quoteとenclave measurementの証明は別API。両方を要求する検証者は同一challenge/sessionへ結び付ける。
 
-## 2. 処理経路
+<a id="pcr-design"></a>
+
+## 2. ソフトウェアPCR・Linux IMA連携
+
+PCR（Platform Configuration Register）は、SMの保護メモリに持つソフトウェアの測定値bankを指す。
+RISC-Vの物理CSRや外付けTPMのレジスタを追加する設計ではない。
+以下は先行PCR設計の目的・要件・ABI・IMA連携・受け入れ条件を統合し、Quoteとの接続条件を補ったもの。
+
+### 2.1. 目的
+
+OpenSBIに統合されたKeystone Security Monitor（SM）内に、SHA-256によるソフトウェアPCRを24本実装する。Linux IMAの測定ダイジェストを独自SBIで渡し、以下の計算で蓄積する。
 
 ```text
+PCR[n] = SHA-256(PCR[n] || digest)
+```
+
+TPM2のPCR extendと同じ計算を提供するが、TPM2デバイスおよびTPM2コマンド全体は実装しない。
+
+実装担当Codexは、最新HEADとAGENTS.mdを再確認し、既存ABIや進行中の変更との競合を確認すること。以下のABI案は実装レビュー後に固定する。
+
+### 2.2. 確定要件
+
+| 項目 | 仕様 |
+|---|---|
+| PCR本数 | 24本 |
+| PCR番号 | 0〜23 |
+| ハッシュ | SHA-256のみ |
+| PCRサイズ | 各32バイト、合計768バイト |
+| 初期値 | 全PCRをゼロ化 |
+| 更新 | 指定PCRへのextendのみ |
+| 読み出し | 指定PCRの現在値 |
+| 能力照会 | PCR数を含む情報を返す |
+| 永続化 | 行わない |
+| Linuxからのリセット | 提供しない |
+| IMA既定測定先 | PCR 10 |
+| IMAポリシーによる指定 | PCR 0〜23を利用可能 |
+
+PCR・IMA単体の対象外は、TPM2コマンド全体、NV領域、locality、認証セッション、ブートローダー等の自動測定、kexec・サスペンド。
+Quote・署名付きPCR証明・AK管理は、本書の第3節以降で追加する。
+
+
+全PCRを同一属性とする。物理TPMの同番号PCRと、用途・アクセス権・リセット条件まで互換であることは保証しない。
+
+### 2.3. 全体構成
+
+```text
+Linuxカーネル組み込み
+  IMA：ポリシー評価、測定、テンプレート生成、測定ログ
+    ↓ テンプレートのSHA-256ハッシュ＋PCR番号
+  Keystone PCR連携
+    ↓ SBI ecall
+OpenSBI：Keystone SBI受付
+    ↓
+Keystone SM：PCR_GET_CAPS／PCR_EXTEND／PCR_READ、保護PCR状態
+
+既存Keystoneドライバ：enclave作成・実行等。モジュール利用可。
+```
+
+Linux IMAはカーネル組み込み機能であり、ロード可能なモジュールではない。本方式ではIMA本体を変更してカーネルを再ビルドする。既存Keystoneモジュールだけの変更では成立しない。
+
+PCR連携部分はIMA初期化前に利用できるよう組み込みとし、enclaveドライバのロード・アンロードに依存させない。PCR処理にenclaveの作成は不要。
+
+### 2.4. 変更対象
+
+| 対象 | パス・変更内容 |
+|---|---|
+| SBI受付 | `keystone/sm/src/sm-sbi-opensbi.c` |
+| 共通定義 | `keystone/sdk/include/shared/sm_call.h`。他の複製定義も検索する |
+| SM初期化 | `keystone/sm/src/sm.c` |
+| SMビルド | `keystone/sm/src/objects.mk`と関連スクリプト |
+| PCR処理 | SM内に新規PCR状態・SHA-256・ロックを追加 |
+| IMA初期化 | `linux-k3/security/integrity/ima/ima_init.c` |
+| IMA extend | 同ディレクトリの`ima_queue.c` |
+| ハッシュ | 同ディレクトリの`ima_crypto.c`等 |
+| Linux設定 | IMAのKconfig／Makefile、組み込みPCR連携コード |
+| ビルド | `scripts/build-linux-k3.sh`、必要に応じ統合ビルド |
+| 検証 | `verifications/`へ実ゲスト試験を追加 |
+
+### 2.5. SBI ABI案
+
+既存Keystone SBI拡張のホスト用FID範囲に追加する。数値FIDは実装開始時に全定義を検索して未使用番号を割り当てる。3001〜3003等の既存番号は流用しない。
+
+以下はRV64用。戻り値は既存Keystoneの規約に合わせる。既存受付は正のKeystoneステータスを扱うため、標準SBIの負のエラーと混在させない。Linux側でerrnoへ変換する。
+
+#### 2.5.1 PCR_GET_CAPS
+
+入力：`a0〜a5 = 0`。
+
+出力：`a0 = ステータス`、`a1 = 能力情報`。
+
+| a1のビット | 内容 |
+|---|---|
+| 0〜15 | ABIバージョン：1 |
+| 16〜31 | PCR数：24 |
+| 32〜47 | アルゴリズムID：SHA-256、0x000b |
+| 48〜63 | ダイジェスト長：32 |
+
+アルゴリズムIDは識別用にTPMの値を用いるものであり、TPM2コマンド対応を意味しない。
+
+#### 2.5.2 PCR_EXTEND
+
+```text
+a0 = PCR番号（0〜23）
+a1 = digest[0..7]
+a2 = digest[8..15]
+a3 = digest[16..23]
+a4 = digest[24..31]
+a5 = 0
+```
+
+各8バイトはリトルエンディアン整数として格納する。例えばa1のbits 7:0がdigest[0]、bits 63:56がdigest[7]。SMも同じ規則で32バイト列を復元する。数値文字列や16進文字列をハッシュしない。
+
+出力：`a0 = ステータス`、`a1 = 0`。
+
+成功時、指定PCRのみを1回更新する。不正番号、予約引数違反、権限違反では更新しない。
+
+#### 2.5.3 PCR_READ
+
+```text
+a0 = PCR番号（0〜23）
+a1 = Linux側出力バッファのS-mode仮想アドレス
+a2 = 出力長（32固定）
+a3〜a5 = 0
+```
+
+出力：`a0 = ステータス`、`a1 = 0`。成功時、バッファに32バイトを格納。
+
+アドレスは物理アドレスではなく、呼び出し元S-modeの仮想アドレス。既存SMコピー機構のホストS-mode対応、例外処理、PMP制約を確認して使用する。受け取ったポインターをM-modeから無検証で直接参照しない。
+
+ロック下でSM内一時バッファへスナップショットを取得し、解放後に呼び出し元へコピーする。コピー失敗でもPCRは不変。出力先が部分的に書かれる可能性があるため、呼び出し側は成功時だけ内容を使用する。
+
+#### 2.5.4 権限・検証
+
+- 通常のLinux S-modeから受け付ける。
+- Keystone enclaveコンテキストからは拒否する。
+- SM未初期化時は拒否する。
+- PCR範囲等をLinuxとSMの両方で検証する。
+- 通常のLinuxカーネル内の呼び出し元をIMAだけに限定するものではない。
+
+### 2.6. SM内部設計
+
+PCR状態をSM保護メモリに配置する。初期実装では全PCRで単一スピンロックを共有する。
+
+extend手順：権限・引数確認 → レジスタから入力復元 → ロック → update counterのoverflow検査 → 旧PCRと入力の64バイトをSHA-256 → 指定PCRへ反映しcounterを1増加 → ロック解除。
+
+Quote拡張では、PCR値、全PCR共通の64-bit update counter、SM異常latchを同じPCR lockで保護する。
+失敗したextendは値もcounterも更新しない。counterが最大ならPCRを変更せず失敗を返す。
+QUOTEは同じlockで選択PCRとcounter/latchを一度にcopyし、署名前にlockを解放する。
+boot_idはcold init時に設定し、そのepoch内では不変とする。contextへの結合は第5節を参照。
+
+ロック中にS-modeメモリへアクセスせず、他hartの完了を待つIPIも発行しない。readとextendの競合でも完全な32バイト値を取得する。
+
+既存SMの`hash_*`はSHA3系なので流用しない。PCR用SHA-256を分離し、enclave測定、attestation、sealingの方式を変更しない。導入するSHA-256のライセンス、出典、既知値との一致を確認する。
+
+PCR配置とPMP設定を調べ、Linuxから直接書き換えできないことを確認する。DMAを含む実機の保護範囲は別途検証する。
+
+### 2.7. Linux IMA連携
+
+#### 2.7.1 バックエンド選択
+
+カーネル設定でSBI PCRバックエンドを利用可能にし、起動時に明示選択する。選択後は固定し、TPMとの二重extendや途中切り替えはしない。Kconfig名と起動パラメーター名は実装時に確定する。
+
+IMA初期化時にGET_CAPSを呼び、ABI、SHA-256、32バイト、PCR数24を確認する。SBI方式を指定したのに使えない場合、黙ってTPM-bypassへ移行しない。初期化失敗と異常状態を明示する。
+
+#### 2.7.2 測定ダイジェストと順序
+
+PCRへ渡すのはファイルハッシュそのものではなく、IMA測定テンプレートのSHA-256ハッシュとする。初期構成はSHA-256／ima-ng、既定PCR 10。
+
+既存テンプレートハッシュ処理を利用する。TPM不在時にも必要なSHA-256スロットが生成されるよう初期化を確認・調整する。
+
+`ima_queue.c`の`ima_add_template_entry()`→`ima_pcr_extend()`→`tpm_pcr_extend()`の経路にSBIバックエンド分岐を追加する。TPM不在時の省略処理も変更対象。
+
+既存`ima_extend_list_mutex`で、重複判定、ログへの追加、extendの順序を維持する。ファイルアクセスごとの無条件extendにはしない。PCR番号は測定エントリーから取り、10に固定しない。
+
+0〜23以外を指定するポリシーは可能な限り読み込み時に拒否し、送信時も検証する。
+
+#### 2.7.3 Violation
+
+violation時は対象PCRへ32バイトの0xffをextendする。TPM不在時に省略されるviolation用ダイジェスト初期化も変更する。ログ再生ツールも特殊処理に対応させる。
+
+#### 2.7.4 エラー処理
+
+SBI失敗時はPCR番号と原因を監査ログに記録し、測定連続性が失われたことを示す、再起動まで保持するLinux側の異常状態を設定する。
+SMが観測した更新失敗はSMのlatchへ記録する。Linuxだけで発生した測定/送信失敗をQuoteのcontextへ結合するには、
+LinuxからSMへ異常をsetするhost用操作（仮称PCR_MARK_FAILED）を追加する。clear操作は設けず、SM自身の異常と申告由来の異常を区別する。
+この操作のFID・引数・flags値・能力照会はABI確定時に定義する。申告しない悪意あるkernelの検出は保証しない。成功として表示せず、別バックエンドへ自動移行しない。結果不明な要求を無条件再送しない。
+
+既存IMAでextend失敗がどのように伝播するか確認する。監査記録とファイル実行拒否は別要件であり、初期実装に実行拒否・panicを含めない。IMA初期化失敗でLinux起動自体が停止すると説明してはならない。
+
+#### 2.7.5 PCR_READ
+
+カーネル内APIを設け、検証モジュールから利用する。PCR READ単体の恒久的なユーザー空間向けデバイスAPIは必須にしない。Quote利用者向けの限定ioctlは第7節で追加する。検証用の操作口を設ける場合は検証専用と明示する。
+
+### 2.8. Boot aggregateとライフサイクル
+
+PCR 0〜7は用意するが、ブートローダー等の測定は追加しない。初期実装ではTPM不在時の既存IMA boot aggregate表現を維持する方針とし、ソフトウェアPCRの存在だけを理由にハードウェア由来の測定済み起動として扱わない。boot aggregateエントリー自体は通常どおり指定PCRへextendする。
+
+全PCRゼロ化とupdate counter=0、異常latchの初期化はファームウェアcold-boot初期化で一度だけ行う。secondary hart初期化、hart停止・再開、enclave作成・破棄ではゼロ化しない。LinuxからのリセットSBIは設けない。
+
+ファームウェア初期化を通る新規起動ではゼロから開始する。warm resetの経路はQEMUと実機で確認し、維持・初期化を推測で保証しない。kexecとサスペンドは初期対象外で、検証構成では無効化する。
+
+### 2.9. ビルド統合
+
+LinuxではPCR連携を組み込み、IMA、securityfs、SHA-256を有効にする。初期構成をSHA-256／ima-ngとする。
+
+`scripts/build-linux-k3.sh`はdefconfigを再適用するため、手動.config変更だけで済ませず、設定の有効化・反映確認をスクリプトへ追加する。
+
+SMでは新規ソースを登録し、既存の外部SMオブジェクトとOpenSBIリンク経路を維持する。PCR機能を無効にした場合の既存機能も確認する。
+
+カーネル更新後はKeystoneドライバと検証モジュールを同じカーネル出力で再ビルドする。
+
+### 2.10. 実装順序
+
+1. 最新HEAD、AGENTS.md、既存FIDを確認する。
+2. ABIと戻り値を確定する。
+3. SMのSHA-256、PCR24本、初期化、排他制御を実装する。
+4. GET_CAPS／EXTEND／READをSBIへ接続する。
+5. Linux組み込みPCR連携を追加する。
+6. IMA初期化、ダイジェスト、extend、violationを変更する。
+7. バックエンド選択、エラー記録、異常状態取得を実装する。
+8. ビルド設定と手順書を更新する。
+9. K3 QEMU実ゲストで専用・回帰試験を行う。
+10. 証跡と未検証範囲を記録する。
+11. Jupiter2実機の起動経路、保護設定、PCR動作を確認する。
+
+### 2.11. 検証計画
+
+#### 2.11.1 SBI経路
+
+IMAを無効にした専用起動で、実Linux検証モジュールから実SBIを呼ぶ。
+
+| 試験 | 合格条件 |
+|---|---|
+| GET_CAPS | PCR数24、SHA-256、32バイト |
+| 全初期値 | PCR 0〜23がゼロ |
+| 1回・反復extend | 独立SHA-256計算と一致 |
+| 独立性 | 指定PCR以外が不変 |
+| 境界 | 0と23が利用可能 |
+| 不正番号 | 24以上を拒否、全PCR不変 |
+| 不正引数 | 予約値・出力長違反等を拒否 |
+| 不正出力先 | SM停止せずread失敗 |
+| 権限 | enclaveからの要求を拒否 |
+| 同一PCR並行extend | 更新消失なし |
+| 別PCR並行extend | 各PCRが独立した期待値 |
+| read競合 | 更新前後いずれかの完全な値 |
+| hart再開 | PCR維持 |
+| 新規起動 | 全PCR初期化 |
+
+同一PCR並行試験は同じダイジェストの反復等で、順序に依存しない期待値を使用する。
+
+#### 2.11.2 IMA統合
+
+1. 新規起動でSBI選択を確認。
+2. PCR10の限定ポリシーでテストファイルを測定。
+3. バイナリ測定ログを取得。
+4. テンプレートハッシュを再計算。
+5. PCRごとに順序どおりextendを再現。
+6. SMのread結果と比較。
+7. PCR0・23等のポリシーを試験。
+8. violation、重複抑制、範囲外PCR、SBI非対応を試験。
+9. extend失敗時の異常状態保持を確認。
+
+表示ハッシュを無条件利用せず、テンプレートのバイナリ表現、ハッシュ方式、violationを正しく処理する。測定対象を限定し、ログ採取とPCR read間に新規測定が入らない制御された条件で照合する。
+
+#### 2.11.3 回帰と証跡
+
+既存CREATE／RUN／STOP／RESUME／EXIT／DESTROY、乱数、暗号機能の対応範囲、PMP、マルチhart、SBIバックエンド無効時の既存IMA経路を確認する。
+
+AGENTS.mdに従い、模擬SBI・PMP・CSR試験を統合試験の代用にしない。`make -C verifications guest`、`make -C verifications kernel-modules`を利用し、`bash verifications/run-all.sh`はシステムゲスト内のみで実行する。
+
+ビルド成功、実QEMU成功、実機成功を分けて記録する。新規のKeystone関連不具合を発見した場合は既存bug registerへ登録する。
+
+### 2.12. セキュリティ範囲
+
+提供するもの：SM内PCR状態、Linuxからの直接書き換えに対する保護、指定PCRのSHA-256 extend、ログとの整合性検査。
+
+PCR・IMA単体では保証しないもの：Linuxによる測定の完全性、侵害後の測定省略・任意extend防止、ファームウェア真正性、物理TPMの耐タンパ性、署名付きリモート証明、実機DMAを含む全経路への保護。
+署名付きリモート検証はQuote機能で追加するが、その信頼性はAKの登録・保護と許可firmware等の検証policyに依存する。
+
+PCR extend自体はセキュアブートから独立して実装できる。実機QuoteのAK解放・firmware真正性を保証する条件は、第9節のAK管理設計で扱う。
+
+### 2.13. 成果物と受け入れ条件
+
+成果物：SM実装とSBI定義、Linux組み込み連携とIMA変更、再現可能な設定、実ゲスト試験、ログ再計算ツール、ビルド・起動手順、コミット・設定・成果物ハッシュ・実行ログ、未検証事項。
+
+受け入れ条件：
+
+1. PCR24本を独立操作できる。
+2. GET_CAPSがPCR数24を返す。
+3. EXTENDとREADでPCR番号を指定できる。
+4. IMAログ再計算値とSMのPCRが一致する。
+5. 不正要求でPCRが変わらない。
+6. 既存機能の回帰試験結果を提示する。
+7. QEMUと実機の検証範囲を明示する。
+
+設計変更が必要になった場合は、その理由と最終仕様を本書へ反映すること。
+
+## 3. 処理経路
+
+```text
+Linux IMA測定 → PCR_EXTEND → OpenSBI/SMのSHA-256 PCR bank
+                                       ↓ 同じlock下でsnapshot
 検証者：challenge nonce＋PCR selection、登録済みAKと許可firmwareの情報
   ↓
 Linux userspace Quote client
@@ -53,13 +357,13 @@ Linuxに任意digestのAK署名APIや、AK秘密鍵を返すAPIを設けない�
 AK providerの内部`sign_digest`は、SMが自分で構築したQuoteにのみ使う。
 PCR READをLinuxで繰り返してから署名依頼する方式では、PCR間の同時性を保証できないため採用しない。
 
-## 3. TPM構造とwire形式
+## 4. TPM構造とwire形式
 
 TCGの型名は仕様の型を指す。RV64 little-endianのC構造体をそのまま送信しない。
 整数はすべてbig-endian。可変長要素は宣言されたsize分だけ送る。
 `sizeof(TPMS_ATTEST)`、union全体、Cのpaddingはwire長ではない。
 
-### 3.1 `TPM2B_ATTEST`
+### 4.1 `TPM2B_ATTEST`
 
 ```text
 UINT16 size                         # attestationDataだけの長さ
@@ -73,7 +377,7 @@ BYTE   attestationData[size]        # marshal(TPMS_ATTEST)
 | magic | UINT32、`TPM_GENERATED_VALUE = 0xff544347` |
 | type | UINT16、`TPM_ST_ATTEST_QUOTE = 0x8018` |
 | qualifiedSigner | `TPM2B_NAME`、このprofileのAK Qualified Name |
-| extraData | `TPM2B_DATA`、初期profileは64 bytes。第4節のnonce＋context hash |
+| extraData | `TPM2B_DATA`、初期profileは64 bytes。第5節のnonce＋context hash |
 | clockInfo.clock | UINT64、SM起動後の経過ms |
 | clockInfo.resetCount | UINT32、初期profileでは0。永続カウンタではない |
 | clockInfo.restartCount | UINT32、初期profileでは0。永続カウンタではない |
@@ -104,7 +408,7 @@ selection自体・PCR番号・長さprefixをpcrDigestのhash入力へ混ぜな�
 複数bank対応時にはTPMLのbank順とbank内PCR昇順が関係するが、v1は1 bankのみ。
 署名はselection自体も含む`TPMS_ATTEST`全体に掛かる。
 
-### 3.2 署名対象と`TPMT_SIGNATURE`
+### 4.2 署名対象と`TPMT_SIGNATURE`
 
 ```text
 M = marshal(TPMS_ATTEST)
@@ -138,7 +442,7 @@ side-channel対策に必要な乱数も暗号品質を満たすproviderから供
 `TPM2B_ATTEST`は179 bytes。参考としてextraData=32なら145／147 bytesだが、v1の応答ではない。
 一般parserはこれらの値を全TPM構造の固定長と決め付けない。
 
-## 4. nonce、補足context、PCR snapshotの結合
+## 5. nonce、補足context、PCR snapshotの結合
 
 challengeは検証者が生成する32-byte nonce。再利用せず、発行時刻と有効期限を検証者側で管理する。
 Quote自身にrequest contextを結合するため、extraDataを次の64 bytesに固定する。
@@ -165,7 +469,7 @@ extraData = nonce[32] || SHA256(marshal(keystone_quote_context_v1))[32]
 domainのbyte数、各enum値、測定するlinker sectionと長さprefixはABI headerと生成ツールで
 一意に定義し、実装開始時に仕様へ固定値を追記する。任意のLinux申告hashを署名しない。
 firmware measurementはmutable dataを除く測定範囲をcold initで計算し、公開manifestと照合する。
-単なるhash計算はsecure bootや測定値の真正性を保証しない。第8節の鍵解放条件も必要。
+単なるhash計算はsecure bootや測定値の真正性を保証しない。第9節の鍵解放条件も必要。
 
 boot_idは実機profileでは信頼できるentropyで生成し、再起動で変更する。counter backendを
 identityやECDSA blinding用のentropyとして使わない。qemu-devの乱数は実機保証の対象外。
@@ -181,7 +485,7 @@ IMAの測定失敗は既存PCR設計の異常latchと接続する。SMが観測�
 失敗を区別し、一度立てたlatchはLinuxからclearできない設計とする。
 ただし悪意あるkernelが測定・異常申告を省略することまでSMが検出できるとはしない。
 
-## 5. AKの公開領域、Name、登録
+## 6. AKの公開領域、Name、登録
 
 AKはQuote専用P-256署名鍵。既存SMのEd25519秘密鍵・sealing keyをそのまま流用しない。
 公開情報に`TPM2B_PUBLIC`を追加し、TPM型parserや外部検証libraryで読み取れるようにする。
@@ -219,14 +523,16 @@ QualifiedName(AK) = BE16(TPM_ALG_SHA256) || SHA256(BE32(TPM_RH_OWNER) || Name(AK
 初期段階は管理者が認証した経路で登録するpin方式。製品ではprovisioning CAによる証明書等を
 別途設計し、発行元・用途・有効期限・失効を検証する。物理TPMのEK証明書とは区別する。
 
-## 6. SBIとLinux API
+## 7. SBIとLinux API
 
 既存host用Keystone EID `0x08424b45`に以下のsymbolic機能を追加する。
-PCR設計のFIDも未確定のため、2001〜2006、3002、4000、検証専用4900を流用しない。
+第2.5節のPCR操作のFIDも未確定のため、2001〜2006、3002、4000、検証専用4900を流用しない。
 数値はPCR/Quoteを一緒に実装する際に重複検索して確定する。
 
 | 機能 | 目的 |
 | --- | --- |
+| PCR_GET_CAPS／PCR_EXTEND／PCR_READ | 第2.5節のPCR操作。Quoteと共通のbankを使用 |
+| PCR_MARK_FAILED（案） | 第2.7.4節のLinux異常申告をset-onlyでSMへ伝達。ABIは実装前に固定 |
 | QUOTE_GET_CAPS | ABI/profile、アルゴリズム、最大長、provider準備状態 |
 | QUOTE_GET_AK_PUBLIC | 公開鍵、Name/QN、登録用公開metadataを返す。秘密鍵は返さない |
 | PCR_QUOTE | nonceとselectionからSM自身がQuoteを生成 |
@@ -238,7 +544,7 @@ Linux層でerrnoへ変換する。未対応・引数不正・copy失敗・provid
 
 requestはversion、bytes、nonce_len=32、nonce、1 bankのselection、予約値を持つ。
 C ABIは固定幅整数と明示padding、長さ上限を定義する。wire TPM整数とは別のABI。
-応答は固定header＋長さで区切る以下のblobとし、各TPM blob内は第3節のwire形式とする。
+応答は固定header＋長さで区切る以下のblobとし、各TPM blob内は第4節のwire形式とする。
 
 1. marshal(TPM2B_ATTEST)
 2. marshal(TPMT_SIGNATURE)
@@ -254,7 +560,7 @@ C ABIは固定幅整数と明示padding、長さ上限を定義する。wire TPM
 初期運用では管理者だけが利用する。ユーザーVAを直接SMへ渡さず、kernel bufferを使う。
 同じkernel内の悪意ある呼び出し元を、SBI番号だけでIMA daemonに限定できるとはしない。
 
-## 7. 排他、copy、エラー、library
+## 8. 排他、copy、エラー、library
 
 処理順：requestを一度SMへcopy → 構文検査 → bounded Quote workspaceを予約 →
 PCR lockでsnapshot → lock解除 → context/TPM marshal → hash/署名 → 応答全体をSM内で完成 → copy out。
@@ -278,9 +584,9 @@ SHA-256はPCRと共通実装を一つ導入する。P-256/ECDSA、HMAC-SHA256/RF
 独自ECC演算を新規作成しない。providerが利用できない実機では未対応を返し、
 qemu-devやtimestamp/counter鍵へ自動fallbackしない。
 
-## 8. Jupiter2のAK秘密鍵をどこで管理するか
+## 9. Jupiter2のAK秘密鍵をどこで管理するか
 
-### 8.1 現時点で分かっていること
+### 9.1 現時点で分かっていること
 
 [既存ハードウェア調査](jupiter2-hardware-compatibility.md)と
 [WTM/OP-TEE調査](jupiter2-security-engine-rng.md)で、K3向けWTM RNGのベンダーdriver、
@@ -292,7 +598,7 @@ WTM RNG、暗号エンジン、独立セキュアCPU、RT24管理コア、AP上�
 同一物として扱わない。RNGがあることは、秘密鍵を永続保存できることの根拠にならない。
 OpenSBI MPXYにはOP-TEE dispatcherがあるが、それだけでAK serviceが完成するわけではない。
 
-### 8.2 管理方式の比較
+### 9.2 管理方式の比較
 
 | 方式 | 平常時の秘密鍵 | 永続保存 | 評価 |
 | --- | --- | --- | --- |
@@ -307,7 +613,7 @@ OpenSBI MPXYにはOP-TEE dispatcherがあるが、それだけでAK serviceが�
 SM RAMのPMP保護もDMA、debug port、悪意あるM-mode firmware、電源断後の残留等まで
 自動的に防ぐとは言えない。実機のDMA/IOPMP、debug lifecycle、secure bootを別に評価する。
 
-### 8.3 推奨する段階とprovider境界
+### 9.3 推奨する段階とprovider境界
 
 1. **QEMU**：独立したqemu-dev AKを使い、wire互換・検証者・異常系を先に確認する。
 2. **Jupiter2調査**：非exportable P-256署名serviceの存在と利用権限を最初に確認する。
@@ -327,7 +633,7 @@ SM専用の認証された呼出経路、mailbox/MMIO所有権、用途制限を
 processor側がPCRを所有しない構成では、processorもSMのQuote構築・snapshotを信頼する。
 これをSMが不要な独立attesterと説明しない。
 
-### 8.4 HUK wrap方式の具体案
+### 9.4 HUK wrap方式の具体案
 
 - 初期provisioningで信頼できるentropyからP-256 AKを生成する。
 - HUKをLinuxへ公開せず、hardware derive serviceでQuote用wrap keyを導出する。
@@ -344,7 +650,7 @@ HUKから直接AK scalarを導出する場合、単純なdigestのmod nだけで
 標準的な鍵導出・range検査・domain separationを採用する。wrap方式との混在・暗黙切替をしない。
 既存Keystone Ed25519/sealingから独立した用途labelと世代を使う。
 
-### 8.5 実機で確認したい情報
+### 9.5 実機で確認したい情報
 
 - SoC security manualとベンダーAPI：key slot、P-256/ECDSA、HUK/KDF、署名、zeroize、権限設定。
 - BootROM→firmwareの認証、debug無効化、anti-rollbackの実際の設定と検証済みimage。
@@ -356,7 +662,7 @@ HUKから直接AK scalarを導出する場合、単純なdigestのmod nだけで
 
 機密鍵そのものの提供は不要。API仕様・公開設定・公開鍵・試験結果で確信度を上げる。
 
-## 9. 検証者の手順
+## 10. 検証者の手順
 
 1. 応答長と各blobの境界を検査し、TPM型をunmarshal。trailing bytes、size違反、未知profileを拒否。
 2. 登録済みAK公開情報とName/QN、署名方式、provider classを照合する。未登録公開鍵を信用しない。
@@ -374,12 +680,12 @@ HUKから直接AK scalarを導出する場合、単純なdigestのmod nだけで
 公式tpm2-tss MUによるunmarshalとOpenSSL等での独立署名検証を基本oracleとする。
 TCTIやTPM handleを要するコマンド全体がそのまま動くとはしない。
 
-## 10. 実装順序と検証計画
+## 11. 実装順序と検証計画
 
 | 段階 | 作業・完了条件 |
 | --- | --- |
 | Q0 | PCR設計と合わせてFID、context/response ABI、enum、測定範囲、library versionを固定 |
-| Q1 | PCR24本/SHA-256を実装し、atomic snapshot、update counter、異常latchを検証 |
+| Q1 | 第2.10節に従いPCR24本/SHA-256、GET_CAPS/EXTEND/READ、Linux組み込みbackendとIMA連携、異常申告を実装。第2.11節のログreplay、atomic snapshot、update counter、latchを検証 |
 | Q2 | C marshal/unmarshal、AK public/Name/QN、Quote builder、qemu-dev ECDSA provider |
 | Q3 | Linux ioctlとC client、SBI受付、外部検証者、独立parser/署名検証 |
 | Q4 | 実QEMUで正常・異常・競合・障害注入と既存3002/3003等の回帰 |
@@ -390,7 +696,7 @@ Linux組み込みbackend、C client/verificationを`verifications/quote/`へ置�
 既存[異常系計画](keystone-abnormal-concurrency-verification-plan.md)にも機能対を追加する。
 この文書で既存の未了試験や製品不具合を完了扱いにはしない。
 
-必須試験：
+PCR・IMA単体の詳細試験と受け入れ条件は第2.11節・第2.13節を適用する。以下はQuote追加分の必須試験：
 
 - 全PCR／単一PCR／PCR0/23／複数PCR、独立SHA-256値、marshal長とbyte order。
 - tpm2-tss MUでTPM2B_ATTEST、内部TPMS_ATTEST、TPMT_SIGNATURE、TPM2B_PUBLICを読む。
@@ -402,13 +708,13 @@ Linux組み込みbackend、C client/verificationを`verifications/quote/`へ置�
 - Sstc on/off・複数hartの実Linux→OpenSBI→SM経路。模擬SM/PMPを合格根拠にしない。
 - 実機の鍵非export性、Linuxからの署名権限、別機体blob、旧鍵rollback、更新/rotation。
 
-現時点の結果：**設計レビューのみ。上記のQuote実装・試験のPASS記録は存在しない。**
+現時点の結果：**設計レビューのみ。PCR・IMA連携・Quoteの実装・試験のPASS記録は存在しない。**
 
-## 11. 参照
+## 12. 参照
 
 - [TCG TPM 2.0 Library Specification](https://trustedcomputinggroup.org/resource/tpm-library-specification/)：Part 2 Structures（TPMS_ATTEST、TPMS_QUOTE_INFO、TPMT_SIGNATURE、Name）、Part 3 Commands（TPM2_Quote）。実装時に採用revisionを固定する。
 - [tpm2-tss型定義](https://github.com/tpm2-software/tpm2-tss/blob/master/include/tss2/tss2_tpm2_types.h)：2026-11-10取得。規範はTCG仕様とし、検証時はtpm2-tssのcommitも固定する。
 - [tpm2_checkquote](https://tpm2-tools.readthedocs.io/en/latest/man/tpm2_checkquote.1/)：file形式とalgorithm対応を採用versionで確認する。
-- [既存PCR/IMA設計](../com/keystone-pcr-ima-design.md)、[既存crypto ABI](../keystone/sdk/include/shared/crypto_abi.h)。
+- PCR/IMAの詳細は本書第2節。旧文書は[統合先案内](../com/keystone-pcr-ima-design.md)として保持。[既存crypto ABI](../keystone/sdk/include/shared/crypto_abi.h)。
 - [Jupiter2 WTM/OP-TEE調査](jupiter2-security-engine-rng.md)、[SBI 3003 provider設計](keystone-sbi-3003-plan.md)。
 - [K3 OP-TEE platform](https://github.com/spacemit-com/optee_os/blob/2fbd6ae54d89ff8621cdc1b5379c6bbe6f2d3c59/core/arch/riscv/plat-k3/platform_config.h)、[OpenSBI MPXY dispatcher](../opensbi/lib/utils/mpxy/fdt_mpxy_opteed.c)。
