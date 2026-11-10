@@ -38,6 +38,10 @@ TPM2のPCR extendと同じ計算を提供するが、TPM2デバイスおよびTP
 
 対象外：TPM2コマンド全体、Quote、署名付きPCR証明、鍵管理、NV領域、locality、認証セッション、ブートローダー等の自動測定、kexec・サスペンド。
 
+2026-11-10追記：Quote・AK管理は本書の初期実装範囲から分離し、
+[TPM 2.0形式Quote設計](../doc/keystone-tpm2-quote-design.md)で拡張設計した。
+TPM2B_ATTEST／TPMT_SIGNATURE、Jupiter2の秘密鍵保管候補を扱う。両機能とも設計段階であり、実装済みとはしない。
+
 全PCRを同一属性とする。物理TPMの同番号PCRと、用途・アクセス権・リセット条件まで互換であることは保証しない。
 
 ## 3. 全体構成
