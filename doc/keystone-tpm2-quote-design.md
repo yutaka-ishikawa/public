@@ -1,14 +1,14 @@
-# OpenSBI＋Keystone SMのPCR・Linux IMA・TPM 2.0形式Quote統合設計
+# OpenSBI＋Keystone SMのPCR・counter・Linux IMA・TPM 2.0形式Quote統合設計
 
-- Quote設計作成日・PCR設計統合日：2026年11月10日（日本時間）
+- Quote設計作成日・PCR設計統合日・counter設計追加日：2026年11月10日（日本時間）
 - 統合元PCR設計：2026年11月9日作成、調査基準`ba27803c8`、Linux 6.18.3。
-- 調査基準：`dfd3cf0e0`。**設計段階。PCR・IMA連携・Quote・AK管理はいずれも未実装、動作検証も未実施。**
+- 調査基準：`dfd3cf0e0`。**設計段階。PCR・counter・IMA連携・Quote・AK管理はいずれも未実装、動作検証も未実施。**
 - 対象：K3 QEMUとMilk-V Jupiter2／SpacemiT K3。
 - 正本：本書。従来の`com/keystone-pcr-ima-design.md`の設計内容は第2節へ統合した。
-- 対象範囲：PCR保持・EXTEND/READ、Linux IMA、`TPM2B_ATTEST`／`TPMT_SIGNATURE`によるQuote、Jupiter2のAK秘密鍵管理。
+- 対象範囲：PCR保持・EXTEND/READ、Linux IMA、`TPM2B_ATTEST`／`TPMT_SIGNATURE`によるQuote、Jupiter2のAK秘密鍵・counterの永続管理。
 
 本書ではPCRの更新・IMAログから、同一snapshotのQuote生成、AK管理、外部検証までを扱う。
-第2節がPCR・IMAの詳細、第3〜8節がQuoteの経路・構造・ABI、第9節がJupiter2のAK管理、
+第2節がPCR・IMAの詳細、第3〜8節がQuoteの経路・構造・ABI、第9節がJupiter2のAK・counter・persistent storage管理、
 第10〜12節が検証者・実装計画・参照である。
 
 ## 1. 採用方針と互換性の範囲
@@ -23,9 +23,10 @@ SMが保持するSHA-256 PCR 24本からQuoteを作り、独立したAttestation
 | `TPMT_SIGNATURE` | `TPM_ALG_ECDSA`、`TPMS_SIGNATURE_ECDSA`に対応 |
 | 公開鍵とName | `TPM2B_PUBLIC`、Name、Qualified Nameを一貫して生成 |
 | PCRとdigestの計算 | 24本・SHA-256 bank、選択PCRをTPM規則の順序で連結してhash |
-| TPMデバイス・コマンド | `/dev/tpm0`、TPM2_Quoteコマンド全体、TCTI、session、NV、EKは実装しない |
+| TPMデバイス・コマンド | `/dev/tpm0`、TPM2_Quoteコマンド全体、TCTI、session、汎用NV領域、EKは実装しない。限定NV counter APIは第9.8節で設計 |
 | TPMのroot of trust | 形式互換だけでは物理TPM・TCG認証・TPM endorsementとは認めない |
-| clock／再起動counter | 初期profileは揮発。TPMの永続clock semantics全体は満たさない |
+| clock／reset/restart counter | 揮発開発profileとprotected-persistent目標profileを分離。第9.6〜9.12節 |
+| NV counter | 64-bit READ/INCREMENTと永続化providerを設計。full TPM NV command全体は対象外 |
 
 従って呼称は「TPM 2.0形式のsoftware Quote」。物理TPMを完全にエミュレートしたという意味ではない。
 標準構造を使うためmagic/typeも規定値にするが、その値はハードウェア由来の証明にならない。
@@ -378,9 +379,9 @@ BYTE   attestationData[size]        # marshal(TPMS_ATTEST)
 | type | UINT16、`TPM_ST_ATTEST_QUOTE = 0x8018` |
 | qualifiedSigner | `TPM2B_NAME`、このprofileのAK Qualified Name |
 | extraData | `TPM2B_DATA`、初期profileは64 bytes。第5節のnonce＋context hash |
-| clockInfo.clock | UINT64、SM起動後の経過ms |
-| clockInfo.resetCount | UINT32、初期profileでは0。永続カウンタではない |
-| clockInfo.restartCount | UINT32、初期profileでは0。永続カウンタではない |
+| clockInfo.clock | UINT64、profile依存のClock。揮発開発profileはSM起動後の経過ms。第9.9節 |
+| clockInfo.resetCount | UINT32、volatile-devでは0。protected-persistentは第9.7節で永続化 |
+| clockInfo.restartCount | UINT32、volatile-devでは0。Reset/Restart相当イベントを第9.7節で定義 |
 | clockInfo.safe | 1 byte、初期profileではNO（0） |
 | firmwareVersion | UINT64、管理されたfirmware version値。測定hashの代用品にしない |
 | attested.quote.pcrSelect | `TPML_PCR_SELECTION`、下記の固定bank形式 |
@@ -465,7 +466,14 @@ extraData = nonce[32] || SHA256(marshal(keystone_quote_context_v1))[32]
 | ak_generation | UINT64、鍵rotationの世代。単なるnonce代わりにはしない |
 | firmware_hash_alg | UINT16、初期profileはSHA-256 |
 | firmware_hash | 32 bytes、定義したOpenSBI/SMのimmutable測定範囲のhash |
+| persistent_state_epoch | 32 bytes、provisioningで固定する永続状態のepoch。volatile-devは未対応値 |
+| durability_class | UINT32、volatile／file-dev／protected-persistentを区別 |
+| nv_index | UINT32、Quoteへ結合する固定NV counter index |
+| nv_initialized | 1 byte、NV counter初期化済みか |
+| nv_counter_value | UINT64、snapshot時点のdurable値。未初期化時0だがvalid値とは区別 |
 
+このcontext v1は未実装の草案であり、今回counter用fieldを追加した。既存の配布済みABIを変更するものではない。
+永続counterを返さないprofileでは未対応を明示し、0を本物のNV counterの証明としない。
 domainのbyte数、各enum値、測定するlinker sectionと長さprefixはABI headerと生成ツールで
 一意に定義し、実装開始時に仕様へ固定値を追記する。任意のLinux申告hashを署名しない。
 firmware measurementはmutable dataを除く測定範囲をcold initで計算し、公開manifestと照合する。
@@ -474,8 +482,8 @@ firmware measurementはmutable dataを除く測定範囲をcold initで計算し
 boot_idは実機profileでは信頼できるentropyで生成し、再起動で変更する。counter backendを
 identityやECDSA blinding用のentropyとして使わない。qemu-devの乱数は実機保証の対象外。
 clockはOpenSBI timer値と検証済みfrequencyからmsへ変換し、逆行を検出したら異常扱いにする。
-safe=0、永続reset/restart counterなしなので、検証者はfreshnessをnonceで判定し、
-clockだけで再起動をまたぐrollback防止を主張しない。
+初期volatile-devではsafe=0で永続reset/restart counterは無い。protected-persistentの保存契約は第9.7〜9.10節で定義する。
+どのprofileでもfreshnessはnonceで判定し、clockだけで再起動をまたぐrollback防止を主張しない。
 
 SMは選択PCR、update counter、異常latch、boot_id等を同じsnapshotに収める。
 PCR値を補足応答に返し、その値のdigestが署名済みpcrDigestと一致することを検証者が確認する。
@@ -532,6 +540,7 @@ QualifiedName(AK) = BE16(TPM_ALG_SHA256) || SHA256(BE32(TPM_RH_OWNER) || Name(AK
 | 機能 | 目的 |
 | --- | --- |
 | PCR_GET_CAPS／PCR_EXTEND／PCR_READ | 第2.5節のPCR操作。Quoteと共通のbankを使用 |
+| NV_COUNTER_GET_CAPS／READ／INCREMENT（案） | 第9.8節。PCR更新counterとは別の永続値 |
 | PCR_MARK_FAILED（案） | 第2.7.4節のLinux異常申告をset-onlyでSMへ伝達。ABIは実装前に固定 |
 | QUOTE_GET_CAPS | ABI/profile、アルゴリズム、最大長、provider準備状態 |
 | QUOTE_GET_AK_PUBLIC | 公開鍵、Name/QN、登録用公開metadataを返す。秘密鍵は返さない |
@@ -542,7 +551,8 @@ a2=responseのS-mode VA、a3=response capacity、a4/a5=0。
 既存SMと同じ正のKeystone statusをa0、成功時の実response長をa1に返す。
 Linux層でerrnoへ変換する。未対応・引数不正・copy失敗・provider不調・BUSYを区別する。
 
-requestはversion、bytes、nonce_len=32、nonce、1 bankのselection、予約値を持つ。
+requestはversion、bytes、nonce_len=32、nonce、1 bankのselection、証明する固定NV index、予約値を持つ。
+NV非対応profileは未対応指定だけを受け付け、値を捏造しない。検証者はselectionと同様に要求したNV indexも照合する。
 C ABIは固定幅整数と明示padding、長さ上限を定義する。wire TPM整数とは別のABI。
 応答は固定header＋長さで区切る以下のblobとし、各TPM blob内は第4節のwire形式とする。
 
@@ -584,13 +594,14 @@ SHA-256はPCRと共通実装を一つ導入する。P-256/ECDSA、HMAC-SHA256/RF
 独自ECC演算を新規作成しない。providerが利用できない実機では未対応を返し、
 qemu-devやtimestamp/counter鍵へ自動fallbackしない。
 
-## 9. Jupiter2のAK秘密鍵をどこで管理するか
+## 9. Jupiter2のAK・counterとpersistent storage管理
 
 ### 9.1 現時点で分かっていること
 
 [既存ハードウェア調査](jupiter2-hardware-compatibility.md)と
 [WTM/OP-TEE調査](jupiter2-security-engine-rng.md)で、K3向けWTM RNGのベンダーdriver、
 OP-TEE platform、TE200等の関連定義を確認している。
+公式K3 datasheetにはeFuseと256-bit NV Counterの記載がある（第9.11節）。
 一方、**P-256の非exportable key slot、device-unique HUK API、secure storage、RPMB鍵、
 AK signing RPCがJupiter2実機で利用可能であることは確認していない。**
 
@@ -662,6 +673,206 @@ HUKから直接AK scalarを導出する場合、単純なdigestのmod nだけで
 
 機密鍵そのものの提供は不要。API仕様・公開設定・公開鍵・試験結果で確信度を上げる。
 
+### 9.6 TPMのcounterを区別する
+
+今回の実装対象にcounterとその永続化providerを加える。次の値は用途と寿命が異なる。
+
+| 値 | 幅 | 寿命・更新契機 | Quoteとの関係 |
+| --- | --- | --- | --- |
+| `pcr_update_counter` | 64 bit（本設計独自） | 同一SM起動内のextend成功ごとに増加。PCRとともにcold initで0 | 補足context。永続NV counterとは別 |
+| `TPMS_CLOCK_INFO.resetCount` | 32 bit | TPM Reset相当のfirmware lifecycleで増加する永続状態 | TPMS_ATTESTに標準フィールドとして含まれる |
+| `TPMS_CLOCK_INFO.restartCount` | 32 bit | 同一Reset期間内のTPM Restart等の規定イベントを数える。Resetで0 | 同上 |
+| `TPMS_CLOCK_INFO.clock` | 64 bit、ms | 電源投入中の時間を基礎にするClock。永続checkpointとsafeの扱いが必要 | 同上。自由に書けるLinux時刻を使わない |
+| NV counter | 64 bit、8 octets | `TPM_NT_COUNTER`相当。認可されたINCREMENTで更新し、電源断後も保持 | 通常のQuoteには標準フィールドがない。下記の補足contextで結合 |
+| storage generation | backend依存 | 保存transactionごとに増加する内部rollback検出値 | TPMのNV counter値、RPMB write counterと同一視しない |
+
+TPM2のNV counterはTPM2_NV_Incrementで更新する8-byte NV indexであり、
+「TPMのすべてのcounterがNV counter」という意味ではない。
+reset/restartは採用するTCG版のReset/Restart/ResumeとStartup/Shutdown状態遷移に照合する。
+初期の本サービスはfull TPM command lifecycleを実装せず、対応するsubsetと未対応操作を明示する。
+
+### 9.7 対応profileとlifecycle
+
+| profile | 動作 | 受け入れpolicy |
+| --- | --- | --- |
+| `volatile-dev` | PCRと起動内counterのみ。reset/restart=0、safe=NO。永続NV APIは未対応 | 開発用。再起動をまたぐ単調性を保証しない |
+| `file-dev` | 開発hostのstate fileで再起動・電源断復旧を試す。認証recordでもsnapshot巻き戻しは可能 | QEMU検証用。hardware-protected persistentと区別 |
+| `protected-persistent` | 認証、durable commit、旧状態拒否を実証したproviderでreset/restart/NV状態を保存 | 実機の目標。必要条件を満たさない場合にこのprofileを名乗らない |
+
+既存の「初期profileではcounter=0」はvolatile-devの仕様として残し、
+永続counterの目標をprotected-persistentへ拡張する。profile、backend class、state epochを
+署名対象contextとGET_CAPSで公開する。storage不調時に揮発値へ自動fallbackしない。
+
+protected-persistentの初期lifecycle：
+
+1. provision済みrecordとprotected anchorを検証する。通常bootでrecordが消えていても新規0状態を作らない。
+2. cold/warmの完全firmware再初期化を、このsoftware profileのReset相当と定義する。
+   resetCountを1増加しrestartCount=0にしたrecordをcommitしてから、Quote/NV APIをreadyにする。
+3. secondary hart初期化、hart STOP/START、enclave操作ではどちらも更新しない。
+4. Resetを伴わないRestart/Resume、kexec、suspendは初期対象外。
+   将来対応時はTCGの遷移表に従いrestartCount等を更新し、単なるLinux再起動検出で代用しない。
+5. 32-bit counterや世代のoverflowは検出してサービス停止とする。黙って0に戻さない。
+6. TPM2_Clear相当やfactory resetを通常Linuxへ公開しない。必要なprovisioningは別の認可経路とし、
+   検証者にも新しいownership/state epochを登録する。AK rotationだけでcounterを初期化しない。
+
+cold initでPCRを0にすることと、永続counterを0にすることは別である。
+Quoteにはその時点でRAMへ公開済みの、durableなcounter状態だけを入れる。
+
+providerがOP-TEE等の起動後にしか利用できない場合、SMのcold initをI/O待ちで止めない。
+PCRは独立して初期化し、protected Quote/NVはNOT_READYのままとする。
+providerの認証・counter commit後に一度だけreadyへ遷移する。
+boot transitionにはSM生成のboot_idを使い、応答喪失後の再loadで同じtransitionのcommit済みrecordを
+確認できれば二重incrementしない。新たなfirmware bootでは新しいtransition IDを使う。
+
+### 9.8 NV counter APIと署名への結合
+
+初期実装はprovisioningで固定した少数の64-bit counter indexのみとし、任意NV領域は設けない。
+動的なNV_DefineSpace/NV_UndefineSpace、TPM session/authorization protocol全体は対象外。
+初期のindex数・識別子・認可policyはQ0で固定する。
+
+| 新規symbolic SBI | 契約 |
+| --- | --- |
+| NV_COUNTER_GET_CAPS | index数、64-bit幅、初期化状態、durability/rollback保護class、rate limit |
+| NV_COUNTER_READ | a0=index、a1〜a5=0。a0=status、成功時a1=現在値 |
+| NV_COUNTER_INCREMENT | a0=index、a1〜a5=0。認可・overflow・storage確認後、永続commitしてからa0=成功、a1=新値 |
+
+数値FIDはPCR/Quoteと一緒にhost範囲で割当てる。SM/enclave・Linux errnoの規約は第7節と同じ。
+管理用Linux interfaceは通常Quote取得と別に認可し、無制限incrementで寿命を消費させない。
+SBIは同一S-mode内の悪意あるkernel callerを識別できないため、認可をioctlだけで保証しない。
+実機providerではSMだけに書込み権限を与え、kernelに対する可用性限界も明記する。
+
+TPM referenceの初期化規則を踏まえ、未初期化indexのREADは未初期化error、最初のINCREMENTは
+永続的なglobal high-water markを基準に初期化・増加する。以後の正常INCREMENTは現在値+1。
+各indexの初期化状態とglobal high-water markも同じtransactionで保存する。
+index再作成で過去に使った値へ戻れる設計にしない。最大値ではoverflowを返し、wrapさせない。
+TPM2 command packetやTPM_RCをそのままSBI ABIに流用するわけではない。
+
+INCREMENT成功はRAM更新完了ではなく、電源断後に新値を復旧できるcommitの完了を意味する。
+timeoutや応答喪失時は結果不明になり得るため、無条件再送しない。READで状態を調べても
+他callerの同時incrementがある場合は自要求の成功を一意には判定できない。
+必要なら将来versionで永続request-idによる重複排除を追加するが、現ABIでexactly-onceを約束しない。
+NV counterにはClockのcheckpoint方式を流用せず、成功incrementごとにcommitする。
+
+TPMのQuoteはPCRの証明であり、NV counterを`TPMS_QUOTE_INFO.pcrDigest`へ混ぜない。
+本profileでは補足contextに`persistent_state_epoch`、`durability_class`、`nv_index`、
+`nv_initialized`、`nv_counter_value`を追加し、第5節のextraData内context hashを通して署名する。
+これはKeystone固有の結合であり、標準TPM2_NV_Certify実装とは呼ばない。
+標準の独立NV証明が必要なら、別段階でTPM_ST_ATTEST_NVとTPMS_NV_CERTIFY_INFOを実装する。
+
+### 9.9 Clockの永続化とsafe
+
+ClockはNV counterやRTCと別物。Linuxのwall-clockやRTCの電池保持だけでは単調性を保証できない。
+TPMのClockはpowered-time、周期的NV反映、Reset/Restart、safeの規定を持つため、
+「bootごとの経過msを保存した」だけでfull TPM Clock互換とはしない。
+
+初期protected-persistent profileは、公開したClock値を再公開時に下回らせないため、
+永続recordにClockの予約上限を持つ方式を採用する。
+
+1. boot時は前回のdurable予約上限を新しいbaseとし、新しい範囲の上限をcommitしてからClockを返す。
+2. Clockはbase＋SMの検証済みmonotonic timerの経過ms。範囲を越える前に次の予約上限をcommitする。
+3. 電源断後は未使用分を捨てて、前回予約上限以上から開始する。時間が前へ跳ぶことはある。
+4. commit失敗・timer逆行・加算overflow時は新たな安全なClock値の公開を停止する。
+
+これは書込みを毎ms行わないsoftware monotonic-clock profileであり、
+実際の通電時間と完全一致するTPM Clockの全規定を実装したという意味ではない。
+予約幅、書込み頻度、timebaseの扱いはproviderの耐久性と合わせて固定する。
+safeは初期実装ではNOを維持する。YESを返すのは、状態巻き戻し不可、複数hart、
+電源断の全経路でTCGのsafe条件を満たすと検証したprofileだけに限定する。
+nonceによるfreshness検査と、このcounter/Clockの検査は両方行う。
+
+### 9.10 persistent storage providerと電源断transaction
+
+SMがLinux filesystemへ直接書き込む設計にはしない。共通providerを以下の契約で分離する。
+
+- `load_verified_state()`：recordのdevice binding、認証、版、世代とprotected anchorを検証。
+- `commit_state(expected_generation, new_record)`：複数writerを直列化し、durabilityと旧状態拒否を満たして成功する。
+- `get_storage_caps()`：媒体、認証、anti-replay、atomicity、耐久性/残量、最大応答時間を公開。
+- provisioningだけが新規epochを作れる。通常処理からerase/reset/deleteはできない。
+
+recordにはformat/version/length、device identity、state epoch、AK generation、storage generation、
+resetCount、restartCount、Clock予約上限、NV counter値/初期化状態/global high-water mark、
+lifecycle状態、直近のboot transition ID、認証tagを含める。公開counter値は必ずしも暗号化が必要ではないが、
+認証とrollback防止は必要。AK blobは第9.4節の暗号化も必要とする。
+
+protected storageがrecord単位のatomic replacementを保証するならそれを利用する。
+そうでなければA/B journalとprotected anchorを組み合わせる。
+
+1. old generationを検査し、新recordをinactive slotへ書く。
+2. durable flush／readbackを完了し、そのrecordのdigestを確定する。
+3. protected anchorのgenerationとrecord digestを一体としてcommitする。
+4. その後RAM状態へ公開し、callerへ成功を返す。old slotの回収はさらに後に行う。
+
+復旧時はanchorが指す正確なrecordだけを採用する。候補slotの最大sequenceを選ぶだけでは、
+両slotを古い正規データへ戻す攻撃を防げない。anchor更新前のcandidateは未commitとして扱う。
+anchorが進んだのに対応recordが無い場合、古いrecordへfallbackせずstorage errorにする。
+MAC付きrecordであっても過去の正規recordはMAC検証に通るため、MAC単独をanti-rollbackとしない。
+
+単なるbit消費型eFuse counterは、ここで必要なgeneration＋record digestのatomic anchor APIを
+そのまま満たすとは限らない。二相commit・電源断復旧まで確認した専用設計が必要。
+blobとAK generationも同じ保護stateへ結び付け、counterだけ新しく鍵だけ古い状態を受け入れない。
+
+NV更新用mutexは署名workspace/PCR spinlockと分離する。storage I/O中はPCR lockを持たない。
+commit後に短時間だけPCR snapshot lockを取得し、RAM上のdurable counter cacheを公開する。
+QuoteはそのlockでPCR/counter/flagsを同時copyするため、署名中に後続更新があっても
+snapshotは一つの合法な時点に対応する。storage世代とTPMの値が同じ数とは限らない。
+
+### 9.11 Jupiter2でどの媒体を使うか
+
+**「Jupiter2にはpersistent storage／不揮発counterが存在しない」とは言えない。**
+確認できた根拠と、まだ確認できていない利用条件を分ける。
+
+| 候補 | 確認できた根拠 | counter用途で残る問題 |
+| --- | --- | --- |
+| SPI NOR | 提供済み実機ログに`d420c000.spi`とbootinfo/fsbl/env/esos/opensbi/ubootのMTD partition。末尾境界0x800000 | 通常の書換可能flash。専用空き領域・耐久性・power-fail atomicity・Linux/外部書換保護は未確認。既存boot領域をcounter保存に流用しない |
+| K3 eFuse/NV Counter | 公式K3 datasheet第2.8.3節に4096-bit eFuse、256-bit user customization、**256-bit non-volatile counter (NV Counter)** を明記 | 「256-bit」は64-bit TPM counterを2^256回増加できる意味とは限らない。bit消費型か、更新上限、アクセス権、lock、電源断、APIは未確認。利用者256-bit領域とcounter領域が別かも確認が必要 |
+| eMMC RPMB | K3 datasheetはeMMC 5.1 controller対応を記載 | board/実機に搭載したeMMCの有無・型番・RPMB容量・key provisioning・secure経路は未確認。controller対応だけでRPMB利用可能とはしない |
+| NVMe/通常file | 一般の永続媒体でstate fileを保存可能 | OSからの消去・過去snapshot復元を単独では防げない。開発用又はprotected anchorとの併用 |
+| OP-TEE secure storage | K3 OP-TEE platformが存在し、eFuse/HUK関連設定がある | REE-FSとRPMBを区別。実際のbackend、正規HUK、認可、rollback保証を実機で確認する必要 |
+| 外付けTPM/secure element | 現時点でこのboardへの実装確認なし | バス接続、driver、provisioningが必要。十分な内蔵providerが無い場合の選択肢 |
+
+判断の順序は、**K3 NV Counterの実仕様調査 → 利用可能なeMMC RPMB/secure serviceの調査 →
+実装するcounterの更新頻度と寿命に合うprovider選定**とする。
+eFuseが少数回しか更新できない方式なら、bootごと・NV_INCREMENTごとに無制限消費させず、
+firmware/ownership世代の低頻度anchor用途に限定する。高頻度counter用には別の書換可能な
+認証storageが必要になる可能性がある。
+
+RPMBの内部write counterは一般に認証書込みの順序管理用であり、TPMのNV counterそのものではない。
+OP-TEE等の別利用者のwriteでも進むため、値を直接TPM counterへ対応付けない。
+共有RPMBではproviderが全writerを調停し、RPMB keyをLinuxへ渡さない。
+
+Linux userspaceによる保存代行は、認証frameの転送経路にはできるが、Linuxをdurable commitの
+唯一の証人にはしない。応答抑止のDoSは残る。通常fileだけのbackendでは、同じAKのまま
+古いcounterへ戻せないという保証はできない。外部検証者のhigh-water記録は補助策であり、
+offlineで動くTPM相当のlocal monotonic storageの代用とはしない。
+
+K3 OP-TEEの確認対象commitのconf.mkには`CFG_TE200_USE_DUMMY_OTP ?= y`、
+`CFG_K3_HUK_ALLOW_UNFUSED ?= y`があり、後者にはblank fuse時のpublic development HUKという
+説明がある。これらの存在を、実機のHUKがprovision済み・秘密保持済みである証拠にはしない。
+本番profileはdevelopment fallbackを拒否し、設定・実際に選ばれたproviderを検証する。
+
+追加で欲しい実機情報は、搭載storage一覧、`/proc/mtd`、eMMC型番とRPMBのread-onlyな能力情報、
+OP-TEE build設定、公開API仕様、K3 NV Counterのprogramming manual、残り更新可能回数、
+secure boot/debug lifecycleの設定である。秘密鍵の開示やeFuse/RPMB keyの不可逆programmingは不要。
+
+### 9.12 counter/storageの実装・試験
+
+counter実装とAK/Quoteの実装を段階分けし、以下をQEMUの実Linux→OpenSBI→SM経路で検証する。
+
+- file-dev backendで、process再起動だけでなくQEMUの完全停止・再起動後の値を確認する。
+- READ、初回INCREMENT、反復increment、同一/別index競合、権限拒否、overflow、rate limit。
+- reset/restartの対応subset、secondary hart初期化で不変、AK rotationでNV値不変。
+- journal書込み、flush、anchor commit、RAM公開、応答の各境界でguestを強制終了し、
+  成功応答済みのNV値が下がらないことを確認する。応答喪失による結果不明も区別する。
+- 正常bootでrecord欠落・改変・古い認証record・別board blob・旧鍵blobを拒否する。
+- protected anchorを保持してjournalだけを巻き戻した場合の拒否、anchor/媒体の不整合でfail closed。
+- Clock予約上限の更新と電源断、timebase逆行、safe=NO、counterとPCRのsnapshot一致。
+- 永続counter/contextの改変、古いQuoteと同じnonceの再利用、署名済みの異常flagsを検証する。
+- storage I/O対PCR_EXTEND/QUOTE/3002/3003、timeout、BUSY、書込み寿命/残量・key状態を記録する。
+
+QEMU上のfileはhostに保護を委ねる。fileとmodel全体を一緒に戻せるhostに対してまで
+anti-rollbackを証明したことにはならない。実storageの耐久性・RPMB/eFuseの不可逆性・
+実機のsecure権限はJupiter2実機で別途検証する。現時点でcounter試験のPASS記録はない。
+
 ## 10. 検証者の手順
 
 1. 応答長と各blobの境界を検査し、TPM型をunmarshal。trailing bytes、size違反、未知profileを拒否。
@@ -684,12 +895,13 @@ TCTIやTPM handleを要するコマンド全体がそのまま動くとはしな
 
 | 段階 | 作業・完了条件 |
 | --- | --- |
-| Q0 | PCR設計と合わせてFID、context/response ABI、enum、測定範囲、library versionを固定 |
+| Q0 | PCR/Quote/NV counterのFID、context/response ABI、profile/lifecycle、storage provider契約、enum、測定範囲、library versionを固定 |
 | Q1 | 第2.10節に従いPCR24本/SHA-256、GET_CAPS/EXTEND/READ、Linux組み込みbackendとIMA連携、異常申告を実装。第2.11節のログreplay、atomic snapshot、update counter、latchを検証 |
+| Q1-NV | counter record、READ/INCREMENT、reset/restart、Clock予約、file-dev/journal backend、storage capabilityと異常復旧を実装・検証 |
 | Q2 | C marshal/unmarshal、AK public/Name/QN、Quote builder、qemu-dev ECDSA provider |
 | Q3 | Linux ioctlとC client、SBI受付、外部検証者、独立parser/署名検証 |
 | Q4 | 実QEMUで正常・異常・競合・障害注入と既存3002/3003等の回帰 |
-| Q5 | Jupiter2のAK provider選定、provisioning/保管/rotation、実機の境界・電源断・rollback検証 |
+| Q5 | Jupiter2のAKとpersistent storage provider選定、eFuse NV Counter/RPMBの仕様確認、provisioning/保管/rotation、実機の電源断・rollback・耐久性検証 |
 
 想定配置：`sm/src/pcr/`、`sm/src/quote/`、`sdk/include/shared/quote_abi.h`、
 Linux組み込みbackend、C client/verificationを`verifications/quote/`へ置く。
@@ -708,7 +920,7 @@ PCR・IMA単体の詳細試験と受け入れ条件は第2.11節・第2.13節を
 - Sstc on/off・複数hartの実Linux→OpenSBI→SM経路。模擬SM/PMPを合格根拠にしない。
 - 実機の鍵非export性、Linuxからの署名権限、別機体blob、旧鍵rollback、更新/rotation。
 
-現時点の結果：**設計レビューのみ。PCR・IMA連携・Quoteの実装・試験のPASS記録は存在しない。**
+現時点の結果：**設計レビューのみ。PCR・counter・IMA連携・Quoteの実装・試験のPASS記録は存在しない。**
 
 ## 12. 参照
 
@@ -718,3 +930,8 @@ PCR・IMA単体の詳細試験と受け入れ条件は第2.11節・第2.13節を
 - PCR/IMAの詳細は本書第2節。旧文書は[統合先案内](../com/keystone-pcr-ima-design.md)として保持。[既存crypto ABI](../keystone/sdk/include/shared/crypto_abi.h)。
 - [Jupiter2 WTM/OP-TEE調査](jupiter2-security-engine-rng.md)、[SBI 3003 provider設計](keystone-sbi-3003-plan.md)。
 - [K3 OP-TEE platform](https://github.com/spacemit-com/optee_os/blob/2fbd6ae54d89ff8621cdc1b5379c6bbe6f2d3c59/core/arch/riscv/plat-k3/platform_config.h)、[OpenSBI MPXY dispatcher](../opensbi/lib/utils/mpxy/fdt_mpxy_opteed.c)。
+
+- [K3 datasheet](https://github.com/spacemit-com/docs-chip/blob/3ea42a6af47f2595428e2870122829dc5e8fc856/en/key_stone/k3/k3_docs/k3_ds.md)：2026-11-10取得、第2.8.3節の256-bit NV CounterとeFuse、第2.2.4節のeMMC controller。固定commitと内容hashは下記調査記録へ保存。
+- [Jupiter2 persistent storage調査](jupiter2-persistent-storage-investigation.md)：実機NORログ、datasheet、未確認事項を区別。
+- [K3 OP-TEE conf.mk](https://github.com/spacemit-com/optee_os/blob/2fbd6ae54d89ff8621cdc1b5379c6bbe6f2d3c59/core/arch/riscv/plat-k3/conf.mk)：開発HUK/dummy OTP設定と本番利用の区別。
+- [TPM reference NV_Increment](https://github.com/microsoft/ms-tpm-20-ref/blob/main/TPMCmd/tpm/src/command/NVStorage/NV_Increment.c)：初回NvReadMaxCountとincrement。規範は採用版のTCG Part 3とする。
