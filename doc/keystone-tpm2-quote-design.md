@@ -824,17 +824,17 @@ snapshotは一つの合法な時点に対応する。storage世代とTPMの値�
 | 候補 | 確認できた根拠 | counter用途で残る問題 |
 | --- | --- | --- |
 | SPI NOR | 提供済み実機ログに`d420c000.spi`とbootinfo/fsbl/env/esos/opensbi/ubootのMTD partition。末尾境界0x800000 | 通常の書換可能flash。専用空き領域・耐久性・power-fail atomicity・Linux/外部書換保護は未確認。既存boot領域をcounter保存に流用しない |
-| K3 eFuse/NV Counter | 公式K3 datasheet第2.8.3節に4096-bit eFuse、256-bit user customization、**256-bit non-volatile counter (NV Counter)** を明記 | 「256-bit」は64-bit TPM counterを2^256回増加できる意味とは限らない。bit消費型か、更新上限、アクセス権、lock、電源断、APIは未確認。利用者256-bit領域とcounter領域が別かも確認が必要 |
+| K3 eFuse/NV Counter | datasheet第2.8.3節とmanual第15.3節。K3 U-Bootではbank 5のARCN-NS 224 bit＋ARCN-Sec 32 bit。汎用eFuse書込みは既存値にORしてburn | 不可逆bitを消費する方式として扱う。1段＝1 bitなら最大224／32段だが、正式なdecoder・1段消費量・残量・bank 5更新API・電源断動作は未確認。TPMの高頻度counter保存には採用しない |
 | eMMC RPMB | K3 datasheetはeMMC 5.1 controller対応を記載 | board/実機に搭載したeMMCの有無・型番・RPMB容量・key provisioning・secure経路は未確認。controller対応だけでRPMB利用可能とはしない |
 | NVMe/通常file | 一般の永続媒体でstate fileを保存可能 | OSからの消去・過去snapshot復元を単独では防げない。開発用又はprotected anchorとの併用 |
 | OP-TEE secure storage | K3 OP-TEE platformが存在し、eFuse/HUK関連設定がある | REE-FSとRPMBを区別。実際のbackend、正規HUK、認可、rollback保証を実機で確認する必要 |
 | 外付けTPM/secure element | 現時点でこのboardへの実装確認なし | バス接続、driver、provisioningが必要。十分な内蔵providerが無い場合の選択肢 |
 
-判断の順序は、**K3 NV Counterの実仕様調査 → 利用可能なeMMC RPMB/secure serviceの調査 →
-実装するcounterの更新頻度と寿命に合うprovider選定**とする。
-eFuseが少数回しか更新できない方式なら、bootごと・NV_INCREMENTごとに無制限消費させず、
-firmware/ownership世代の低頻度anchor用途に限定する。高頻度counter用には別の書換可能な
-認証storageが必要になる可能性がある。
+追加調査で、NV CounterはeFuse bank 5のfirmware image向けanti-rollback資源と確認できた。
+詳細と根拠は[storage調査第5節](jupiter2-persistent-storage-investigation.md)に記録する。
+bootごと・NV_INCREMENTごと・Clock checkpointごとに消費させる設計にはしない。
+低頻度anchorとしても、正式な符号化・更新API・残量・既存boot chainとの所有権を確認してから採否を決める。
+TPM counter用の書換可能な認証storageについては、利用可能なeMMC RPMB/secure serviceを優先して調査する。
 
 RPMBの内部write counterは一般に認証書込みの順序管理用であり、TPMのNV counterそのものではない。
 OP-TEE等の別利用者のwriteでも進むため、値を直接TPM counterへ対応付けない。
