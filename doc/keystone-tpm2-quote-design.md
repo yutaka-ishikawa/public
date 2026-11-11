@@ -4,6 +4,8 @@
 - 統合元PCR設計：2026年11月9日作成、調査基準`ba27803c8`、Linux 6.18.3。
 - 調査基準：`dfd3cf0e0`。**設計段階。PCR・counter・IMA連携・Quote・AK管理はいずれも未実装、動作検証も未実施。**
 - 対象：K3 QEMUとMilk-V Jupiter2／SpacemiT K3。
+- 2026年11月11日追記：OP-TEE fTPMとの脅威比較・OpenSBI対策は第13節。
+  AKの具体的なOP-TEE不使用設計は[jupiter2-ak-management.md](jupiter2-ak-management.md)を参照。
 - 正本：本書。従来の`com/keystone-pcr-ima-design.md`の設計内容は第2節へ統合した。
 - 対象範囲：PCR保持・EXTEND/READ、Linux IMA、`TPM2B_ATTEST`／`TPMT_SIGNATURE`によるQuote、Jupiter2のAK秘密鍵・counterの永続管理。
 
@@ -596,6 +598,12 @@ qemu-devやtimestamp/counter鍵へ自動fallbackしない。
 
 ## 9. Jupiter2のAK・counterとpersistent storage管理
 
+以下の方式一覧は一般候補の調査を含む。現在の開発対象はOP-TEE不使用、
+M-modeでeFuse由来HUKを導出し、SPI NORへ暗号化AKを保存する構成である。
+詳細は[AK管理設計](jupiter2-ak-management.md)。
+SPI NOR A/Bは開発baselineで、rollback耐性storageは別の製品要件として実証する。
+counter／Clockの永続性・rollback要件は、AK固定の仮定によって省略しない。
+
 ### 9.1 現時点で分かっていること
 
 [既存ハードウェア調査](jupiter2-hardware-compatibility.md)と
@@ -935,3 +943,38 @@ PCR・IMA単体の詳細試験と受け入れ条件は第2.11節・第2.13節を
 - [Jupiter2 persistent storage調査](jupiter2-persistent-storage-investigation.md)：実機NORログ、datasheet、未確認事項を区別。
 - [K3 OP-TEE conf.mk](https://github.com/spacemit-com/optee_os/blob/2fbd6ae54d89ff8621cdc1b5379c6bbe6f2d3c59/core/arch/riscv/plat-k3/conf.mk)：開発HUK/dummy OTP設定と本番利用の区別。
 - [TPM reference NV_Increment](https://github.com/microsoft/ms-tpm-20-ref/blob/main/TPMCmd/tpm/src/command/NVStorage/NV_Increment.c)：初回NvReadMaxCountとincrement。規範は採用版のTCG Part 3とする。
+
+## 13. OP-TEE fTPMとの脅威比較とOpenSBI対策
+
+2026年11月11日追記。比較の正本は
+[AK管理設計 第12節](jupiter2-ak-management.md#12-op-tee-ftpmとの脅威耐性比較)、
+実装対応・試験は[第13節](jupiter2-ak-management.md#13-opensbi側の対応案と検証)に置く。
+
+比較対象は、一般的なOP-TEE fTPM TA構成と本書の限定PCR／counter／Quote設計。
+Jupiter2でfTPMが実装・稼働し、正規HUK／RPMBを利用することは未確認。
+本書もfull TPM実装ではなく、設計段階の機能である。
+
+| 脅威群 | OP-TEE fTPM | OpenSBI側の現状と対応 |
+| --- | --- | --- |
+| 改造／古いfirmware | boot認証とcomponent別anti-rollbackに依存 | 未実証。C01でboot chainとversion policyを検証 |
+| Linuxから鍵読出し、DMA／debug迂回 | TEE／SoC／monitorの隔離に依存 | 未実証。C02でGEU、SM RAM、CCU、全hartとDMAを保護 |
+| trusted code実行時侵害 | TA隔離はあるが、fTPM／core／monitor自身の侵害は残る | M-mode TCBが拡大。C03でparser、copy、資源と攻撃面を限定 |
+| 永続state rollback、電源断 | REE単独では不足。正しいRPMB等とstate保存統合が必要 | A/Bだけでは不足。C04／C05で独立rootとatomic transactionを導入 |
+| 不正署名・不正PCR reset／counter clear | TPM認可・policy／locality規則に依存 | C06で限定APIとlifecycleを定義。TPM全policy互換は主張しない |
+| 偽測定・replay・不正AK登録 | 測定主体と外部verifierに依存 | C07〜C09でprovisioning、pin、nonce、boot測定を結合 |
+| 暗号実装、DoS、物理攻撃 | platform／library／運用依存。全耐性はない | C10〜C12でentropy、秘密消去、資源制限、保証範囲を評価 |
+| TPM互換・保証の誤認 | K3移植・backendの実機検証が必要 | C13で限定機能とprofileを明示 |
+
+eFuse秘密値の変更をDoSに限定できるのは、既存AK復号失敗時にfallback／自動再生成しない場合。
+boot認証・debug・保護設定を弱めるfuse改変は別脅威である。
+Secure Bootは秘密保持に必要なtrusted code認証であり、PMP／IOPMP等の実行時保護も必要。
+
+rollback耐性filesystemを採用する場合、AKだけでなくcounter／lifecycle／必要な認可metadata、
+全filesystem snapshotと削除・再初期化を保護対象とする。
+同じSPI NOR内のMAC付きroot fileだけでは全媒体rollbackを防げない。
+C04の独立root／anchorが未提供なら、protected-persistent profileを提供しない。
+
+実装順序は、保護基盤C01／C02、M-mode入力と暗号C03／C10、
+storage C04／C05、限定API C06、外部運用C07〜C09／C13とする。
+既存Q1〜Q5の各段階に対応するC-IDとCMP試験を追加し、
+build、QEMU、実機、隔離保証の結果を分けて記録する。
