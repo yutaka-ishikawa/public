@@ -59,6 +59,87 @@ Linuxがblobを渡すまでAK署名はunavailable。通常boot／enclave基本�
 OP-TEE OS自体を実行時依存にしない。BSD-2-Clauseの出典・著作権・licenseを保持する。
 ベンダー実装の存在は、対象実機でM-modeから正規値を読めることや隔離の実証ではない。
 
+#### 2.1.1 eFuseはMMIO経由で読む
+
+**K3のGEU/eFuse controllerは物理アドレス空間へメモリマップされている。**
+CPUはcontrollerのデータレジスタを32-bit MMIO loadで読む。
+SPI／I2C経由でも、SPI NORの読出しでもなく、LinuxのAPIも必要ない。
+ただし、eFuse arrayそのものを通常RAMとして直接読むわけではない。
+controllerへreloadを要求して、読出し用レジスタへ反映された値を取得する。
+
+参照する[platform_config.h](https://github.com/spacemit-com/optee_os/blob/2fbd6ae54d89ff8621cdc1b5379c6bbe6f2d3c59/core/arch/riscv/plat-k3/platform_config.h)
+には以下の物理アドレスがある。
+
+| 対象 | 物理アドレス／範囲 | 用途 |
+| --- | --- | --- |
+| eFuse MMIO mapping window | [0xf0702000, 0xf0703000)、4 KiB | 参照OP-TEEのpage単位mapping |
+| GEU/eFuse register base | 0xf0702800 | register offsetの基準 |
+| GEU/eFuse register window | [0xf0702800, 0xf0702c00)、0x400 bytes | controllerの定義範囲 |
+| GEU_CONFIG | base＋0x004＝0xf0702804 | reload制御 |
+| EFUSE_STATUS | base＋0x184＝0xf0702984 | FUSE_READY等の状態 |
+| bank1の読出しwindow | [0xf0702924, 0xf0702944)、32 bytes | base＋0x124、HUK元のvendor bank |
+| bank2の読出しwindow | [0xf0702944, 0xf0702964)、32 bytes | base＋0x144、HUK元のOEM bank |
+
+bank1は0xf0702924から0xf0702940まで、bank2は0xf0702944から0xf0702960までを、
+それぞれ4-byte刻みで8回読む。各wordをlittle-endianの4 bytesとして並べ、各32 bytesを構成する。
+bank番号から単純にbase＋bank×32を計算してはいけない。
+bank0等の配置も含め、元コードはbank別のregister offset tableを使っている。
+
+参照OP-TEEは物理MMIOをsecure仮想アドレスへmappingしてio_read32()を使う。
+OpenSBIへの移植ではOP-TEEのmapping APIを使わず、
+実行時の物理アクセス条件を確認してOpenSBIのreadl()/writel()等のMMIO helperへ置き換える。
+M-modeは通常のload/storeでS-modeのsatpによるページ変換を使わないが、
+MPRV等の実効特権、PMPのlock／Smepmp、SoC側bus権限、clock/reset状態によってアクセスは制限される。
+M-modeなら無条件に読めると仮定しない。
+
+#### 2.1.2 読出し前の手順
+
+参照k3_efuse.cの順序は以下である。値は固定commitの実装根拠であり、
+現在の修正版OpenSBIに実装済み、または対象実機で確認済みという意味ではない。
+
+1. k3_ccu_ensure(K3_CLK_TE200, ...)で関連clock/resetを準備する。
+   eFuseはTE200／WTM側の共有制御に依存する。
+2. GEU_CONFIG（0xf0702804）へ0x0c424000を書いてreloadを要求する。
+3. 200,000 μs（200 ms）待つ。
+4. 同じGEU_CONFIGへ0x0c024000を書く。
+5. EFUSE_STATUS（0xf0702984）のbit1、FUSE_READYをpollする。
+   readyを待つ上限は3,000,000 μs（3 s）。
+   readyにならなければ読出し成功にせず、AK providerを利用不可にする。
+6. ready後にbank1・2の32-bitレジスタを各8個読み、SM専用bufferへ格納する。
+7. HUKとK_wrapを導出し、bank bufferとHUK temporaryを明示的に消去する。
+
+```text
+GEU clock/reset準備
+  → GEU_CONFIGへreload要求を書込
+  → settle待ち
+  → reload開始
+  → EFUSE_STATUS.FUSE_READY待ち
+  → bank1・2のデータレジスタをMMIO read
+  → SM RAMでHUK導出
+```
+
+この制御レジスタ書込みは**既存fuse内容を読み出すためのreload操作**であり、
+新しい秘密値を焼くfuse programmingではない。
+ただしhardware制御への書込みは伴うので、「一切のMMIO書込みを行わない読出し」とは区別する。
+汎用efuse burn／program経路は移植対象にしない。
+
+参照OP-TEEは初回reload後に全12 bankをRAM cacheし、以降はcacheから返す。
+本案では秘密保持範囲を小さくするため、必要なbank1・2だけを読み、
+全bankの長期cacheやLinuxへのraw bank返却を追加しない。
+
+#### 2.1.3 MMIOであることと秘密保持は別
+
+MMIO読出しでbank平文を取得できる方式なので、秘密保持は
+「このMMIOとSM RAMへ誰がアクセスできるか」に依存する。
+LinuxのDTからbank1・2を除くだけでは不十分である。
+第4節でCPUのPMP、DMA／busのアクセス制御、clock/reset所有権、
+MMIO fault emulation、debugとboot chainを一体で扱う。
+
+0x400-byte controller範囲と4 KiB mapping windowは区別する。
+page単位等で保護する場合、同じpage内にある他機能への影響も調べる。
+参照ソースのアドレス定義は確認できたが、実機でのbank内容、
+provisioning、read lock、bus許可は別の確認事項である。
+
 ### 2.2 SPI NORの実測
 
 [採取手順・提供結果](jupiter2-spi-nor-inspection.md)を根拠とする。
