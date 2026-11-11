@@ -8,6 +8,7 @@
   既存SBI 3002のEd25519 SM鍵、device root、sealing keyとは独立させる。
 - 関連：[Quote統合設計](keystone-tpm2-quote-design.md)。
   同文書第9節の一般候補のうち、本開発で採用する構成は本書で具体化する。
+- 脅威比較更新：OP-TEE fTPMとの比較、rollback耐性storageの製品前提と対応案は第12〜13節。
 - 初期のlifecycle方針：端末の運用期間中はAK固定、通常rotationなし。
   これは開発案の明示的な仮定であり、将来rotationを追加するときは設計を改訂する。
 
@@ -354,7 +355,11 @@ OpenSBIがLinuxへ同期callbackする仕組みは作らない。
 公開鍵の外部pinがない状態では、同一device上で過去に作られた別の正規blobを
 SMが確実に識別することはできない。登録済みNameの照合責務を外部検証者に置く。
 
-## 7. 固定AKの仮定とロールバック
+## 7. 開発baseline：固定AKの仮定とロールバック
+
+本節はanchorなしの開発baseline。製品目標として追加されたrollback耐性filesystem／storageの
+契約と脅威比較は第12節、実装対応と試験は第13節に定める。
+SPI NOR A/Bをrollback耐性filesystemと読み替えない。
 
 ### 7.1 初期開発で省略するもの
 
@@ -503,3 +508,151 @@ HUK元bankが非ゼロという結果だけで製品の秘密保持をPASSにし
 - [Linux eFuse driver](../linux-k3/drivers/nvmem/spacemit-efuse.c)
 
 本版は設計文書の更新であり、firmware変更、実機fuse読出し、NOR書込みは実施していない。
+
+## 12. OP-TEE fTPMとの脅威・耐性比較
+
+### 12.1 比較対象と前提
+
+比較日：2026年11月11日（日本時間）。
+OP-TEE側は[optee_ftpm](https://github.com/OP-TEE/optee_ftpm)の一般的なTA構成を指す。
+Microsoft TPM 2.0 reference implementationを使うfTPM TAであり、
+OP-TEEが存在するだけでfTPMが搭載・稼働しているとは判断しない。
+**Jupiter2上のfTPM実装、build、稼働、正規HUK、RPMB backendは本調査では未確認。**
+upstream READMEが案内するARM由来の構成が、そのままK3 RISC-Vで動作するとも判断しない。
+
+OpenSBI側は本書と[統合設計](keystone-tpm2-quote-design.md)の限定TPM機能案である。
+PCR、counter、TPM形式Quote、AK保存は設計段階で、full TPM command processor、
+session、汎用NV、EK、物理TPM相当の認証・耐タンパ性は提供しない。
+既存SBI 3002の実装済みreport署名と、この未実装機能を混同しない。
+
+以下を評価前提とする。ただし前提を実機で検証済みという意味ではない。
+
+- **B1**：BootROMからOpenSBI等のtrusted codeまで認証するSecure Boot。
+  古い正規版の拒否は別途firmware anti-rollbackで保証する。
+- **B2**：CPU／DMA／debugからeFuse、鍵RAM、clock/reset、保護制御を隔離する。
+  Secure Bootだけではこの実行時アクセス制限を代替できない。
+- **B3**：AKと関連stateをrollback耐性storageへ保存することを製品目標とする。
+  storageの信頼できるroot／anchor、状態認証、atomic commitをSMが検証する。
+- **B4**：eFuseの秘密bankが変わり既存AKが復号不能なら、fallback・自動再生成せずDoSとして扱う。
+  lifecycle／boot認証／アクセス制御を弱めるfuse変更は、このDoS限定の仮定に含めない。
+- **B5**：外部検証者がAK identity、deviceとの対応、profile、失効状態を信頼できる経路で管理する。
+
+第7節の固定AK・anchorなしは開発用baselineとして残す。
+B3を満たす製品profileとは分け、固定AKだけを根拠にTPM全状態のrollback耐性を主張しない。
+
+### 12.2 比較表
+
+「条件付き」は構成・運用・実機検証が必要なことを意味する。
+OpenSBI列の「計画」は対策が文書化されているだけで、実装・検証済みではない。
+OP-TEE列も一般的な構成上の性質であり、特定releaseの無脆弱性やK3実機の保証ではない。
+
+| ID／脅威 | OP-TEE上のfTPM | OpenSBI内の限定TPM機能：現状・不足 | OpenSBI側の対応 |
+| --- | --- | --- | --- |
+| T01 改造firmwareを起動 | boot chainがTA／OP-TEE／monitorまで認証すれば条件付き耐性。TA署名だけではmonitorを守れない | M-modeに秘密が現れるため改造OpenSBIで漏えいし得る。B1は未実証 | C01 |
+| T02 古い正規firmware・TAへ差戻し | Secure Boot単独では防げず、各componentのversion policyが必要 | 古いOpenSBI／provisioning imageから秘密取得・再生成のおそれ。未実証 | C01、C07 |
+| T03 LinuxによるAK／HUKの直接読出し | TEE隔離、正規HUK、共有memory処理が正しければ条件付きで防御 | PMP／MMIO拒否案あり。全hart、fault emulation、Linux改造に対する検証が必要 | C02、C03 |
+| T04 DMA、debug、clock/reset操作による隔離迂回 | SoC bus隔離、debug lifecycle、monitor設定に依存 | GEUとSM RAM、共有CCU保護は計画。実機資源・所有権未確定 | C02 |
+| T05 trusted codeの実行時侵害 | fTPM TAはuser TAとしてOP-TEE core等から分離可能。ただしTA侵害はTPMを、core／monitor侵害は全体を危険にする | TPM parser／暗号処理もM-mode trusted computing baseに入る。失敗がOpenSBI／SM全体へ波及し得る | C03 |
+| T06 AK／NV stateの古いsnapshot復元 | storage選択に依存。REE FS単独は不足。正しく設定・選択されたRPMB FS等が必要 | SPI NOR AEAD＋A/Bだけでは防止不可。B3 backendは未選定／未実装 | C04 |
+| T07 電源断・partial write・commit応答消失 | trusted storageのatomic操作を利用可能。ただしTPM stateの保存単位／応答時点との統合検証が必要 | A/B案あり。製品profileはstorage commitとAK／counter公開の整合が追加で必要 | C04、C05 |
+| T08 署名APIの悪用 | TPM object属性、authorization、policy、command制約で制御可能。設定・実装に依存 | full TPM policy engineなし。限定Quote入口とSM構築対象のみ署名する計画 | C06 |
+| T09 測定値の偽装・測定省略 | PCRはextendを保護できても、入力digestが真実かは測定主体に依存。measured bootは別統合が必要 | Linux IMA経由の測定は侵害Linuxによる省略・偽入力を防げない。boot trustとの関係を明示する必要 | C06、C09 |
+| T10 PCR reset／NV counter reset・巻戻し | TPMのlocality／authorization／lifecycle規則とstorageに依存 | 独自SBIなのでreset、clear、初期化の権限を自ら定義・検証する必要 | C05、C06 |
+| T11 challenge／Quoteのreplay | 正しいnonceと署名検証を実施する検証者側protocolが必要 | nonce、PCR／counter snapshot結合は計画。検証者の再利用拒否とsession対応が必要 | C08 |
+| T12 鍵生成、AEAD nonce、cryptoの不具合 | RNG、暗号library、platform portに依存。fTPMという名称だけでは解決しない | 正規entropy、GCM nonce、scalar検証、temporary消去は計画。HUK16の強度上限も明示済み | C03、C10 |
+| T13 AK差替え・不正provisioning・失効取消 | TPM commandの認可とdeploymentの登録／clear policyに依存 | 固定AKだけではNOR消去後の一度限り生成を永続強制できない。外部pinと製品lifecycleが必要 | C07、C08 |
+| T14 eFuse秘密bankの改変・HUK喪失 | 正規HUK必須・fallbackなしなら既存stateが復号不能。boot／protection fuse改変は別脅威 | B4の範囲ではDoSとして拒否。全ゼロ以外の不正値やdebug解除を同じ扱いにしない | C01、C02、C10 |
+| T15 Linuxの保存拒否・呼出し抑止・大量要求 | supplicant／Linux依存のI/Oとrequest経路にはDoSが残る | MTD代行、LOAD前unavailable、busy処理、共有lock枯渇への対策が必要 | C05、C11 |
+| T16 fault injection、cache／timing、物理RAM観測 | SoC／実装／攻撃条件に依存。外付け耐タンパTPM相当とはしない | M-modeでも自動耐性なし。秘密処理、debug、物理運用を評価 | C10、C12 |
+| T17 platform移植・互換性・誤った保証表示 | reference実装とTA基盤は再利用可能だが、K3 port／storage接続は別検証 | 限定TPM形式機能。TPM2全体や物理TPM endorsementを偽装しない | C08、C13 |
+
+K3の参照OP-TEEはOpenSBI配下のS-mode trusted domainで動く。
+従って**悪意あるM-mode OpenSBIからの隔離をfTPM TA配置だけで提供できるとは判断しない**。
+今回のM-mode実装にはTAのような別のuser特権境界がなく、TCB拡大が主な設計上の注意点である。
+一方、実際のcode量・脆弱性件数を比較せず「OP-TEEの方が常に安全／危険」と順位付けしない。
+
+### 12.3 rollback耐性filesystemを採用するための条件
+
+今回のak-store A/Bは生のMTD slot backendであり、rollback耐性filesystemではない。
+filesystemへの置換／追加は設計変更であり、機能名称だけでB3成立としない。
+
+必要な契約：
+1. SMがstorage root、generation、record digestを認証し、Linuxの「最新」という申告を信用しない。
+2. 全SPI NOR imageを過去の正規imageへ戻しても、保護anchorとの不一致で拒否する。
+3. AKだけでなく、鍵世代、provisioning完了、失効／認可policy、
+   TPM reset/restart/NV counter等の必要な永続stateを保護する。
+   外部管理するpolicyは、その外部側でもrollbackを防止する。
+4. file単位のatomic性だけでなく、AKと関連metadataのtransaction整合を保証する。
+   新state確定後の旧state fallback、旧backend／開発profileへの自動降格は禁止する。
+5. root／anchorの初期化、recovery、factory resetを認可し、削除を未provisionと誤認しない。
+6. anchorがSPI NOR内のMAC付きfileだけなら、全image復元へのrollback耐性は成立しない。
+   RPMB等の独立した保護state、または同等の実証された機構が必要となる。
+   外部serverをanchorとする場合はonline依存・障害時policyを明記し、offline local保証と区別する。
+
+OP-TEE公式storage文書では、REE FS単独にrollback保護はなく、
+RPMB FS、またはREE FSのhash stateをRPMBへ置く構成が説明されている。
+さらにTEE_STORAGE_PRIVATEはREE FSが有効ならそちらを選ぶため、
+「RPMBをbuildした」だけではfTPMが意図するbackendを使う証拠にならない。
+TAの保存先、build設定、fallback、実際のdeviceと実行結果を確認する。
+
+本案はOP-TEEを使わず同等のstorage契約をSM側で満たす必要がある。
+SPI NOR単独で実証できるanchorが無ければ、製品profileは未対応のままとする。
+暗号化A/Bの開発実装は継続できるが、local rollback耐性ありとはadvertiseしない。
+
+## 13. OpenSBI側の対応案と検証
+
+### 13.1 実装対応表
+
+優先度P0は秘密を扱う製品profileの前提、P1は公開前の機能・運用対策、
+P2は保証範囲に応じた追加評価を指す。全項目は現時点で計画である。
+
+| 対応ID／優先度 | 具体的な対応案 | 受入れの証拠 |
+| --- | --- | --- |
+| C01／P0 | BootROM→FSBL→OpenSBI等の全認証経路、version policy、provisioning image失効を定義。vendorの署名鍵・更新認可も管理 | 改造image拒否と、署名が正しくても禁止旧版を拒否する実機試験 |
+| C02／P0 | 全hart PMP、GEU／CCU MMIO拒否、DMA／IOPMP、debug lifecycleを一体で確立。保護解除・fault emulation迂回も拒否 | CPU種類ごとのreadback、非秘密診断、DMA到達性とLinux再設定拒否 |
+| C03／P0 | M-modeの入力parserを固定上限・固定形式に限定。copy後のsnapshotを使いTOCTOUを避ける。長さ／PA／overflowを検査。heap依存と呼出し面を抑制 | 実guestから境界・破損・並行入力を試験。host parser fuzzは補助として区別。共有RAMを再参照しない |
+| C04／P0 | rollback耐性storage providerのroot／anchorとSM側検証を実装。AK＋関連stateを同一transactionへ結合 | file、両slot、metadata、全媒体の旧snapshotを復元して拒否。独立anchorなしなら非対応 |
+| C05／P0 | durable commit後に新AK／counterを公開。transaction IDで応答消失後の結果照会を可能にする。I/O中にPCR spinlockを保持しない | commit各境界の電源断、short write、timeout、再試行、counter成功応答後の再起動で値を維持 |
+| C06／P1 | SM構築Quote専用署名、任意digest API禁止。PCR extend／reset／counter初期化／clearの権限とlifecycleを個別定義 | 不正caller、未認可reset、用途外署名、snapshot競合を拒否 |
+| C07／P0 | 製造用生成と通常LOADを分離。provisioning済みstateと再登録を保護。通常root権限だけを認可根拠にしない | NOR消去、古い管理token、旧製造imageで無断再生成・再登録できない。できない条件は明示 |
+| C08／P1 | 外部pin、provider／profile、AK Name、失効、nonce再利用拒否、wire length／signatureを検証するverifierを用意 | 別AK、旧失効AK、replay、改変context、未対応profileを拒否 |
+| C09／P1 | authenticated bootの測定とLinux IMA由来測定を区別。信頼できる前段のevent log／measurement handoffを認証し、PCR所有権を定義 | 起動測定の欠落／偽log／順序変更を検出。侵害Linuxの自己申告限界を結果に表示 |
+| C10／P0 | entropy health、crypto version／advisory、定数時間処理、nonce規則、公開鍵再計算、秘密消去と開発fallback禁止 | known-answer test、RNG故障、nonce異常、秘密log／panic／temporary監査 |
+| C11／P1 | requestの入力上限、busy／timeout、lock分離と資源上限を実装。storage不応答で基本SBIまで停止しない | 大量要求、daemon停止、長時間storage、複数hart競合で機密性・整合性を維持。可用性保証の限界を記録 |
+| C12／P2 | 物理・side-channelの保証範囲を定義し、必要ならfault検出、署名自己検証、物理運用制限を追加 | 評価対象と未評価攻撃を明示。署名自己検証だけで全fault耐性とはしない |
+| C13／P1 | full TPMとの差、未実装属性、state profileを能力照会と登録metadataへ反映 | 標準parser／独立verifierとの相互運用、誤ったTPM属性・保証表示がない |
+
+### 13.2 追加テスト計画
+
+第9節のNAK試験を維持し、次を追加する。実機用とQEMU／補助試験を区別する。
+未提供hardwareをmockして保護成立のPASSにしない。
+
+| ID | 対象 | 合格条件 |
+| --- | --- | --- |
+| CMP-01 | boot認証とfirmware anti-rollback | 署名破損、未承認image、禁止旧版をそれぞれ拒否 |
+| CMP-02 | rollback耐性storage | AK／metadata／全SPI NOR旧snapshotを拒否。root／anchor不一致時は停止し旧backendへ降格しない |
+| CMP-03 | atomic commit | AK、認可state、counterの各更新で電源断し、一つの整合した確定状態に復旧 |
+| CMP-04 | privilegeとTOCTOU | 不正PA／長さ、共有buffer改変、MMIO代行、全hartの不正アクセスから秘密・保護状態を守る |
+| CMP-05 | TPM用途・測定経路 | 用途外署名、未認可PCR reset／clearを拒否。偽event logと測定未実施の扱いを確認 |
+| CMP-06 | provisioning／失効 | NOR全消去・旧token・旧製造imageでも未認可identityを外部検証者が受理しない |
+| CMP-07 | verifier protocol | nonce／session／Name／profileを結合し、旧署名、別AK、失効AKを拒否 |
+| CMP-08 | DoS／資源枯渇 | MTD不応答・大量要求・並行cryptoで秘密漏えい・state破壊を起こさず、回復可能なerrorを返す |
+| CMP-09 | 比較の再現性 | fTPMを実機比較する場合、TA／OS／monitor revision、backend、正規HUK、実測結果を揃える。未取得は未確認 |
+
+### 13.3 リリース判定と残余リスク
+
+- 開発版：暗号化A/B、固定AK等の検証範囲を明記し、正規HUK／local rollback保証を未実証なら表示しない。
+- 製品目標：C01〜C05、C07、C10の前提とP1の機能・運用を検証してから保証profileを有効化する。
+- その後もtrusted M-mode codeの実行時侵害、未評価の物理攻撃、LinuxによるDoSは残余リスク。
+- 鍵が安全でも測定入力が正しいとは限らない。Quoteが証明する範囲は測定経路とverifier policyで限定する。
+- HUK元bankの改変による復号不能はDoS扱いだが、boot／debug／アクセス制御fuseの改変を同じ範囲へ含めない。
+
+### 13.4 比較の参考資料
+
+以下は2026年11月11日閲覧のupstream資料。masterは可変であり、
+実装・実機比較時は使用revisionを固定する。
+
+- [OP-TEE fTPM README](https://github.com/OP-TEE/optee_ftpm/blob/master/README.md)：MS reference実装のTA統合、measured bootの追加条件。
+- [OP-TEE secure storage](https://github.com/OP-TEE/optee_docs/blob/master/architecture/secure_storage.rst)：REE／RPMB、backend選択、rollback、Linux経由I/Oとprovisioningの制約。
+- [K3 OP-TEE構成調査](optee-milk-v-jupiter2.md)：K3実装と実機未検証の範囲。
+- 本書第2節の固定commitソース：K3のHUK／eFuse経路。
