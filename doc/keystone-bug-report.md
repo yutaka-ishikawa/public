@@ -70,10 +70,21 @@
 | KSB-043 | 並行PMP更新の一時競合でDESTROYが回収不能になる | K3移植のHSM/PMP admission | 実QEMUで再現・未修正 |
 | KSB-044 | CREATE失敗時のPMP rollback結果を検査しない | SM CREATE cleanup・由来未確定 | ソース確認・障害注入による実証前 |
 | KSB-045 | MPXY共有メモリーの丸め値がbytesではなくpage数になる | OpenSBI取込コード・上流修正照合済み | 未修正・PAGE_SIZE超channelで発火、実ゲスト未検証 |
+| KSB-046 | MPXY属性範囲のu32加算overflow | OpenSBI取込コード・上流修正照合済み | 未修正・ソース確認、実ゲスト未検証 |
+| KSB-047 | PMU counter indexの加算overflow | OpenSBI取込コード・上流修正照合済み | 未修正・ソース確認、実ゲスト未検証 |
+| KSB-048 | PMU event infoのサイズ乗算overflow | OpenSBI取込コード・上流修正照合済み | 未修正・ソース確認、実ゲスト未検証 |
+| KSB-049 | DBTR trigger範囲のoverflowとexact-end拒否 | OpenSBI取込コード・上流修正照合済み | 未修正・ソース確認、実ゲスト未検証 |
+| KSB-050 | RPMI共有queueの最小容量検査不足 | OpenSBI transport・上流修正照合済み | 未修正・DT依存、実ゲスト未検証 |
+| KSB-051 | RPMI queue_id=countを受理 | OpenSBI transport・上流修正照合済み | 未修正・ソース確認、実ゲスト未検証 |
+| KSB-052 | SBI拡張名文字列の容量超過 | OpenSBI共通処理・上流修正照合済み | 未修正・拡張列/容量依存、実ゲスト未検証 |
+| KSB-053 | HSM拒否前に対象hartの起動contextを更新 | OpenSBI共通処理とK3 admissionの統合 | 未修正・ソース確認、実ゲスト未検証 |
+| KSB-054 | domain subset計算でXLEN幅shift | OpenSBI旧path・上流修正照合済み | 未修正・ソース確認、実ゲスト未検証 |
+| KSB-055 | RPMI CPPC要求のfield順序が上流修正前 | OpenSBI wire ABI／server互換性制約 | 修正候補・K3 server照合待ち |
+| KSB-056 | PMU FW counter探索失敗時の配列index | OpenSBI取込コード・上流修正照合済み | 未修正・ソース確認、実ゲスト未検証 |
 | KSB-041 | attestor統合時に負荷・2 OCALLのループを削除 | samples統合の変更 | 復元済・Sstc on/off実QEMU PASS |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
-KSB-010/045以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
+KSB-010およびKSB-045〜056以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
 
 ## KSB-001: SDK memset/strlenが自身を呼ぶ機械語になる
 
@@ -698,3 +709,108 @@ K3移植固有のadmission経路。driverは保護不明のページをquarantin
   [取り込み計画P1/T-MPXY](optee-opensbi-keystone-merge-plan.md)で既存のmapping変更を保持して
   上流修正をバックポートし、実firmwareの検証channelと実guest ECALLで確認する。
 - **検証範囲**：ソースと上流修正の照合のみ。ビルド、実QEMU、実機は未実施。
+
+## KSB-046〜056: OpenSBI上流差分調査で確認した修正対象
+
+確認日：2026-11-11。基準は本repo `779fb85a764e678a3c9bbbac1450e4c434cb319d`。
+以下は上流patchと現行の未修正条件のソース照合であり、実ゲスト再現・悪用の実証ではない。
+全件とも今回の変更では機能修正をしていない。上流起因の共通コードとK3固有の統合を区別する。
+計画・採否・依存・試験は[OpenSBI差分](opensbi-upstream-delta-2026-11-11.md)と
+[バックポート全件台帳](opensbi-upstream-backport-catalog.md)へ対応付ける。
+
+### KSB-046: MPXY属性範囲endpointのoverflow
+
+- 対象：`opensbi/lib/sbi/sbi_mpxy.c` のread/write attrs。
+- 条件・証拠：`u32 end_id` に `base_attr_id + attr_count - 1` を格納する。
+  endpointがwrapすると上限検査をすり抜け得る。driver側の属性配列アクセスへ影響する。
+- 上流修正：`2afa77759241d425a6130e6a52560ef6fa2a6dac`。endpointをu64化する。
+- 状態：未修正。BP01/T-MPXYで境界正常入力、不正入力、driver未到達を確認する。
+
+### KSB-047: PMU counter index検査のoverflow
+
+- 対象：`opensbi/lib/sbi/sbi_pmu.c:pmu_ctr_idx_validate()` とSKIP_MATCH経路。
+- 条件・証拠：`cbase + sbi_fls(cmask) < total_ctrs` に加算overflow検査がなく、
+  巨大なcbaseがwrapして有効と判定され得る。counter配列/CSR選択の範囲保証を損なう。
+- 上流修正：`0dfe6be08778102bf2fde61c5c99ea2cceb0b73a`。
+- 状態：未修正。BP02/T-PMUでULONG_MAX境界、zero mask、SKIP_MATCHを実ECALLで確認する。
+
+### KSB-048: PMU event infoサイズの乗算overflow
+
+- 対象：`opensbi/lib/sbi/sbi_pmu.c:sbi_pmu_event_get_info()`。
+- 条件・証拠：検査前に `num_events * sizeof(struct sbi_pmu_event_info)` を計算する。
+  wrapした小さい値でdomain/mapping検査をしてから元のcountで参照する懸念がある。
+  現行のdomain検査強化だけでこの乗算を修正したことにはならない。
+- 上流修正：`f45b9433ed03588edf7c5a9a803c67b2c9d09aee`（完全SHAは全件台帳）。乗算前上限検査等を移植する。
+- 状態：未修正。BP02/T-PMU。map/unmap失敗処理を保持し、ゼロ/巨大countと正常countを確認。
+
+### KSB-049: DBTR範囲のoverflowと正当な終端範囲の拒否
+
+- 対象：`opensbi/lib/sbi/sbi_dbtr.c` のREAD/UPDATE/INSTALL。
+- 条件・証拠：READの `trig_idx_base + trig_count >= total_trigs` は加算overflowに弱く、
+  最終要素1件などexact-endの正当な範囲も拒否する。UPDATEにもcount境界条件が残る。
+- 上流修正：`a14e4d24a1f51a9d6d263f1da4e23c01bd89f3ce`と後続`ed70256dd22c09962d146e433834239825ef0616`。片方だけで完了としない。
+- 状態：未修正。BP03/T-DBTRで0/1/N triggerと巨大count、exact-endを実guest確認する。
+
+### KSB-050: RPMI共有queueの容量検査不足
+
+- 対象：`opensbi/lib/utils/mailbox/fdt_mailbox_rpmi_shmem.c` のtransport初期化。
+- 条件・証拠：DTのreg_sizeからheader分を減算してslot数を算出する前に、最小容量・
+  実用的なring長・u32表現上限を検査しない。小さいDT領域でunderflow/div0等の条件を作り得る。
+- 上流修正：`95c7980851171ef7b0fd909214ec5838f34ee12d`。
+- 状態：未修正。BP04/T-RPMI。専用DTの小容量拒否と正常server通信を確認する。
+
+### KSB-051: RPMI queue indexのoff-by-one
+
+- 対象：同transportの `smq_rx()/smq_tx()`。
+- 条件・証拠：`mctl->queue_count < queue_id` は `queue_id == queue_count` を受理する。
+  DTにないqueue contextを選択し得る。
+- 上流修正：`9bc841226d8a63aaa59fc6b26a4452fe548c6589`。両方向で `queue_id >= queue_count` を拒否する。
+- 状態：未修正。BP04/T-RPMI。専用検証firmwareの実transportで境界と正常queueを確認する。
+
+### KSB-052: SBI/ISA拡張名文字列の容量境界
+
+- 対象：`opensbi/lib/sbi/sbi_ecall.c:sbi_ecall_get_extensions_str()` と
+  `opensbi/lib/sbi/sbi_hart.c:sbi_hart_get_extensions_str()`。
+- 条件・証拠：各拡張名の本来の長さでoffsetを加算し、容量によって止めない。
+  最後の `exts_str[offset - 1]` も容量外になり得る。発火は登録拡張列とbuffer長に依存する。
+- 上流修正：ISA列は`d2166a9d4045013654b04a1a46ab43fdb7dabb95`、
+  SBI列は`f95648d3955d72f77e13315a990a6135303978a5`。
+  同じ関数への連続patchではない。両方の容量境界を個別に直す。
+- 状態：未修正。BP05/07、T-CORE/T-CSR。実firmwareの長い拡張列でguard/終端と起動を確認。
+
+### KSB-053: HSM拒否前のscratch書換え
+
+- 対象：`opensbi/lib/sbi/sbi_hsm.c:sbi_hsm_hart_start()`。
+- 条件・証拠：STOPPED状態確認より先に `next_arg1/next_addr/next_mode` を書く。
+  不正状態へのstartが後で拒否されても起動contextは変更済みとなる。
+- 由来：上流共通処理の修正`131bda944704293fa75295060aec96061cdb3749`に対応。ただし現行にはK3 PMP admissionが挿入されており、
+  patchを丸ごと置換せずbegin/cancel/finish契約を維持する。
+- 状態：未修正。BP06/T-HSM。実guestで拒否後のscratch、並行start、warm bootを確認する。
+
+### KSB-054: domain subset判定のXLEN shift
+
+- 対象：`opensbi/lib/sbi/sbi_domain.c:is_region_subset()`。
+- 条件・証拠：`BIT(reg->order)` は `order == __riscv_xlen` の全域regionで幅以上のshiftになる。
+  Cの未定義動作により包含判定が保証できない。
+- 上流修正：`3baca10015393359ec46a2500c8ebe7daa9672c6`。現上流の修正pathはheaderだが、旧pathへ同じ対策を移植する。
+- 状態：未修正。BP08/T-PMP。全域region、被覆/隣接/単一region、PMP保護を実firmware確認。
+
+### KSB-055: RPMI CPPC要求field順序の互換性
+
+- 対象：`opensbi/include/sbi_utils/mailbox/rpmi_msgprot.h` のCPPC PROBE/READ/WRITE要求。
+- 条件・証拠：現行構造体はhart_id→reg_idの順。上流修正`332798211e7232da60158b0545b23c61b5338516`は仕様に合わせreg_id→hart_idとする。
+- 影響：仕様準拠serverとの通信に影響する。一方K3側serverも旧順を使う場合は、OpenSBIだけを
+  修正すると既存通信を壊す。今回K3 serverの実装/実通信は照合できていない。
+- 分類：現行wire ABIが上流修正前であることは確認済み、K3上の実障害は未確認の互換性制約。
+- 状態：BP04/T-RPMIの修正候補。server側と必要なら同時更新し、実機probe/read/writeを確認する。
+
+
+### KSB-056: PMU FW counter探索失敗後の配列書込み
+
+- 対象：`opensbi/lib/sbi/sbi_pmu.c:sbi_pmu_ctr_cfg_match()`。
+- 条件・証拠：`pmu_ctr_find_fw()` の結果に対する `ctr_idx < 0` 検査より先に、
+  FW_PLATFORM eventで `fw_counters_data[ctr_idx - num_hw_ctrs]` へ書く。
+  探索が失敗する入力・資源状態で負のindexによるM-mode状態破壊の懸念がある。
+- 上流修正：`ac16c6b6`（完全SHAは全件台帳）。現行にないhw_counters_data変更部分は機械的に追加せず、
+  現行の探索結果と配列所有関係に合わせて移植する。
+- 状態：未修正、ソース照合のみ。BP02/T-PMUでFW counter枯渇・unsupported eventと正常割当を確認する。
