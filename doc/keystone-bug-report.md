@@ -69,10 +69,11 @@
 | KSB-042 | EXIT後のRESUMEが再進入を許す | SM状態遷移・由来未確定 | 実QEMUで再現・未修正 |
 | KSB-043 | 並行PMP更新の一時競合でDESTROYが回収不能になる | K3移植のHSM/PMP admission | 実QEMUで再現・未修正 |
 | KSB-044 | CREATE失敗時のPMP rollback結果を検査しない | SM CREATE cleanup・由来未確定 | ソース確認・障害注入による実証前 |
+| KSB-045 | MPXY共有メモリーの丸め値がbytesではなくpage数になる | OpenSBI取込コード・上流修正照合済み | 未修正・PAGE_SIZE超channelで発火、実ゲスト未検証 |
 | KSB-041 | attestor統合時に負荷・2 OCALLのループを削除 | samples統合の変更 | 復元済・Sstc on/off実QEMU PASS |
 
 「取込コード」は本リポジトリで修正前のコードを確認できるという意味。
-KSB-010以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
+KSB-010/045以外の上流所在・上流最新の修正状態は、この台帳で新たに照合したものではない。
 
 ## KSB-001: SDK memset/strlenが自身を呼ぶ機械語になる
 
@@ -679,3 +680,21 @@ K3移植固有のadmission経路。driverは保護不明のページをquarantin
 戻り値無視と経路はソースで確認したが、部分適用を注入した実QEMU再現は未実施。
 上流にも同等問題があるかは未照合。未修正。F-PMP/F-IPIの詳細試験を増やす前に、
 解除確認不能時のdescriptor/EID/物理ページの保持契約を確定する必要がある。
+
+## KSB-045: MPXY共有メモリーのサイズ丸めがpage数になる
+
+- **確認日・対象**：2026-11-11、基準 `8ce25d283e19c02cdf2e08727460473b8408882a` の
+  [sbi_mpxy_register_channel](../opensbi/lib/sbi/sbi_mpxy.c)。
+- **条件・ソース証拠**：`msg_data_maxlen` が現在の `mpxy_shmem_size` を超えると、
+  `(maxlen + PAGE_SIZE - 1) / PAGE_SIZE` をサイズ変数に格納する。
+  この値はpage数だが、利用側はbytesとして扱う。PAGE_SIZE=4096なら4097 bytesが2になる。
+  既存OPTEEDはmaxlen=PAGE_SIZEであり、そのchannelだけでこの分岐の発火を確認したわけではない。
+- **由来**：OpenSBI取込コード。上流の
+  [2de7dfb6813facba8e376897290bedb18ef38401](https://github.com/riscv-software-src/opensbi/commit/2de7dfb6813facba8e376897290bedb18ef38401)
+  は同じ箇所をbyte単位のROUNDUPへ修正する。Keystone固有の新規バグとは分類しない。
+- **影響**：大きなchannel登録時に共有領域サイズの通知・転送境界の契約が崩れる。
+  実際のサービス障害・メモリー破壊・漏出は今回再現しておらず、断定しない。
+- **状態・方針**：未修正。今回の依頼では調査と文書を追加した。
+  [取り込み計画P1/T-MPXY](optee-opensbi-keystone-merge-plan.md)で既存のmapping変更を保持して
+  上流修正をバックポートし、実firmwareの検証channelと実guest ECALLで確認する。
+- **検証範囲**：ソースと上流修正の照合のみ。ビルド、実QEMU、実機は未実施。
