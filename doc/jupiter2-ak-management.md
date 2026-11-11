@@ -1,6 +1,7 @@
 # Jupiter2のAttestation Key管理設計：HUK暗号化とSPI NOR保存
 
-- 作成日：2026年11月11日（日本時間）。
+- 作成日・実測反映日：2026年11月11日（日本時間）。
+- 更新：ユーザー提供のMTD区画表とdump解析結果を反映。SPI NOR末尾64 KiBをAK用に予約する候補を具体化。
 - 対象：Milk-V Jupiter2／SpacemiT K3、修正版OpenSBIに統合したKeystone SM。
 - 状態：**設計・修正計画。実装、実機での鍵保存、電源断試験は未実施。**
 - 対象鍵：TPM 2.0形式Quote専用のECDSA NIST P-256 AK（Attestation Key）。
@@ -20,7 +21,8 @@ AKはSM内で生成し、HUK由来の鍵でAEAD暗号化したblobだけを専�
 
 1. 製品固有で非公開の正規HUK、またはHUKからのderive／wrap serviceが利用できる。
 2. 承認されたSMだけがAK用derive／unwrapを利用できる。公開の開発用HUKは拒否する。
-3. 実機のSPI NOR容量、erase単位、partition構成、書込み経路と予約領域を確定する。
+3. SPI NORのMTD公開容量8 MiB、erase単位4 KiBと区画構成は実測で確認済み。
+   末尾64 KiBの予約、更新処理との非競合、書込み経路は今後確定する。
 4. secure boot、firmware anti-rollback、debug／DMAの扱いを確認する。
 5. ロールバックをローカルで拒否するprofileには、SPI NORと独立した保護anchorがある。
 
@@ -37,7 +39,7 @@ AKはSM内で生成し、HUK由来の鍵でAEAD暗号化したblobだけを専�
 | QEMU開発seed／開発firmware埋込み | SM RAM。開発image等から抽出可能 | host state／開発image | 既存の開発鍵方式を参考にできるが、独立P-256 AK providerは追加が必要。実機の秘密保持には使わない |
 | SM揮発AK | PMP保護SM RAM | なし | 信頼できるentropyと生成処理が必要。再起動で変わり、固定AK登録には不適 |
 | Linux経由の暗号化ファイル保存 | SM RAM | Linuxが使用できる既存filesystem | OpenSBI側block driverを不要にできる。blob転送ABIと正規HUKが必要。rootfsの保存媒体の実機型番は既存調査で未確定 |
-| **HUK wrap＋既存SPI NOR** | **SM RAM** | **専用NOR区画の暗号化blob** | **本書の詳細検討対象。NORは実機ログで確認済み。空き領域、SM側driver、HUKは未確認／未実装** |
+| **HUK wrap＋既存SPI NOR** | **SM RAM** | **専用NOR区画の暗号化blob** | **本書の採用設計。8 MiB／4 KiB eraseと末尾3720 KiBの消去状態を実測確認。予約・書込み・HUKは未確定／未実装** |
 | HUKからAKを直接導出 | SM RAM、または安全なderive service | HUKと公開導出parameter | blob不要。ただしP-256 scalarの正しい導出、rotation、firmware更新時identityの規則が必要。世代parameterもrollback対象 |
 | eMMC RPMB／HUK-backed secure storage | SM RAMまたはtrusted service | 認証されたsecure storage | K3はeMMC controller対応。実機のeMMC搭載、RPMB、鍵設定、安全な経路は未確認 |
 | secure processor／key engineの非exportable AK | engine内 | 保護slot／secure NVM | 長期候補。P-256署名API、永続slot、SM専用認可は未確認 |
@@ -64,11 +66,25 @@ K3 eFuse ARCNはfirmware向けのbit消費型anti-rollback資源であり、AK�
 | 0x1b0000–0x210000 | opensbi |
 | 0x210000–0x800000 | uboot |
 
-これは既存partitionの境界であり、NORの全物理容量や空き領域の証明ではない。
+今回追加提供された/proc/mtdでは、master mtd0は0x800000 bytes、erase sizeは0x1000。
+Linuxに公開されたNOR容量8 MiB、erase単位4 KiBを確認できた。
+mtd1〜mtd6はmasterの子partitionで、同じ媒体である。
 特に`uboot`区画の未使用に見える末尾や`env`をAK用に流用しない。
 既存のOpenSBI区画は0x60000 bytesで、AK機能やdriver追加後のimage／boot containerの収容性も別に検査する。
 
-### 3.2 HUK
+### 3.2 追加実測：uboot末尾の消去状態
+
+ユーザー提供のdump解析結果では、uboot区画内[0x24e000, 0x5f0000)、
+NOR全体[0x45e000, 0x800000)が、4 KiB block単位で全て0xffであった。
+連続する消去済み末尾は0x3a2000 bytes＝3720 KiBである。
+uboot区画全体が未使用という結果ではない。
+採取時刻、元dumpのSHA-256、chip型番は未提供であり、こちらで再採取していない。
+
+[取得・解析手順と提供結果](jupiter2-spi-nor-inspection.md)に記録する。
+この実測は読出しと消去状態の根拠であり、
+書込み成功・書込み保護解除・将来の更新で不使用の証明にはならない。
+
+### 3.3 HUK
 
 K3 OP-TEEの調査対象設定には、`CFG_TE200_USE_DUMMY_OTP`、
 `CFG_K3_HUK_ALLOW_UNFUSED`等の開発用設定がある。
@@ -166,9 +182,40 @@ nonce misuse耐性のある別方式への変更は、対応libraryとformatを�
 
 ### 5.4 専用partitionとslot配置
 
-AK専用の予約partitionを新設し、slot Aとslot Bをそれぞれ異なるerase block群へ置く。
-必要容量は実機のerase geometry、blob最大長、更新頻度、wear条件から決める。
-offsetやサイズは現段階では確定しない。
+実測の消去済み末尾内にあるNOR末尾64 KiBを予約候補とし、既存uboot区画を縮小する。
+以下は移行計画上の候補配置で、実機のpartitionはまだ変更していない。
+
+| 領域 | NOR絶対範囲（終了を含まない） | サイズ |
+| --- | --- | --- |
+| 縮小後uboot | [0x210000, 0x7f0000) | 0x5e0000 = 6016 KiB |
+| ak-store（親予約領域） | [0x7f0000, 0x800000) | 0x10000 = 64 KiB |
+| slot A（ak-store内部） | [0x7f0000, 0x7f8000) | 0x8000 = 32 KiB |
+| slot B（ak-store内部） | [0x7f8000, 0x800000) | 0x8000 = 32 KiB |
+
+ak-storeは独立したMTD partition一つとし、A/Bは管理tool内部のoffset 0／0x8000で管理する。
+新しい/dev/mtd番号を固定せず、nameとsize／erase geometryで識別する。
+両slotはそれぞれ8個の4 KiB erase blockを持ち、boot領域とblockを共有しない。
+slot当たり32 KiBは容量上限であり、blob本体の上限は初期仕様で4 KiBとする。
+残りは0xff paddingとし、将来format拡張まで用途を割り当てない。
+鍵世代の更新時だけ書き込み、通常boot・署名ごとの書込みは行わない。
+
+#### 5.4.1 partitionと更新経路の移行
+
+1. 元dump、/proc/mtd、flash layoutと正規boot imageをhash付きで保管する。
+2. U-Boot image、環境変数、backup、更新・recoveryの固定offset参照を照合する。
+3. cmdline partition／DT／bootloader layout／update manifestを同じlayoutへ揃える。
+   現ログはcmdlinepart由来であり、DTだけ変更して完了としない。
+4. update toolはuboot開始0x210000、最大長0x5e0000の境界を検査する。
+   chip全消去や旧uboot全域0x5f0000のeraseを通常更新から除外する。
+5. 再起動後にak-storeと縮小ubootの範囲を確認する。旧layoutのままAKを書かない。
+6. 旧recoveryがAK区画を消す可能性がある場合は更新・使用制限を先に実施する。
+   factory recoveryで意図的に全消去するときはAK喪失と再登録が必要と明示する。
+7. 予約領域が消去状態であることを再確認した後、専用区画だけで書込み試験をする。
+
+build時にもfirmware／containerが既存OpenSBI区画に収まること、
+U-Boot containerが新上限に収まることを別々に検査する。
+NOR全体へのアクセスが可能なmtd0や外部writerはこのpartition境界を迂回できるため、
+区画分割自体を攻撃者に対するwrite protectionと説明しない。
 
 - bootloader、firmware image、環境変数、crash dumpとerase blockを共有しない。
 - bootloader、Linux DT／MTD、OpenSBI、更新toolで同じpartition定義を使用する。
@@ -194,6 +241,37 @@ clock/reset、pinmux、chip-select、busy polling、timeout、erase geometry、c
 Linuxとの同時操作を通常のmutexだけで調停しない。controllerの専有または信頼できる仲介を設け、
 Linux側driverのunbind／再初期化、multi-hart、割込み、suspend／resumeまで検証する。
 直接アクセスにしても、外部からのNOR全体差戻しに対するrollback保護は追加されない。
+
+#### 5.5.1 Linux MTD保存代行の処理契約
+
+MTD管理toolは対象partition名ak-store、size 0x10000、erase size 0x1000と
+layout versionを検査し、master mtd0やubootを渡された場合は拒否する。
+SBI入口の名称／番号は最新ABI確認後に固定するが、責務は以下とする。
+
+- PREPARE：認可された管理要求から候補blobとtransaction_id、公開identity、digestを返す。
+  AK平文は返さない。候補状態はSM内で現在のprofileと旧世代へ結合する。
+- 保存：inactive slotのblockだけをeraseし、MTD character device経由でblobをprogramする。
+  エラー／short writeを検査し、処理完了後にMTDを読み直す。
+- VERIFY/COMMIT：読出したblob全体を上限付きでSMへ渡す。
+  SMはcanonical blob digest、AEAD、公開鍵、transactionと準備中候補の一致を確認する。
+  protectedではその後にanchorをatomic更新する。
+- STATUS：generation、Name、transaction、profile、確定結果だけを返し、再試行を支える。
+- LOAD：boot後に両slotの候補をSMへ渡す。SMがanchor／認証を検証して鍵を選ぶ。
+  boot全体をLinux応答待ちにせず、LOAD前はAK unavailableとする。
+
+mtdblockをfilesystemとしてmountせず、erase-awareなMTD I/Oを使う。
+通常fileのfsyncだけをNOR program完了の証拠にしない。採用driverの同期動作、
+MTD_SYNC等の実装と戻り値を確認し、readbackを追加する。
+ただし悪意あるLinuxはreadbackも偽装できる点は変わらない。
+
+blobは固定headerで長さを判定し、残りslot領域はpaddingとして扱う。
+一部だけprogramされたrecordは認証で拒否し、slotの別blockを新しい鍵と誤認しない。
+slotのvalid marker／sequenceを設ける場合もhintに限定し、
+AEADとanchorの代わりにしない。
+
+anchorなしprofileでは、認証成功したslotの最大generationを選ぶ規則を明示する。
+これは正常なrotation／電源断の復旧規則であり、両slotを過去へ戻す攻撃は防げない。
+初期実装でこのprofileを使う場合、外部検証者の旧AK失効が必要である。
 
 ### 5.6 初回provisioningと通常boot
 
@@ -306,10 +384,10 @@ AK rotationのたびに消費する実装は行わない。
 
 | 段階 | 修正内容 | 完了条件 |
 | --- | --- | --- |
-| P0 調査 | NOR chip／容量／erase単位、全partition、更新tool、Linux MTD経路、正規HUK API、認可とlifecycleを確認 | 固定資料／実機read-only結果を記録。AK partitionとHUKの可否が判断可能 |
+| P0 調査・区画移行 | 実測8 MiB／4 KiB、消去済み末尾3720 KiBを採用。chip仕様、update／recoveryとHUKを確認し、uboot縮小＋末尾64 KiB予約 | 新layoutを全経路へ反映し、ak-storeの範囲と既存boot起動を確認 |
 | P1 契約 | blob形式、AAD、KDF、nonce、profile、status、世代／transactionと内部APIを固定 | security reviewを通し、上限・失敗時動作が仕様化 |
 | P2 暗号 | 保守対象libraryのP-256／AEAD／KDFを最小構成で導入し、AK managerとHUK adapterを追加 | 非公開materialの境界、消去、公開鍵整合、開発fallback拒否を確認 |
-| P3 保存 | 固定slot backend、管理用の限定SBI入口、Linux MTD管理toolを追加 | AK平文を転送せず、予約区画以外へ書けない。電源断時に旧確定版または新確定版へ復旧 |
+| P3 保存 | ak-store内32 KiB×2 slot、blob上限4 KiB、限定SBIとLinux MTD管理tool、LOAD／PREPARE／COMMITを追加 | AK平文を転送せず、予約区画以外へ書けない。電源断時に旧確定版または新確定版へ復旧 |
 | P4 rollback | 独立anchor adapterとcompare-and-commit、世代／digest照合を追加 | 全NOR差戻し拒否。anchor未提供時はprotectedをadvertiseしない |
 | P5 lifecycle | provisioning、rotation、復旧、失効、firmware migrationを実装 | 運用手順と再試行規則が一致。通常署名から生成／import／eraseできない |
 | P6 実機 | 正規HUKと予約NORで段階検証。必要なら直接NOR driverを別変更で追加 | 実機の保護・電源断・boot更新条件を確認してprofileを有効化 |
@@ -370,6 +448,10 @@ build成功とQEMU PASS、実機PASSを別に記録する。
 | AK-18 | partition境界、erase共有、timeout、bad read | boot領域を変更せず停止。失敗後も他SBI機能が動作 |
 | AK-19 | 外部検証者の旧AK失効・世代記録 | 新AKを受理し旧AKを拒否。検証者state差戻しも別途確認 |
 | AK-20 | nonce生成、再試行、暗号化回数上限 | 再暗号化でのnonce再使用を避け、entropy故障・上限超過は拒否 |
+| AK-21 | 新layoutのuboot上限、ak-store名／size、MTD番号変化 | 上限超過imageと誤partitionを拒否。番号が変わっても正しく識別 |
+| AK-22 | firmware update／recovery、旧layout・旧tool | 通常更新でAK 64 KiBを保持。旧toolは拒否／使用制限し、意図的factory eraseは喪失扱い |
+| AK-23 | slot A/B境界、blob 4 KiB上限、padding、partial program | 隣接slot／boot領域を触らず、不完全blobを拒否 |
+| AK-24 | LOAD前のboot、Linux保存daemon不在・異常終了 | 通常bootは継続、AKはunavailable。準備中候補を勝手に有効化しない |
 
 ### 8.3 実機固有の確認
 
@@ -393,10 +475,10 @@ build成功とQEMU PASS、実機PASSを別に記録する。
 
 ## 9. 未確定事項
 
-1. 実機NORの全容量・geometryと、安全に予約可能な区画。
+1. MTD公開容量8 MiB、erase 4 KiBは確認済み。chip型番／耐久仕様、末尾64 KiB予約の更新経路との非競合は未確認。
 2. 正規HUK API、derive／unwrap権限、blank fuse時の挙動、firmware更新時のpolicy。
 3. secure boot／anti-rollbackとdebug／DMA制限の実機設定。
-4. NORの保存代行から開始するか、trusted I/O経路を先に用意するか。
+4. 初期実装はLinux MTD保存代行。独立anchor／trusted I/Oの実機採用可否と追加時期は未確定。
 5. 独立anchorの利用可否とatomic commitの仕様。未確定の間はlocal rollback保証なし。
 6. provisioning認証、外部登録・失効、factory reset／board交換時の運用。
 7. 暗号library、blob形式、nonce規則、migration対応範囲の固定。
@@ -405,6 +487,7 @@ build成功とQEMU PASS、実機PASSを別に記録する。
 
 - [PCR・counter・Quote統合設計 第9節](keystone-tpm2-quote-design.md#9-jupiter2のakcounterとpersistent-storage管理)：AK保存方式、HUK wrap、providerとrollbackの検討。
 - [Jupiter2 storage調査](jupiter2-persistent-storage-investigation.md)：実機NOR partition、eMMC／RPMBの未確認事項、eFuse ARCNの制約。
+- [SPI NOR取得・解析手順](jupiter2-spi-nor-inspection.md)：今回のユーザー提供実測と再現用script。
 - [実機inventory](jupiter2-hardware-inventory.json)：観測環境とNOR OpenSBI partition。
 - [OP-TEE調査](optee-milk-v-jupiter2.md)：開発用HUK設定とsecure bootの区別。
 - [既存3002／3003実装](keystone-sbi-3002-3003-implementation.md)：共通providerの既存責務。P-256 AK実装済みの根拠にはしない。
